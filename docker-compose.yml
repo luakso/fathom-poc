@@ -39,7 +39,7 @@ services:
       args:
         BINARY: base-collector
     image: fathom-base-collector:dev
-    restart: unless-stopped
+    restart: "no"  # switch to unless-stopped once it's a real long-running loop
     environment:
       DB_URL: ${DB_URL}
     depends_on:
@@ -53,7 +53,7 @@ services:
       args:
         BINARY: solana-collector
     image: fathom-solana-collector:dev
-    restart: unless-stopped
+    restart: "no"  # switch to unless-stopped once it's a real long-running loop
     environment:
       DB_URL: ${DB_URL}
     depends_on:
@@ -67,7 +67,7 @@ services:
       args:
         BINARY: probe-collector
     image: fathom-probe-collector:dev
-    restart: unless-stopped
+    restart: "no"  # switch to unless-stopped once it's a real long-running loop
     environment:
       DB_URL: ${DB_URL}
     depends_on:
