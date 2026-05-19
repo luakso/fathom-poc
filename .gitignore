@@ -1,0 +1,28 @@
+# Build artifacts
+/bin/
+/dist/
+/out/
+*.exe
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Docker overrides
+compose.override.yml
+docker-compose.override.yml
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp

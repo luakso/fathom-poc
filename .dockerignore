@@ -1,0 +1,14 @@
+.git/
+.github/
+docs/
+.idea/
+.vscode/
+.DS_Store
+*.md
+.env
+.env.*
+compose.override.yml
+docker-compose.override.yml
+bin/
+dist/
+out/
