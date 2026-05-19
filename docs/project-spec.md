@@ -48,7 +48,7 @@ That's three numbers. Resist adding more until month two.
 
 - **Language:** Go (everything)
 - **Database:** Postgres (single instance)
-- **Hosting:** Single VPS, ~$20/month
+- **Hosting:** Local Docker Compose on the operator's machine for v1 (VPS deferred)
 - **Charts:** Go plotting library, fallback to Python if needed
 - **Source control / distribution:** Public GitHub repo
 - **No Kubernetes, no Kafka, no managed event store, no Clickhouse**
@@ -96,8 +96,8 @@ Go program that:
 
 ### Week 1
 
-- [ ] Repo created (Go monorepo, three service skeletons)
-- [ ] VPS provisioned, Postgres running
+- [x] Repo created (Go monorepo, four binary stubs: three collectors + publisher)
+- [x] Local Docker Compose stack running (Postgres + init-db + collectors)
 - [ ] Base x402 collector running and backfilled
 - [ ] Hand-curated YAML of ~20 endpoints
 - [ ] Endpoint probe service running daily

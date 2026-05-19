@@ -8,17 +8,17 @@
 
 ## 1. Overview
 
-Fathom is a weekly published index of agent-mediated payment flow. The system has three layers, runs entirely on a single ~$20/month VPS, and is implemented in Go against a single Postgres instance. Everything is plumbing in service of one weekly artifact.
+Fathom is a weekly published index of agent-mediated payment flow. The system has three layers, runs locally on the operator's machine for v1, and is implemented in Go against a single Postgres instance. Everything is plumbing in service of one weekly artifact.
 
 The locked technology surface:
 
 - **Go** — every long-running process and every one-shot tool
 - **Postgres** — single instance, sole source of truth
-- **systemd** (or equivalent supervisor) — for the long-running collectors
-- **cron** — for the weekly publisher and daily probe schedule
+- **Docker Compose** — orchestrates Postgres + collectors + init-db locally; the supervisor for v1
+- **scheduling** — TBD; the daily probe and weekly publisher will land with either an in-binary scheduler, a sidecar cron container, or host crontab calling `docker compose run`
 - **git** — distribution channel for the public data repo and weekly artifacts
 
-No Kubernetes, no Kafka, no managed event store, no Clickhouse, no web frontend. These are not merely avoided — their absence is a load-bearing design choice the rest of the architecture depends on.
+No Kubernetes, no Kafka, no managed event store, no Clickhouse, no web frontend, no VPS for v1. These are not merely avoided — their absence is a load-bearing design choice the rest of the architecture depends on.
 
 End-to-end pipeline:
 
@@ -174,14 +174,17 @@ Each cut also doubles as a test boundary: a collector is tested by inserting row
 
 ---
 
-## 6. Open architectural decisions (lock by end of week 1)
+## 6. Open architectural decisions
 
-These are deliberately deferred and need a one-line decision before code starts:
+Status at 2026-05-20:
 
-- **Repo layout.** Single monorepo with subfolders for each binary, or separate code repo + separate public data repo? Working assumption: monorepo for code, separate public-only data repo pushed to from the publisher.
-- **Chart pipeline.** Go-native (`gonum/plot` or similar) or shell out to a minimal Python script? Decision driven by whether Go-native output meets the visual-identity bar in week 1.
-- **Process supervisor on VPS.** systemd is the obvious default; confirm and write the unit files.
-- **Project name.** Currently "Fathom" internally. Confirm or replace before the public repo is created — renaming a public repo costs credibility.
+- **Repo layout.** ✅ Decided: monorepo for code (this repo). The public data repo will be created when the publisher first ships and pushes weekly artifacts to it.
+- **Process supervisor.** ✅ Decided for v1: Docker Compose orchestrates Postgres + the three collectors + a one-shot `init-db` container locally. systemd is deferred until v1 grows a deployment target beyond the operator's laptop.
+- **Project name.** ✅ Decided: Fathom (kept).
+- **Chart pipeline.** Still open. Go-native (`gonum/plot` or similar) or shell out to a minimal Python script? Decision driven by whether Go-native output meets the visual-identity bar in the first publish week.
+- **Scheduling (probe daily, publisher weekly).** Open. Three viable paths — internal Go scheduler with `--once` vs daemon mode, a cron sidecar container (e.g., `ofelia`), or host crontab calling `docker compose run`. Lock with the first binary that needs it.
+
+The project setup that implements the closed items above is specified in [`superpowers/specs/2026-05-19-project-setup-design.md`](./superpowers/specs/2026-05-19-project-setup-design.md).
 
 ---
 
