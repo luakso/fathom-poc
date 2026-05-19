@@ -1,0 +1,15 @@
+# Copy to compose.override.yml for local-only tweaks.
+# Examples below — keep what you need, delete the rest.
+
+services:
+  base-collector:
+    # Mount source for fast iteration without rebuild:
+    # volumes:
+    #   - .:/src:ro
+    environment:
+      LOG_LEVEL: debug
+
+  postgres:
+    # Expose on a different host port:
+    # ports:
+    #   - "5433:5432"
