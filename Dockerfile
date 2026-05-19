@@ -3,7 +3,8 @@
 # ---- Goose binary (used by init-db stage) ----
 FROM golang:1.26-alpine AS goose-installer
 ENV CGO_ENABLED=0
-RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+ARG GOOSE_VERSION=v3.27.1
+RUN go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
 
 # ---- Build stage for Go binaries ----
 FROM golang:1.26-alpine AS builder
