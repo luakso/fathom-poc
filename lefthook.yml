@@ -1,0 +1,24 @@
+pre-commit:
+  parallel: false
+  commands:
+    gofumpt:
+      glob: "*.go"
+      run: go tool gofumpt -l -w {staged_files}
+      stage_fixed: true
+    goimports:
+      glob: "*.go"
+      run: go tool goimports -w {staged_files}
+      stage_fixed: true
+    golangci-lint:
+      glob: "*.go"
+      run: go tool golangci-lint run --new-from-rev=HEAD
+    go-test:
+      glob: "*.go"
+      run: go test ./...
+
+pre-push:
+  commands:
+    go-mod-tidy:
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum
