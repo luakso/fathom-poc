@@ -1,0 +1,93 @@
+name: fathom
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  init-db:
+    build:
+      context: .
+      target: init-db
+    environment:
+      DB_URL: ${DB_URL}
+    volumes:
+      - ./migrations:/migrations:ro
+      - ./views:/views:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  base-collector:
+    build:
+      context: .
+      target: runtime
+      args:
+        BINARY: base-collector
+    image: fathom-base-collector:dev
+    restart: unless-stopped
+    environment:
+      DB_URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  solana-collector:
+    build:
+      context: .
+      target: runtime
+      args:
+        BINARY: solana-collector
+    image: fathom-solana-collector:dev
+    restart: unless-stopped
+    environment:
+      DB_URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  probe-collector:
+    build:
+      context: .
+      target: runtime
+      args:
+        BINARY: probe-collector
+    image: fathom-probe-collector:dev
+    restart: unless-stopped
+    environment:
+      DB_URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  publisher:
+    build:
+      context: .
+      target: runtime
+      args:
+        BINARY: publisher
+    image: fathom-publisher:dev
+    restart: "no"
+    environment:
+      DB_URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    profiles: ["manual"]
+
+volumes:
+  postgres-data:

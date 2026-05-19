@@ -4,7 +4,12 @@ set -euo pipefail
 : "${DB_URL:?DB_URL is required}"
 
 echo "init-db: running goose migrations"
-goose -dir /migrations postgres "$DB_URL" up
+# goose exits 1 when no .sql files exist; skip if dir is empty
+if ls /migrations/*.sql 1>/dev/null 2>&1; then
+  goose -dir /migrations postgres "$DB_URL" up
+else
+  echo "  no migration files found, skipping"
+fi
 
 echo "init-db: applying views"
 shopt -s nullglob
