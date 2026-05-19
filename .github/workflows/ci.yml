@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: golangci-lint
+        run: go tool golangci-lint run ./...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fathom
+          POSTGRES_PASSWORD: fathom
+          POSTGRES_DB: fathom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fathom"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DB_URL_HOST: postgres://fathom:fathom@localhost:5432/fathom?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test -race ./...
+
+  vuln:
+    name: Vuln scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: govulncheck
+        run: go tool govulncheck ./...
+
+  build:
+    name: Docker build (${{ matrix.binary }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        binary: [base-collector, solana-collector, probe-collector, publisher]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg BINARY=${{ matrix.binary }} \
+            --target runtime \
+            -t fathom-${{ matrix.binary }}:ci \
+            .
