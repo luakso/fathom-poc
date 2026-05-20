@@ -52,7 +52,7 @@ jobs:
       - name: Download modules
         run: go mod download
       - name: Apply migrations
-        run: go tool goose -dir migrations postgres "$DB_URL_HOST" up
+        run: go tool goose -dir database/migrations postgres "$DB_URL_HOST" up
       - name: Test
         run: go test -race ./...
 
