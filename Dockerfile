@@ -27,6 +27,6 @@ ENTRYPOINT ["/app"]
 FROM alpine:3.20 AS init-db
 RUN apk add --no-cache postgresql-client bash
 COPY --from=goose-installer /go/bin/goose /usr/local/bin/goose
-COPY scripts/init-db.sh /init-db.sh
+COPY database/init/init-db.sh /init-db.sh
 RUN chmod +x /init-db.sh
 ENTRYPOINT ["/init-db.sh"]
