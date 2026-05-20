@@ -50,15 +50,17 @@ just nuke         # tear down and drop the postgres volume
 ## Layout
 
 ```
-cmd/<binary>/main.go   # one entrypoint per long-running unit
-internal/              # shared packages (emerge with the first real collector)
-migrations/            # goose .sql migrations — NNNNN_name.sql
-views/                 # versioned SQL views — methodology lives here
-scripts/init-db.sh     # one-shot: goose up + apply views (used inside init-db container)
-docs/                  # spec, architecture, plans
+cmd/<binary>/main.go        # one entrypoint per long-running unit
+config/<binary>/            # per-binary TOML (base.toml, local.toml, etc.)
+internal/                   # shared packages (config, log, db)
+database/migrations/        # goose .sql migrations — NNNNN_name.sql
+database/views/             # versioned SQL views — methodology lives here
+database/init/init-db.sh    # one-shot: goose up + apply views (inside init-db container)
+database/testdata/          # seed scripts (empty in v1)
+docs/                       # spec, architecture, plans, conventions
 ```
 
-The split between `migrations/` (tables) and `views/` (methodology) is load-bearing — see the architecture doc.
+The split between `database/migrations/` (tables) and `database/views/` (methodology) is load-bearing — see the architecture doc.
 
 ## Conventions
 

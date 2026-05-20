@@ -73,12 +73,12 @@ logs *args:
 #   just migrate create add_payments_table sql
 migrate *args:
     @set -a; . ./.env; set +a; \
-        go tool goose -dir migrations postgres "$DB_URL_HOST" {{args}}
+        go tool goose -dir database/migrations postgres "$DB_URL_HOST" {{args}}
 
 # Apply all view SQL files (idempotent)
 apply-views:
     @set -a; . ./.env; set +a; \
-        for f in views/*.sql; do \
+        for f in database/views/*.sql; do \
             [ -e "$f" ] || break; \
             echo "applying $f"; \
             docker compose exec -T postgres psql "$DB_URL" -v ON_ERROR_STOP=1 -f - < "$f"; \
