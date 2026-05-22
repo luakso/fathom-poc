@@ -86,7 +86,8 @@ services:
     image: fathom-publisher:dev
     restart: "no"
     environment:
-      DB_URL: ${DB_URL}
+      APP_ENV: local
+      DATABASE__URL: ${DB_URL}
     depends_on:
       init-db:
         condition: service_completed_successfully
