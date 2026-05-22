@@ -86,6 +86,10 @@ func ParseConfig[Config BasicConfigurator](binaryName, environment string) (Conf
 	var cfg Config
 	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.StringToTimeDurationHookFunc(),
+			// WeaklyTypedInput matches koanf's bare Unmarshal default,
+			// allowing string→number coercions from env var overrides.
+			WeaklyTypedInput: true,
 			// Squash enables embedded struct field promotion so that
 			// fields in embedded structs (like BasicConfig) are mapped
 			// from top-level koanf keys rather than a nested sub-map.

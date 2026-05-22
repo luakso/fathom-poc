@@ -14,7 +14,7 @@ type MissingRequiredFieldsError struct {
 
 func (m MissingRequiredFieldsError) Error() string {
 	return fmt.Sprintf(
-		"missing required fields in config(%s): name=%q version=%q env=%q",
-		m.BinaryName, m.Name, m.Version, m.Env,
+		"missing required fields in config(%s, %s): name=%q version=%q",
+		m.BinaryName, m.Env, m.Name, m.Version,
 	)
 }
