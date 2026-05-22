@@ -1,0 +1,6 @@
+env = "local"
+secrets_path = "config/solana-collector/local.secrets.toml"
+
+[log]
+is_pretty = true
+level = "debug"

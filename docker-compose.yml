@@ -56,7 +56,8 @@ services:
     image: fathom-solana-collector:dev
     restart: "no"  # switch to unless-stopped once it's a real long-running loop
     environment:
-      DB_URL: ${DB_URL}
+      APP_ENV: local
+      DATABASE__URL: ${DB_URL}
     depends_on:
       init-db:
         condition: service_completed_successfully
