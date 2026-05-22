@@ -66,6 +66,12 @@ func ParseConfig[Config BasicConfigurator](binaryName, environment string) (Conf
 	// Layer 3: environment variables. FOO__BAR -> foo.bar using "__" as delimiter.
 	// The v2 env.Provider uses env.Provider(delim, Opt) where Opt.TransformFunc
 	// receives (key, value) and returns (transformedKey, transformedValue).
+	//
+	// env.Provider with no prefix loads ALL environment variables — there is no
+	// FATHOM__ namespace today. This keeps the compose contract simple
+	// (DATABASE__URL is a direct path into database.url) but means config field
+	// names must not collide with common system env vars (USER, SHELL, TERM, PATH,
+	// HOME, PWD). Revisit if config keys grow ambiguous.
 	envProvider := env.Provider(".", env.Opt{
 		TransformFunc: func(k, v string) (string, interface{}) {
 			return strings.ReplaceAll(strings.ToLower(k), "__", "."), v
@@ -104,7 +110,11 @@ func ParseConfig[Config BasicConfigurator](binaryName, environment string) (Conf
 	b := cfg.GetBasicConfig()
 	if b.Name == "" || b.Version == "" || b.Env == "" {
 		return empty, MissingRequiredFieldsError{
-			BinaryName: binaryName, Env: b.Env, Name: b.Name, Version: b.Version,
+			BinaryName:  binaryName,
+			Environment: environment,
+			Env:         b.Env,
+			Name:        b.Name,
+			Version:     b.Version,
 		}
 	}
 
