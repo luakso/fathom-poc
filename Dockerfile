@@ -19,7 +19,9 @@ RUN go build -o /out/app ./cmd/${BINARY}
 
 # ---- Runtime for Go binaries ----
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+WORKDIR /
 COPY --from=builder /out/app /app
+COPY --from=builder /src/config /config
 USER nonroot:nonroot
 ENTRYPOINT ["/app"]
 
