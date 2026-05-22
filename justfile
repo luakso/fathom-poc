@@ -60,6 +60,10 @@ psql:
 init-db:
     docker compose run --rm init-db
 
+# Run a binary from the host with APP_ENV=local (outside docker)
+dev binary:
+    APP_ENV=local go run ./cmd/{{binary}}
+
 # Run a binary on demand: `just run publisher`
 run binary:
     docker compose run --rm {{binary}}
