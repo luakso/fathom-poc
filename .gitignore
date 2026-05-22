@@ -16,6 +16,8 @@ go.work.sum
 .env
 .env.*
 !.env.example
+config/*/local.secrets.toml
+config/*/*.secrets.toml
 
 # Docker overrides
 compose.override.yml
