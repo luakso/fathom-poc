@@ -1,0 +1,7 @@
+name = "publisher"
+version = "v0"
+with_debug_profiler = false
+
+[log]
+is_pretty = false
+level = "info"
