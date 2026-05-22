@@ -15,6 +15,10 @@ lint:
 test:
     go test -race ./...
 
+# Run integration tests (requires Docker daemon for testcontainers)
+test-integration:
+    go test -tags=integration -race -v ./...
+
 # Build all binaries to ./bin/
 build:
     @mkdir -p bin
