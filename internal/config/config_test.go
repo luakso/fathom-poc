@@ -136,9 +136,9 @@ func TestParseConfig_MissingRequiredFields(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing required fields")
 	}
-	var missing config.MissingRequiredFieldsError
+	var missing *config.MissingRequiredFieldsError
 	if !errors.As(err, &missing) {
-		t.Errorf("error type = %T, want MissingRequiredFieldsError", err)
+		t.Errorf("error type = %T, want *MissingRequiredFieldsError", err)
 	}
 }
 

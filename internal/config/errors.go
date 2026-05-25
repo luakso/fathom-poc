@@ -13,7 +13,7 @@ type MissingRequiredFieldsError struct {
 	Version     string
 }
 
-func (m MissingRequiredFieldsError) Error() string {
+func (m *MissingRequiredFieldsError) Error() string {
 	return fmt.Sprintf(
 		"missing required fields in config(%s, env=%q): name=%q version=%q parsed_env=%q",
 		m.BinaryName, m.Environment, m.Name, m.Version, m.Env,
