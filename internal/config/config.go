@@ -109,7 +109,7 @@ func ParseConfig[Config BasicConfigurator](binaryName, environment string) (Conf
 
 	b := cfg.GetBasicConfig()
 	if b.Name == "" || b.Version == "" || b.Env == "" {
-		return empty, MissingRequiredFieldsError{
+		return empty, &MissingRequiredFieldsError{
 			BinaryName:  binaryName,
 			Environment: environment,
 			Env:         b.Env,

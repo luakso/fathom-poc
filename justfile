@@ -11,6 +11,10 @@ fmt:
 lint:
     go tool golangci-lint run ./...
 
+# Run go generate across the module (mocks, enums, etc.)
+generate:
+    go generate ./...
+
 # Run tests
 test:
     go test -race ./...

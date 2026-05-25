@@ -59,7 +59,7 @@ database/migrations/        # goose .sql migrations — NNNNN_name.sql
 database/views/             # versioned SQL views — methodology lives here
 database/init/init-db.sh    # one-shot: goose up + apply views (inside init-db container)
 database/testdata/          # seed scripts (empty in v1)
-docs/                       # spec, architecture, plans, conventions
+docs/                       # spec, architecture, plans
 ```
 
 The split between `database/migrations/` (tables) and `database/views/` (methodology) is load-bearing — see the architecture doc.
