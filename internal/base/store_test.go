@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,13 +65,13 @@ func samplePayment(logIndex uint32) x402.Payment {
 		Payer:             "0xpay",
 		Payee:             "0xrec",
 		Asset:             "USDC",
-		TokenAddress:      x402.USDCProxyBase.Hex(),
+		TokenAddress:      strings.ToLower(x402.USDCProxyBase.Hex()),
 		AmountRaw:         big.NewInt(1_000_000),
 		AmountUSDC:        decimal.NewFromInt(1),
 		AssetUSDAtTime:    decimal.NewFromInt(1),
 		AuthNonce:         []byte{0x01, 0x02},
 		MethodSelector:    []byte{0xe3, 0xee, 0x16, 0x0e},
-		CalledContract:    x402.USDCProxyBase.Hex(),
+		CalledContract:    strings.ToLower(x402.USDCProxyBase.Hex()),
 		TxType:            2,
 		TxNonce:           42,
 		GasUsed:           50_000,

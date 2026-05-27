@@ -30,10 +30,10 @@ type Payment struct {
 	Protocol string // 'x402'
 
 	// Payment principals (all lowercased addresses)
-	Facilitator    string  // tx.from
-	Payer          string  // EIP-3009 authorizer == Transfer.from
-	Payee          string  // Transfer.to
-	PayeeServiceID *uint64 // logical link, may be nil
+	Facilitator    string // tx.from
+	Payer          string // EIP-3009 authorizer == Transfer.from
+	Payee          string // Transfer.to
+	PayeeServiceID *int64 // logical link, may be nil
 
 	// Amount (exact + convenience; never lose precision)
 	Asset          string
