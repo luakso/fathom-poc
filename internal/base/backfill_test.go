@@ -138,10 +138,10 @@ func TestBackfill_Run_WritesPaymentsAndCursor(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM payments`).Scan(&n))
 	require.Equal(t, 1, n)
 
-	// tx_hash is lowercased.
+	// tx_hash stored as canonical 32-byte hex (lowercased by common.Hash.Hex()).
 	var txHash string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT tx_hash FROM payments LIMIT 1`).Scan(&txHash))
-	require.Equal(t, "0xdead", strings.ToLower(common.HexToHash(txHash).Hex()))
+	require.Equal(t, common.HexToHash("0xdead").Hex(), txHash)
 
 	// Cursor advanced to max block (100).
 	cur, err := store.GetCursor(ctx)
