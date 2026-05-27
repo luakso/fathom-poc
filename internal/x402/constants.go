@@ -13,8 +13,8 @@ package x402
 import "github.com/ethereum/go-ethereum/common"
 
 // Canonical addresses on Base mainnet (chain ID 8453). Stored as the
-// checksummed common.Address; callers should lowercase via .Hex() then
-// strings.ToLower at the storage boundary (see internal/base.normalizeAddress).
+// checksummed common.Address; callers should lowercase via strings.ToLower(addr.Hex())
+// at the storage boundary (see internal/x402.Assemble).
 var (
 	// USDCProxyBase is the Circle USDC proxy on Base. All x402 EIP-3009
 	// settlements emit AuthorizationUsed from this address.

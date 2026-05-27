@@ -14,7 +14,6 @@ import (
 // topics: list of 32-byte topic hashes. data: raw bytes.
 func fixtureLog(t *testing.T, address common.Address, topics []string, data string) Log {
 	t.Helper()
-	t.Parallel()
 	hs := make([]common.Hash, 0, len(topics))
 	for _, s := range topics {
 		hs = append(hs, common.HexToHash(s))
@@ -25,6 +24,7 @@ func fixtureLog(t *testing.T, address common.Address, topics []string, data stri
 }
 
 func TestDecodeTransfer_Success(t *testing.T) {
+	t.Parallel()
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{
@@ -43,6 +43,7 @@ func TestDecodeTransfer_Success(t *testing.T) {
 }
 
 func TestDecodeTransfer_RejectsWrongTopicCount(t *testing.T) {
+	t.Parallel()
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{TransferTopic.Hex()}, // missing from/to topics
@@ -53,6 +54,7 @@ func TestDecodeTransfer_RejectsWrongTopicCount(t *testing.T) {
 }
 
 func TestDecodeAuthorizationUsed_Success(t *testing.T) {
+	t.Parallel()
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{
@@ -70,6 +72,7 @@ func TestDecodeAuthorizationUsed_Success(t *testing.T) {
 }
 
 func TestDecodeAuthorizationUsed_RejectsShortData(t *testing.T) {
+	t.Parallel()
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{
