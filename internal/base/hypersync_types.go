@@ -90,10 +90,10 @@ type HyperSyncBatchData struct {
 	Blocks       []HyperSyncBlock       `json:"blocks"`
 }
 
-// HyperSyncLog / HyperSyncTransaction / HyperSyncBlock use stringly-typed
-// fields because HyperSync wire format encodes numerics as 0x-prefixed hex
-// (variable-length) and bytes as 0x-prefixed hex. We accept the strings here
-// and convert in hypersync_decode.go (Task 3).
+// HyperSyncLog holds raw wire-format log fields. Numeric fields under 64-bit
+// width (TxIndex, LogIndex) and byte/256-bit fields (Address, Topics, Data,
+// TxHash) arrive as JSON numbers and 0x-prefixed hex strings respectively;
+// conversion to x402 types happens in hypersync_decode.go (Task 3).
 type HyperSyncLog struct {
 	Address     string   `json:"address"`
 	Topics      []string `json:"topics"`

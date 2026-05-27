@@ -41,10 +41,21 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	txFilter := txFilters[0].(map[string]any)
 	sigList := txFilter["sighash"].([]any)
 	require.Len(t, sigList, len(x402.AllowSighashes))
+	require.Equal(t, SighashHex(x402.AllowSighashes[0]), sigList[0])
 }
 
 func TestSighashHex(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "0xe3ee160e", SighashHex(0xe3ee160e))
 	require.Equal(t, "0x00000001", SighashHex(0x00000001))
+}
+
+func TestHyperSyncBatch_MaxBlock(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, uint64(0), HyperSyncBatch{}.MaxBlock(), "empty batch must report 0 — the empty-batch guard depends on this")
+
+	b := HyperSyncBatch{Data: HyperSyncBatchData{Blocks: []HyperSyncBlock{
+		{Number: 100}, {Number: 250}, {Number: 175},
+	}}}
+	require.Equal(t, uint64(250), b.MaxBlock())
 }
