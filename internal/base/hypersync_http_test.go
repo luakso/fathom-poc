@@ -125,3 +125,29 @@ func TestHTTPFetcher_ServerErrorBubblesUp(t *testing.T) {
 	_, _, err = stream.Next()
 	require.Error(t, err)
 }
+
+func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		// next_block == from_block → no advance. Without the guard the loop
+		// would re-issue the same query indefinitely.
+		_, _ = w.Write([]byte(`{"data":{"logs":[],"transactions":[],"blocks":[]},"next_block":100}`))
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "")
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	require.NoError(t, err)
+	defer stream.Close()
+	for {
+		_, ok, err := stream.Next()
+		require.NoError(t, err)
+		if !ok {
+			break
+		}
+	}
+	require.Equal(t, 1, calls, "non-advancing server must terminate stream after one call")
+}

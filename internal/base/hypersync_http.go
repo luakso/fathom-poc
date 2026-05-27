@@ -86,7 +86,10 @@ func (s *httpStream) Next() (HyperSyncBatch, bool, error) {
 		return HyperSyncBatch{}, false, fmt.Errorf("post hypersync query: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return HyperSyncBatch{}, false, fmt.Errorf("read response body: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return HyperSyncBatch{}, false, fmt.Errorf("hypersync status %d: %s", resp.StatusCode, string(body))
 	}
