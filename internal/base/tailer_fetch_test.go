@@ -3,6 +3,7 @@ package base
 import (
 	"context"
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -13,40 +14,56 @@ import (
 	"github.com/lukostrobl/fathom/internal/x402"
 )
 
-// fakeRPC implements Client with a static fixture.
+// fakeRPC implements Client with a static fixture. Call counters are guarded
+// by mu because FetchRange fetches blocks and receipts concurrently.
 type fakeRPC struct {
-	tip         uint64
-	logs        []types.Log
-	blocks      map[uint64]*types.Block
-	receipts    map[uint64][]*types.Receipt
-	filterCalls int
+	tip      uint64
+	logs     []types.Log
+	blocks   map[uint64]*types.Block
+	receipts map[uint64][]*types.Receipt
+
+	mu           sync.Mutex
+	filterCalls  int
+	blockCalls   int
+	receiptCalls int
 }
 
 func (f *fakeRPC) BlockNumber(_ context.Context) (uint64, error) { return f.tip, nil }
 func (f *fakeRPC) FilterLogs(_ context.Context, _ ethereum.FilterQuery) ([]types.Log, error) {
+	f.mu.Lock()
 	f.filterCalls++
+	f.mu.Unlock()
 	return f.logs, nil
 }
 
 func (f *fakeRPC) BlockByNumber(_ context.Context, n uint64) (*types.Block, error) {
+	f.mu.Lock()
+	f.blockCalls++
+	f.mu.Unlock()
 	return f.blocks[n], nil
 }
 
 func (f *fakeRPC) BlockReceipts(_ context.Context, n uint64) ([]*types.Receipt, error) {
+	f.mu.Lock()
+	f.receiptCalls++
+	f.mu.Unlock()
 	return f.receipts[n], nil
 }
 func (f *fakeRPC) Close() {}
 
 // buildClassicTx builds an x402-shaped tx with classic-sig transferWithAuthorization input.
 // The tx is unsigned (no key available in tests); tx.Hash() is deterministic from the fields.
-func buildClassicTx(t *testing.T, _ common.Hash, _ common.Address) *types.Transaction {
+// buildClassicTx builds a tx whose calldata carries the ALLOWED classic-sig
+// transferWithAuthorization selector. nonce varies the resulting tx hash so
+// callers can place distinct txs in distinct blocks.
+func buildClassicTx(t *testing.T, nonce uint64) *types.Transaction {
 	t.Helper()
 	to := x402.USDCProxyBase
 	// SighashTransferWithAuthV = 0xe3ee160e (ALLOWED)
 	data := append([]byte{0xe3, 0xee, 0x16, 0x0e}, make([]byte, 32)...)
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   big.NewInt(8453),
-		Nonce:     7,
+		Nonce:     nonce,
 		GasTipCap: big.NewInt(0),
 		GasFeeCap: big.NewInt(1_000_000_000),
 		Gas:       50_000,
@@ -59,7 +76,7 @@ func buildClassicTx(t *testing.T, _ common.Hash, _ common.Address) *types.Transa
 func TestFetchRange_FilterCutsByAddressTopic(t *testing.T) {
 	ctx := context.Background()
 
-	tx := buildClassicTx(t, common.HexToHash("0xdead"), common.HexToAddress("0xfac"))
+	tx := buildClassicTx(t, 7)
 	header := &types.Header{Number: big.NewInt(100), Time: 1_700_000_000}
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: types.Transactions{tx}})
 
@@ -95,6 +112,7 @@ func TestFetchRange_FilterCutsByAddressTopic(t *testing.T) {
 	require.Len(t, payments, 1)
 	require.Equal(t, uint64(100), maxBlock)
 	require.Equal(t, big.NewInt(1_000_000), payments[0].AmountRaw)
+	require.Equal(t, 1, rpc.filterCalls, "one eth_getLogs call for the range")
 }
 
 func TestFetchRange_NoLogsAdvancesNothing(t *testing.T) {
@@ -155,10 +173,67 @@ func TestFetchRange_DropsRowFromDeniedSighash(t *testing.T) {
 	require.Empty(t, payments, "receiveWithAuthorization must be filtered out")
 }
 
+// classicBlockFixture builds a single block at blockNum containing one allowed
+// transferWithAuthorization tx, the AuthorizationUsed log returned by
+// eth_getLogs, and the receipt (Transfer + AuthorizationUsed companions). The
+// nonce keeps each block's tx hash distinct.
+func classicBlockFixture(t *testing.T, blockNum, nonce uint64) (*types.Block, types.Log, *types.Receipt) {
+	t.Helper()
+	tx := buildClassicTx(t, nonce)
+	header := &types.Header{Number: new(big.Int).SetUint64(blockNum), Time: 1_700_000_000}
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: types.Transactions{tx}})
+
+	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
+	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+	authLog := types.Log{
+		Address:     x402.USDCProxyBase,
+		Topics:      []common.Hash{x402.AuthorizationUsedTopic, common.HexToHash(payer)},
+		Data:        make32(0xaa),
+		BlockNumber: blockNum,
+		TxHash:      tx.Hash(),
+		Index:       1,
+	}
+	transferLog := &types.Log{
+		Address:     x402.USDCProxyBase,
+		Topics:      []common.Hash{x402.TransferTopic, common.HexToHash(payer), common.HexToHash(payee)},
+		Data:        encodeU64(1_000_000),
+		BlockNumber: blockNum,
+		TxHash:      tx.Hash(),
+		Index:       0,
+	}
+	authLogCopy := authLog
+	receipt := &types.Receipt{TxHash: tx.Hash(), Status: 1, Logs: []*types.Log{transferLog, &authLogCopy}}
+	return block, authLog, receipt
+}
+
+func TestFetchRange_FetchesAcrossBlocksConcurrently(t *testing.T) {
+	ctx := context.Background()
+
+	block100, auth100, receipt100 := classicBlockFixture(t, 100, 1)
+	block101, auth101, receipt101 := classicBlockFixture(t, 101, 2)
+
+	rpc := &fakeRPC{
+		tip:    120,
+		logs:   []types.Log{auth100, auth101},
+		blocks: map[uint64]*types.Block{100: block100, 101: block101},
+		receipts: map[uint64][]*types.Receipt{
+			100: {receipt100},
+			101: {receipt101},
+		},
+	}
+
+	payments, maxBlock, err := FetchRange(ctx, rpc, 100, 101, 2)
+	require.NoError(t, err)
+	require.Len(t, payments, 2, "one payment per block")
+	require.Equal(t, uint64(101), maxBlock)
+	require.Equal(t, 2, rpc.blockCalls, "both blocks fetched")
+	require.Equal(t, 2, rpc.receiptCalls, "receipts fetched for both surviving blocks")
+}
+
 func make32(b byte) []byte { out := make([]byte, 32); out[0] = b; return out }
 func encodeU64(v uint64) []byte {
 	out := make([]byte, 32)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		out[31-i] = byte(v >> (8 * i))
 	}
 	return out

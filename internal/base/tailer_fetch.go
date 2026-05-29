@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum"
@@ -90,7 +90,7 @@ func FetchRange(ctx context.Context, c Client, fromBlock, toBlock uint64, concur
 	for n := range survivingBlocks {
 		survivingNums = append(survivingNums, n)
 	}
-	sort.Slice(survivingNums, func(i, j int) bool { return survivingNums[i] < survivingNums[j] })
+	slices.Sort(survivingNums)
 	receiptsByBlock, err := fetchBlockReceipts(ctx, c, survivingNums, concurrency)
 	if err != nil {
 		return nil, 0, err
@@ -200,7 +200,7 @@ func uniqueBlockNumbers(logs []types.Log) []uint64 {
 		seen[n] = struct{}{}
 		out = append(out, n)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -213,7 +213,6 @@ func fetchBlocks(ctx context.Context, c Client, nums []uint64, concurrency int64
 	var mu sync.Mutex
 
 	for _, n := range nums {
-		n := n
 		if err := sem.Acquire(gctx, 1); err != nil {
 			return nil, fmt.Errorf("acquire sem: %w", err)
 		}
@@ -248,7 +247,6 @@ func fetchBlockReceipts(ctx context.Context, c Client, nums []uint64, concurrenc
 	var mu sync.Mutex
 
 	for _, n := range nums {
-		n := n
 		if err := sem.Acquire(gctx, 1); err != nil {
 			return nil, fmt.Errorf("acquire sem: %w", err)
 		}
