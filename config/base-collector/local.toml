@@ -4,3 +4,6 @@ secrets_path = "config/base-collector/local.secrets.toml"
 [log]
 is_pretty = true
 level = "debug"
+
+# rpc_url and hypersync_bearer_token live in local.secrets.toml (gitignored)
+# or come from BASE__RPC_URL / BASE__HYPERSYNC_BEARER_TOKEN env vars.

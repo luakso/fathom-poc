@@ -5,3 +5,12 @@ with_debug_profiler = false
 [log]
 is_pretty = false
 level = "info"
+
+[base]
+# Public HyperSync endpoint for Base. Override via BASE__HYPERSYNC_URL.
+hypersync_url = "https://base.hypersync.xyz"
+confirmation_depth = 6
+poll_interval_ms = 1000
+block_batch_size = 100
+concurrency = 10
+batch_commit_size = 5000
