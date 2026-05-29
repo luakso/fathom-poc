@@ -18,6 +18,9 @@ func TestRunLive_ValidatesClient(t *testing.T) {
 	require.Error(t, err)
 }
 
+// This proves RunLive wires LiveDeps -> TailerOptions and propagates the
+// nil-on-cancel return. The loop behaviour itself (cursor advance, confirmation
+// depth) is covered by the Tailer tests; here we only care about the wiring.
 func TestRunLive_ReturnsCleanlyOnCtxCancel(t *testing.T) {
 	ctx, store := setupStore(t)
 
