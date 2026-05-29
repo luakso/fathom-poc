@@ -62,10 +62,41 @@ func TestWithRateLimitBackoff_CtxCancelDuringSleep(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	// Deliberately a non-zero sleep: the cancelled ctx.Done() is the only
+	// ready select case, so cancellation is chosen deterministically. Using a
+	// zero-duration sleep here would make time.After(0) ready too and let the
+	// select pick randomly between the two — a ~50% flake. Do not "simplify"
+	// this to instantSleeps().
 	err := WithRateLimitBackoff(ctx, func() error {
 		return errors.New("429")
 	}, []time.Duration{time.Second})
 	require.Error(t, err)
+}
+
+func TestWithRateLimitBackoff_StopsRetryingWhenErrorShapeChanges(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	err := WithRateLimitBackoff(context.Background(), func() error {
+		calls++
+		if calls == 1 {
+			return errors.New("429 rate limit")
+		}
+		return errors.New("schema validation failed")
+	}, instantSleeps())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "schema validation failed")
+	require.Equal(t, 2, calls, "retry once for the 429, then fail fast on the non-rate-limit error")
+}
+
+func TestWithRateLimitBackoff_EmptySleepsMeansZeroRetries(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	err := WithRateLimitBackoff(context.Background(), func() error {
+		calls++
+		return errors.New("429 rate limit")
+	}, nil)
+	require.Error(t, err)
+	require.Equal(t, 1, calls, "no sleeps means no retries — one call then exhausted")
 }
 
 func instantSleeps() []time.Duration {
