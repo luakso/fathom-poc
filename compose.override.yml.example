@@ -13,3 +13,9 @@ services:
     # Expose on a different host port:
     # ports:
     #   - "5433:5432"
+
+# Run base-collector backfill on demand (does NOT auto-start):
+#   docker compose run --rm base-collector backfill --from-block 36334720
+#
+# Or via justfile:
+#   just run base-collector backfill --from-block 36334720
