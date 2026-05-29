@@ -43,6 +43,29 @@ func NewTailer(c Client, s *Store, opts TailerOptions) *Tailer {
 	return &Tailer{client: c, store: s, opts: opts}
 }
 
+// nextWindow computes the next block range to query from the current cursor
+// and chain tip. It is the pure core of the polling loop, factored out so the
+// confirmation-depth and batch-clamp boundaries can be unit-tested without a
+// live RPC or database.
+//
+// safeTip = tip - confirmationDepth (the deepest block we trust not to reorg).
+// When the chain is younger than the confirmation depth, or the cursor has
+// already reached safeTip, hasWork is false and from/to are meaningless.
+// Otherwise the closed range [from, to] is [cursor+1, min(cursor+batchSize,
+// safeTip)].
+func nextWindow(cursor, tip, batchSize, confirmationDepth uint64) (from, to uint64, hasWork bool) {
+	if tip < confirmationDepth {
+		return 0, 0, false // chain too young
+	}
+	safeTip := tip - confirmationDepth
+	if cursor >= safeTip {
+		return 0, 0, false // caught up
+	}
+	from = cursor + 1
+	to = min(from+batchSize-1, safeTip)
+	return from, to, true
+}
+
 // Run drives the polling loop until ctx is cancelled. On cancel Run returns
 // nil (graceful shutdown). On any in-flight error (RPC dropout, decode
 // failure, Postgres unavailable) Run returns the error — the caller is
@@ -94,19 +117,9 @@ func (t *Tailer) iterate(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("read tip: %w", err)
 	}
 
-	if tip < t.opts.ConfirmationDepth {
-		return false, nil // chain too young; wait
-	}
-	safeTip := tip - t.opts.ConfirmationDepth
-
-	if cursor >= safeTip {
-		return false, nil // caught up; sleep
-	}
-
-	fromBlock := cursor + 1
-	rangeEnd := fromBlock + t.opts.BlockBatchSize - 1
-	if rangeEnd > safeTip {
-		rangeEnd = safeTip
+	fromBlock, rangeEnd, hasWork := nextWindow(cursor, tip, t.opts.BlockBatchSize, t.opts.ConfirmationDepth)
+	if !hasWork {
+		return false, nil // chain too young or caught up; sleep
 	}
 
 	started := time.Now()
@@ -116,12 +129,10 @@ func (t *Tailer) iterate(ctx context.Context) (bool, error) {
 	}
 
 	// Even with zero payments, advance the cursor to rangeEnd: we DID query
-	// the range and confirmed it's empty. maxBlock from FetchRange is the
-	// queried range end (or toBlock if no logs in this batch).
-	advanceTo := maxBlock
-	if advanceTo < rangeEnd {
-		advanceTo = rangeEnd
-	}
+	// the range and confirmed it's empty. FetchRange returns rangeEnd as
+	// maxBlock on every success path, so this max is belt-and-suspenders
+	// against a future FetchRange that reports a partial high-water mark.
+	advanceTo := max(maxBlock, rangeEnd)
 
 	if err := t.store.InsertBatch(ctx, payments, advanceTo); err != nil {
 		return false, fmt.Errorf("insert %d rows (range %d-%d): %w",
