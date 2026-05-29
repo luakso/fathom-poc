@@ -119,22 +119,36 @@ func TestFetchRange_DropsRowFromDeniedSighash(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(100), Time: 1_700_000_000}
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: types.Transactions{tx}})
 
+	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
+	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
 	authLog := types.Log{
 		Address: x402.USDCProxyBase,
 		Topics: []common.Hash{
 			x402.AuthorizationUsedTopic,
-			common.HexToHash("0x000000000000000000000000aaaa000000000000000000000000000000000001"),
+			common.HexToHash(payer),
 		},
 		Data:        make32(0xaa),
 		BlockNumber: 100,
 		TxHash:      tx.Hash(),
 		Index:       1,
 	}
+	// A valid companion Transfer log is present in the receipt: the row is
+	// otherwise assemblable, so the ONLY reason it must drop is the denied
+	// sighash. Without this companion the test would pass even if the gate
+	// were broken (Assemble would drop the row for "no companion Transfer").
+	transferLog := types.Log{
+		Address:     x402.USDCProxyBase,
+		Topics:      []common.Hash{x402.TransferTopic, common.HexToHash(payer), common.HexToHash(payee)},
+		Data:        encodeU64(1_000_000),
+		BlockNumber: 100,
+		TxHash:      tx.Hash(),
+		Index:       0,
+	}
 	rpc := &fakeRPC{
 		tip:      110,
 		logs:     []types.Log{authLog},
 		blocks:   map[uint64]*types.Block{100: block},
-		receipts: map[uint64][]*types.Receipt{100: {{TxHash: tx.Hash(), Logs: []*types.Log{&authLog}}}},
+		receipts: map[uint64][]*types.Receipt{100: {{TxHash: tx.Hash(), Logs: []*types.Log{&transferLog, &authLog}}}},
 	}
 	payments, _, err := FetchRange(ctx, rpc, 100, 100, 4)
 	require.NoError(t, err)
