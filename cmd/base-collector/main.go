@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/lukostrobl/fathom/internal/base"
 	"github.com/lukostrobl/fathom/internal/config"
@@ -26,20 +25,10 @@ type Config struct {
 }
 
 // BaseConfig holds chain + endpoint configuration. Defaults are applied at use
-// site (rpc.go / backfill.go) when a field is its zero value.
+// site (backfill.go) when a field is its zero value.
 type BaseConfig struct {
-	RPCURL               string `koanf:"rpc_url"`
 	HyperSyncURL         string `koanf:"hypersync_url"`
 	HyperSyncBearerToken string `koanf:"hypersync_bearer_token"`
-
-	// Live tuning knobs (zero = default)
-	ConfirmationDepth uint64 `koanf:"confirmation_depth"`
-	PollIntervalMs    int    `koanf:"poll_interval_ms"`
-	BlockBatchSize    uint64 `koanf:"block_batch_size"`
-	Concurrency       int64  `koanf:"concurrency"`
-
-	// Backfill tuning knob
-	BatchCommitSize int `koanf:"batch_commit_size"`
 }
 
 func (c Config) GetBasicConfig() config.BasicConfig { return c.BasicConfig }
@@ -67,7 +56,7 @@ func run() error {
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
-	case "backfill", "live", "probe", "status":
+	case "backfill", "probe", "status":
 		// known subcommand — fall through to setup below
 	default:
 		return fmt.Errorf("unknown subcommand %q\n\n%s", cmd, usageText())
@@ -98,8 +87,6 @@ func run() error {
 	switch cmd {
 	case "backfill":
 		return runBackfillCmd(ctx, args, cfg, store, logger)
-	case "live":
-		return runLiveCmd(ctx, args, cfg, store, logger)
 	case "probe":
 		return runProbeCmd(ctx, args, cfg, logger)
 	case "status":
@@ -138,39 +125,6 @@ func runBackfillCmd(ctx context.Context, args []string, cfg Config, store *base.
 		Store:     store,
 		FromBlock: *fromBlock,
 		ToBlock:   *toBlock,
-	})
-}
-
-func runLiveCmd(ctx context.Context, args []string, cfg Config, store *base.Store, logger *slog.Logger) error {
-	fs := flag.NewFlagSet("live", flag.ExitOnError)
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if cfg.Base.RPCURL == "" {
-		return errors.New("live: base.rpc_url not configured")
-	}
-
-	client, err := base.NewRPCClient(cfg.Base.RPCURL)
-	if err != nil {
-		return fmt.Errorf("open rpc client: %w", err)
-	}
-	defer client.Close()
-
-	pollInterval := time.Duration(cfg.Base.PollIntervalMs) * time.Millisecond
-	logger.Info(
-		"base-collector: starting live tail",
-		"rpc_url", cfg.Base.RPCURL,
-		"poll_interval", pollInterval.String(),
-		"confirmation_depth", cfg.Base.ConfirmationDepth,
-	)
-
-	return base.RunLive(ctx, base.LiveDeps{
-		Client:            client,
-		Store:             store,
-		PollInterval:      pollInterval,
-		BlockBatchSize:    cfg.Base.BlockBatchSize,
-		Concurrency:       cfg.Base.Concurrency,
-		ConfirmationDepth: cfg.Base.ConfirmationDepth,
 	})
 }
 
@@ -224,8 +178,7 @@ func usageText() string {
 	return `usage: base-collector <subcommand> [flags]
 
 subcommands:
-  backfill --from-block N [--to-block N]    one-shot HyperSync backfill
-  live                                       long-running RPC tail
+  backfill --from-block N --to-block N       one-shot HyperSync backfill
   probe    --from-block N --to-block N       dry-run HyperSync count, no writes
   status                                     print cursor + recent counts
 
