@@ -82,13 +82,14 @@ func TestFetchRange_FilterCutsByAddressTopic(t *testing.T) {
 
 	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
 	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+	// Real USDC EIP-3009 order: AuthorizationUsed (index 0) then Transfer (index 1).
+	// AuthorizationUsed has 3 topics (sig, authorizer, indexed nonce).
 	authLog := types.Log{
 		Address:     x402.USDCProxyBase,
-		Topics:      []common.Hash{x402.AuthorizationUsedTopic, common.HexToHash(payer)},
-		Data:        make32(0xaa),
+		Topics:      []common.Hash{x402.AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(make32(0xaa))},
 		BlockNumber: 100,
 		TxHash:      tx.Hash(),
-		Index:       1,
+		Index:       0,
 	}
 	transferLog := types.Log{
 		Address:     x402.USDCProxyBase,
@@ -96,9 +97,9 @@ func TestFetchRange_FilterCutsByAddressTopic(t *testing.T) {
 		Data:        encodeU64(1_000_000),
 		BlockNumber: 100,
 		TxHash:      tx.Hash(),
-		Index:       0,
+		Index:       1,
 	}
-	receipt := &types.Receipt{TxHash: tx.Hash(), Status: 1, Logs: []*types.Log{&transferLog, &authLog}}
+	receipt := &types.Receipt{TxHash: tx.Hash(), Status: 1, Logs: []*types.Log{&authLog, &transferLog}}
 
 	rpc := &fakeRPC{
 		tip:      120,
@@ -185,13 +186,14 @@ func classicBlockFixture(t *testing.T, blockNum, nonce uint64) (*types.Block, ty
 
 	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
 	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+	// Real USDC EIP-3009 order: AuthorizationUsed (index 0) then Transfer (index 1).
+	// AuthorizationUsed has 3 topics (sig, authorizer, indexed nonce).
 	authLog := types.Log{
 		Address:     x402.USDCProxyBase,
-		Topics:      []common.Hash{x402.AuthorizationUsedTopic, common.HexToHash(payer)},
-		Data:        make32(0xaa),
+		Topics:      []common.Hash{x402.AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(make32(0xaa))},
 		BlockNumber: blockNum,
 		TxHash:      tx.Hash(),
-		Index:       1,
+		Index:       0,
 	}
 	transferLog := &types.Log{
 		Address:     x402.USDCProxyBase,
@@ -199,10 +201,10 @@ func classicBlockFixture(t *testing.T, blockNum, nonce uint64) (*types.Block, ty
 		Data:        encodeU64(1_000_000),
 		BlockNumber: blockNum,
 		TxHash:      tx.Hash(),
-		Index:       0,
+		Index:       1,
 	}
 	authLogCopy := authLog
-	receipt := &types.Receipt{TxHash: tx.Hash(), Status: 1, Logs: []*types.Log{transferLog, &authLogCopy}}
+	receipt := &types.Receipt{TxHash: tx.Hash(), Status: 1, Logs: []*types.Log{&authLogCopy, transferLog}}
 	return block, authLog, receipt
 }
 

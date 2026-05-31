@@ -127,7 +127,7 @@ func Assemble(
 			GasUsed:           tx.GasUsed,
 			EffectiveGasPrice: tx.EffectiveGasPrice,
 			GasCostWei:        gasCost,
-			BaseFeePerGas:     tx.BaseFeePerGas,
+			BaseFeePerGas:     block.BaseFeePerGas,
 		})
 	}
 	return out

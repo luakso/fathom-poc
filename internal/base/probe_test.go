@@ -26,10 +26,9 @@ func TestRunProbe_CountsByOuterSighash(t *testing.T) {
 		To:                strings.ToLower("0xcA11bde05977b3631167028862bE2a173976CA11"),
 		Input:             "0x82ad56cb",
 		Type:              2,
-		Nonce:             1,
-		GasUsed:           50_000,
+		Nonce:             "0x1",    // 1
+		GasUsed:           "0xc350", // 50_000
 		EffectiveGasPrice: "0x3b9aca00",
-		BaseFeePerGas:     "0x1dcd6500",
 	})
 	// Mirror the first batch's existing Transfer+AuthorizationUsed pattern, but
 	// attached to the second tx so the second sighash actually gets counted.

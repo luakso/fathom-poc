@@ -32,14 +32,15 @@ type Transaction struct {
 	Nonce             uint64
 	GasUsed           uint64
 	EffectiveGasPrice *big.Int
-	BaseFeePerGas     *big.Int
 }
 
-// Block carries only the per-block context we actually use.
+// Block carries only the per-block context we actually use. BaseFeePerGas is a
+// block-level (EIP-1559) property — sourced from the block header, not the tx.
 type Block struct {
-	Number    uint64
-	Timestamp uint64 // unix seconds
-	Hash      common.Hash
+	Number        uint64
+	Timestamp     uint64 // unix seconds
+	Hash          common.Hash
+	BaseFeePerGas *big.Int // nullable on legacy (pre-EIP-1559) blocks
 }
 
 // DecodeTransfer extracts (from, to, value) from a standard ERC-20 Transfer log.
@@ -61,22 +62,23 @@ func DecodeTransfer(log Log) (from, to common.Address, value *big.Int, err error
 }
 
 // DecodeAuthorizationUsed extracts (authorizer, nonce) from an EIP-3009
-// AuthorizationUsed log. Caller is responsible for confirming
+// AuthorizationUsed log. The canonical USDC event is
+//
+//	AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)
+//
+// Both parameters are INDEXED, so the log has 3 topics (signature, authorizer,
+// nonce) and empty data. Caller is responsible for confirming
 // Topics[0] == AuthorizationUsedTopic and Address == USDCProxyBase.
 //
 // Returned nonce is a copy — safe to store.
 func DecodeAuthorizationUsed(log Log) (authorizer common.Address, nonce []byte, err error) {
-	if len(log.Topics) != 2 {
+	if len(log.Topics) != 3 {
 		return common.Address{}, nil,
-			fmt.Errorf("authorization-used log: expected 2 topics, got %d", len(log.Topics))
-	}
-	if len(log.Data) < 32 {
-		return common.Address{}, nil,
-			fmt.Errorf("authorization-used log: data too short (%d bytes)", len(log.Data))
+			fmt.Errorf("authorization-used log: expected 3 topics, got %d", len(log.Topics))
 	}
 	authorizer = common.BytesToAddress(log.Topics[1].Bytes())
 	nonce = make([]byte, 32)
-	copy(nonce, log.Data[:32])
+	copy(nonce, log.Topics[2].Bytes())
 	return authorizer, nonce, nil
 }
 

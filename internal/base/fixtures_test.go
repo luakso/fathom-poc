@@ -42,6 +42,22 @@ func fixtureBatch() base.HyperSyncBatch {
 	return base.HyperSyncBatch{
 		Data: base.HyperSyncBatchData{
 			Logs: []base.HyperSyncLog{
+				// Real USDC EIP-3009 order: AuthorizationUsed (log_index 0) first.
+				// Both params indexed → 3 topics (sig, authorizer, nonce), empty data.
+				{
+					Address: strings.ToLower(x402.USDCProxyBase.Hex()),
+					Topics: []string{
+						x402.AuthorizationUsedTopic.Hex(),
+						payer,
+						"0x1111111111111111111111111111111111111111111111111111111111111111", // nonce (indexed)
+					},
+					Data:        "0x",
+					BlockNumber: 100,
+					TxHash:      "0xdead",
+					TxIndex:     0,
+					LogIndex:    0,
+				},
+				// ...then the companion Transfer (log_index 1).
 				{
 					Address: strings.ToLower(x402.USDCProxyBase.Hex()),
 					Topics: []string{
@@ -49,18 +65,6 @@ func fixtureBatch() base.HyperSyncBatch {
 						payer, payee,
 					},
 					Data:        "0x00000000000000000000000000000000000000000000000000000000000f4240", // 1 USDC
-					BlockNumber: 100,
-					TxHash:      "0xdead",
-					TxIndex:     0,
-					LogIndex:    0,
-				},
-				{
-					Address: strings.ToLower(x402.USDCProxyBase.Hex()),
-					Topics: []string{
-						x402.AuthorizationUsedTopic.Hex(),
-						payer,
-					},
-					Data:        "0x1111111111111111111111111111111111111111111111111111111111111111",
 					BlockNumber: 100,
 					TxHash:      "0xdead",
 					TxIndex:     0,
@@ -75,14 +79,13 @@ func fixtureBatch() base.HyperSyncBatch {
 					To:                strings.ToLower(x402.USDCProxyBase.Hex()),
 					Input:             "0xe3ee160edeadbeef",
 					Type:              2,
-					Nonce:             7,
-					GasUsed:           50_000,
+					Nonce:             "0x7",    // 7
+					GasUsed:           "0xc350", // 50_000
 					EffectiveGasPrice: "0x3b9aca00",
-					BaseFeePerGas:     "0x1dcd6500",
 				},
 			},
 			Blocks: []base.HyperSyncBlock{
-				{Number: 100, Timestamp: 1_700_000_000, Hash: "0xb100"},
+				{Number: 100, Timestamp: "0x6553f100", Hash: "0xb100", BaseFeePerGas: "0x1dcd6500"}, // ts 1_700_000_000
 			},
 		},
 		NextBlock: 101,

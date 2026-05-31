@@ -55,31 +55,35 @@ func TestDecodeTransfer_RejectsWrongTopicCount(t *testing.T) {
 
 func TestDecodeAuthorizationUsed_Success(t *testing.T) {
 	t.Parallel()
+	// AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce):
+	// BOTH params are indexed → 3 topics, empty data. The nonce is topic[2].
+	nonceHex := "0x201c19d42de40583dcae582c5ab2775811399e41508ba7dd1de67ced33e02c7a"
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{
 			AuthorizationUsedTopic.Hex(),
 			"0x000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			nonceHex,
 		},
-		// nonce is non-indexed bytes32 in data
-		"0x1111111111111111111111111111111111111111111111111111111111111111",
+		"0x", // empty — nonce is indexed, not in data
 	)
 	authorizer, nonce, err := DecodeAuthorizationUsed(log)
 	require.NoError(t, err)
 	require.Equal(t, common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), authorizer)
 	require.Len(t, nonce, 32)
-	require.Equal(t, byte(0x11), nonce[0])
+	require.Equal(t, common.HexToHash(nonceHex).Bytes(), nonce)
 }
 
-func TestDecodeAuthorizationUsed_RejectsShortData(t *testing.T) {
+func TestDecodeAuthorizationUsed_RejectsWrongTopicCount(t *testing.T) {
 	t.Parallel()
+	// Only 2 topics (missing the indexed nonce) — must be rejected.
 	log := fixtureLog(
 		t, USDCProxyBase,
 		[]string{
 			AuthorizationUsedTopic.Hex(),
 			"0x000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
-		"0x1111", // too short
+		"0x",
 	)
 	_, _, err := DecodeAuthorizationUsed(log)
 	require.Error(t, err)

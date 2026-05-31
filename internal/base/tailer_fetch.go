@@ -143,7 +143,6 @@ func FetchRange(ctx context.Context, c Client, fromBlock, toBlock uint64, concur
 				Nonce:             tx.Nonce(),
 				GasUsed:           receiptGasUsed(receiptsByBlock[lg.BlockNumber], lg.TxHash),
 				EffectiveGasPrice: tx.GasFeeCap(),
-				BaseFeePerGas:     blk.BaseFee(),
 			}
 		}
 
@@ -178,9 +177,10 @@ func FetchRange(ctx context.Context, c Client, fromBlock, toBlock uint64, concur
 
 		if _, seen := blockByNumberMap[lg.BlockNumber]; !seen {
 			blockByNumberMap[lg.BlockNumber] = x402.Block{
-				Number:    lg.BlockNumber,
-				Timestamp: blk.Time(),
-				Hash:      blk.Hash(),
+				Number:        lg.BlockNumber,
+				Timestamp:     blk.Time(),
+				Hash:          blk.Hash(),
+				BaseFeePerGas: blk.BaseFee(),
 			}
 		}
 	}

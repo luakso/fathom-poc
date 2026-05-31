@@ -21,7 +21,6 @@ func txFixture(hash, from, to string, input []byte) Transaction {
 		Nonce:             7,
 		GasUsed:           50_000,
 		EffectiveGasPrice: big.NewInt(1_000_000_000),
-		BaseFeePerGas:     big.NewInt(500_000_000),
 	}
 }
 
@@ -38,7 +37,21 @@ func TestAssemble_SinglePayment_DirectUSDCCall(t *testing.T) {
 	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
 
 	logs := []Log{
-		// Transfer companion at log_index=0
+		// Real USDC EIP-3009 order: AuthorizationUsed first (log_index=0)...
+		// Both event params are indexed → 3 topics (sig, authorizer, nonce),
+		// empty data.
+		{
+			Address: USDCProxyBase,
+			Topics: []common.Hash{
+				AuthorizationUsedTopic,
+				common.HexToHash(payer),
+				common.BytesToHash(bytes32(0xab)), // nonce (indexed)
+			},
+			BlockNumber: 42,
+			TxHash:      tx.Hash,
+			LogIndex:    0,
+		},
+		// ...then the companion Transfer at log_index=1.
 		{
 			Address: USDCProxyBase,
 			Topics: []common.Hash{
@@ -50,23 +63,11 @@ func TestAssemble_SinglePayment_DirectUSDCCall(t *testing.T) {
 			Data:        make32WithUint64(1_000_000),
 			BlockNumber: 42,
 			TxHash:      tx.Hash,
-			LogIndex:    0,
-		},
-		// AuthorizationUsed at log_index=1
-		{
-			Address: USDCProxyBase,
-			Topics: []common.Hash{
-				AuthorizationUsedTopic,
-				common.HexToHash(payer),
-			},
-			Data:        bytes32(0xab),
-			BlockNumber: 42,
-			TxHash:      tx.Hash,
 			LogIndex:    1,
 		},
 	}
 
-	block := Block{Number: 42, Timestamp: 1_700_000_000}
+	block := Block{Number: 42, Timestamp: 1_700_000_000, BaseFeePerGas: big.NewInt(500_000_000)}
 	out := Assemble(
 		logs,
 		map[common.Hash]Transaction{tx.Hash: tx},
@@ -76,7 +77,7 @@ func TestAssemble_SinglePayment_DirectUSDCCall(t *testing.T) {
 	require.Len(t, out, 1)
 	p := out[0]
 	require.Equal(t, ChainBase, p.Chain)
-	require.Equal(t, uint32(1), p.LogIndex)
+	require.Equal(t, uint32(0), p.LogIndex) // the AuthorizationUsed log index
 	require.Equal(t, "0xfac1000000000000000000000000000000000001", p.Facilitator)
 	require.Equal(t, "0xaaaa000000000000000000000000000000000001", p.Payer)
 	require.Equal(t, "0xbbbb000000000000000000000000000000000001", p.Payee)
@@ -85,6 +86,7 @@ func TestAssemble_SinglePayment_DirectUSDCCall(t *testing.T) {
 	require.Equal(t, time.Unix(1_700_000_000, 0).UTC(), p.BlockTimestamp)
 	require.Equal(t, []byte{0xe3, 0xee, 0x16, 0x0e}, p.MethodSelector)
 	require.Equal(t, USDCProxyBase.Hex(), common.HexToAddress(p.CalledContract).Hex()) // round-trip
+	require.Equal(t, big.NewInt(500_000_000), p.BaseFeePerGas, "base fee sourced from the block")
 }
 
 func TestAssemble_DropsReceiveWithAuthorization(t *testing.T) {
@@ -138,11 +140,13 @@ func TestAssemble_MulticallProducesMultipleRows(t *testing.T) {
 	payerB := "0x000000000000000000000000cccc000000000000000000000000000000000001"
 	payeeB := "0x000000000000000000000000dddd000000000000000000000000000000000001"
 
+	// Real USDC EIP-3009 order per payment: AuthorizationUsed then Transfer.
+	// Two interleaved payments: [AUTH_A@0, XFER_A@1, AUTH_B@2, XFER_B@3].
 	logs := []Log{
-		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payerA), common.HexToHash(payeeA)}, Data: make32WithUint64(100), TxHash: tx.Hash, LogIndex: 0, BlockNumber: 42},
-		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payerA)}, Data: bytes32(0xaa), TxHash: tx.Hash, LogIndex: 1, BlockNumber: 42},
-		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payerB), common.HexToHash(payeeB)}, Data: make32WithUint64(500), TxHash: tx.Hash, LogIndex: 2, BlockNumber: 42},
-		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payerB)}, Data: bytes32(0xbb), TxHash: tx.Hash, LogIndex: 3, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payerA), common.BytesToHash(bytes32(0xaa))}, TxHash: tx.Hash, LogIndex: 0, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payerA), common.HexToHash(payeeA)}, Data: make32WithUint64(100), TxHash: tx.Hash, LogIndex: 1, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payerB), common.BytesToHash(bytes32(0xbb))}, TxHash: tx.Hash, LogIndex: 2, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payerB), common.HexToHash(payeeB)}, Data: make32WithUint64(500), TxHash: tx.Hash, LogIndex: 3, BlockNumber: 42},
 	}
 	out := Assemble(
 		logs,
@@ -152,11 +156,11 @@ func TestAssemble_MulticallProducesMultipleRows(t *testing.T) {
 	)
 	require.Len(t, out, 2)
 
-	require.Equal(t, uint32(1), out[0].LogIndex)
+	require.Equal(t, uint32(0), out[0].LogIndex)
 	require.Equal(t, "0xaaaa000000000000000000000000000000000001", out[0].Payer)
 	require.Equal(t, big.NewInt(100), out[0].AmountRaw)
 
-	require.Equal(t, uint32(3), out[1].LogIndex)
+	require.Equal(t, uint32(2), out[1].LogIndex)
 	require.Equal(t, "0xcccc000000000000000000000000000000000001", out[1].Payer)
 	require.Equal(t, big.NewInt(500), out[1].AmountRaw)
 }
@@ -182,7 +186,7 @@ func TestAssemble_SkipsAuthMissingCompanionTransfer(t *testing.T) {
 		map[common.Hash][]Log{tx.Hash: logs},
 		map[uint64]Block{42: {Number: 42, Timestamp: 1_700_000_000}},
 	)
-	require.Empty(t, out, "auth without preceding companion Transfer must be skipped, not exploded")
+	require.Empty(t, out, "auth without a companion Transfer must be skipped, not exploded")
 }
 
 // helpers

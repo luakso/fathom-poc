@@ -21,10 +21,12 @@ type ProbeDeps struct {
 // MatchedEvents is the count of AuthorizationUsed logs whose parent tx passed
 // KeepAuthorizationUsed (i.e., would have become payments rows).
 //
-// OuterSighashCounts maps outer-tx sighash hex → count of MATCHING
-// AuthorizationUsed events on the USDC proxy seen with that sighash. Includes
-// sighashes outside ALLOW that emitted the event — these are coverage-gap
-// signals (probe found x402 traffic our filter would have missed).
+// OuterSighashCounts maps outer-tx sighash hex → count of ALL AuthorizationUsed
+// events on the USDC proxy seen with that sighash (bucketed before the
+// KeepAuthorizationUsed gate, so the total spans matched and unmatched alike).
+// Sighashes outside ALLOW that emitted the event are coverage-gap signals
+// (x402 traffic our filter would have missed). MatchedEvents is the subset that
+// passed the gate.
 type ProbeReport struct {
 	FromBlock          uint64
 	ToBlock            uint64

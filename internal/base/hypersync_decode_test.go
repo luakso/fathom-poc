@@ -41,10 +41,9 @@ func TestConvertHyperSyncTransaction(t *testing.T) {
 		To:                "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 		Input:             "0xe3ee160edeadbeef",
 		Type:              2,
-		Nonce:             7,
-		GasUsed:           50_000,
+		Nonce:             "0x7",        // 7
+		GasUsed:           "0xc350",     // 50_000
 		EffectiveGasPrice: "0x3b9aca00", // 1_000_000_000
-		BaseFeePerGas:     "0x1dcd6500", // 500_000_000
 	}
 	got, err := base.ConvertTransaction(htx)
 	require.NoError(t, err)
@@ -53,29 +52,27 @@ func TestConvertHyperSyncTransaction(t *testing.T) {
 	require.Equal(t, x402.USDCProxyBase, got.To)
 	require.Equal(t, []byte{0xe3, 0xee, 0x16, 0x0e, 0xde, 0xad, 0xbe, 0xef}, got.Input)
 	require.Equal(t, big.NewInt(1_000_000_000), got.EffectiveGasPrice)
-	require.Equal(t, big.NewInt(500_000_000), got.BaseFeePerGas)
+	require.Equal(t, uint64(7), got.Nonce)
 	require.Equal(t, uint64(50_000), got.GasUsed)
-}
-
-func TestConvertHyperSyncTransaction_LegacyTxHasNilBaseFee(t *testing.T) {
-	t.Parallel()
-	htx := base.HyperSyncTransaction{
-		Hash: "0xdead", BlockNumber: 42, From: "0xfac1000000000000000000000000000000000001", To: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-		Input: "0xe3ee160e", Type: 0, Nonce: 1, GasUsed: 50_000,
-		EffectiveGasPrice: "0x3b9aca00",
-		BaseFeePerGas:     "", // legacy
-	}
-	got, err := base.ConvertTransaction(htx)
-	require.NoError(t, err)
-	require.Nil(t, got.BaseFeePerGas)
 }
 
 func TestConvertHyperSyncBlock(t *testing.T) {
 	t.Parallel()
-	got, err := base.ConvertBlock(base.HyperSyncBlock{Number: 100, Timestamp: 1_700_000_000, Hash: "0xabc"})
+	got, err := base.ConvertBlock(base.HyperSyncBlock{
+		Number: 100, Timestamp: "0x6553f100", Hash: "0xabc", // 1_700_000_000
+		BaseFeePerGas: "0x1dcd6500", // 500_000_000
+	})
 	require.NoError(t, err)
 	require.Equal(t, uint64(100), got.Number)
 	require.Equal(t, uint64(1_700_000_000), got.Timestamp)
+	require.Equal(t, big.NewInt(500_000_000), got.BaseFeePerGas)
+}
+
+func TestConvertHyperSyncBlock_LegacyHasNilBaseFee(t *testing.T) {
+	t.Parallel()
+	got, err := base.ConvertBlock(base.HyperSyncBlock{Number: 100, Timestamp: "0x6553f100", Hash: "0xabc", BaseFeePerGas: ""})
+	require.NoError(t, err)
+	require.Nil(t, got.BaseFeePerGas)
 }
 
 func TestParseHexInt_RejectsBadInput(t *testing.T) {

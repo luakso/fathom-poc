@@ -15,22 +15,13 @@ import (
 func TestHTTPFetcher_StreamsBatches(t *testing.T) {
 	t.Parallel()
 
-	// Two-batch fixture: first batch covers blocks [100, 109] and sets
-	// next_block = 110; second covers [110, 119] and sets next_block = 120
-	// (past to_block), which terminates the stream.
-	batches := []base.HyperSyncBatch{
-		{
-			Data: base.HyperSyncBatchData{
-				Blocks: []base.HyperSyncBlock{{Number: 100, Timestamp: 1, Hash: "0xa"}, {Number: 109, Timestamp: 9, Hash: "0xb"}},
-			},
-			NextBlock: 110,
-		},
-		{
-			Data: base.HyperSyncBatchData{
-				Blocks: []base.HyperSyncBlock{{Number: 110, Timestamp: 10, Hash: "0xc"}, {Number: 119, Timestamp: 19, Hash: "0xd"}},
-			},
-			NextBlock: 120,
-		},
+	// Two-batch fixture in HyperSync's real wire shape (`data` is an array).
+	// First response covers blocks [100, 109] and sets next_block = 110; second
+	// covers [110, 119] and sets next_block = 120 (past to_block), terminating
+	// the stream.
+	responses := []string{
+		`{"data":[{"logs":[],"transactions":[],"blocks":[{"number":100,"timestamp":"0x1","hash":"0xa"},{"number":109,"timestamp":"0x9","hash":"0xb"}]}],"next_block":110}`,
+		`{"data":[{"logs":[],"transactions":[],"blocks":[{"number":110,"timestamp":"0xa","hash":"0xc"},{"number":119,"timestamp":"0x13","hash":"0xd"}]}],"next_block":120}`,
 	}
 
 	var idx int
@@ -46,7 +37,7 @@ func TestHTTPFetcher_StreamsBatches(t *testing.T) {
 			require.Equal(t, uint64(110), q.FromBlock)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(batches[idx]))
+		_, _ = io.WriteString(w, responses[idx])
 		idx++
 	}))
 	defer srv.Close()
@@ -75,7 +66,7 @@ func TestHTTPFetcher_SendsBearerToken(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "Bearer secret-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"logs":[],"transactions":[],"blocks":[]},"next_block":200}`))
+		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":200}`))
 	}))
 	defer srv.Close()
 
@@ -93,7 +84,7 @@ func TestHTTPFetcher_StreamEndsWhenNextBlockPastToBlock(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"logs":[],"transactions":[],"blocks":[]},"next_block":200}`))
+		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":200}`))
 	}))
 	defer srv.Close()
 
@@ -134,7 +125,7 @@ func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// next_block == from_block → no advance. Without the guard the loop
 		// would re-issue the same query indefinitely.
-		_, _ = w.Write([]byte(`{"data":{"logs":[],"transactions":[],"blocks":[]},"next_block":100}`))
+		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":100}`))
 	}))
 	defer srv.Close()
 

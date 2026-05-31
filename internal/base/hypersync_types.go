@@ -1,6 +1,7 @@
 package base
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -40,6 +41,12 @@ type HyperSyncQuery struct {
 	Logs           []LogFilter             `json:"logs"`
 	Transactions   []TransactionFilter     `json:"transactions"`
 	FieldSelection HyperSyncFieldSelection `json:"field_selection"`
+	// JoinMode controls which related rows HyperSync returns. "JoinAll" makes it
+	// return ALL logs of the matched transactions (not just the topic-matched
+	// AuthorizationUsed logs), so the companion USDC Transfer needed for pairing
+	// is present. Without it the response carries only AuthorizationUsed logs and
+	// every row drops at the pairing step.
+	JoinMode string `json:"join_mode,omitempty"`
 }
 
 // LogFilter specifies log event criteria (address + topics).
@@ -65,9 +72,37 @@ type HyperSyncFieldSelection struct {
 // wire shape — see hypersync_decode.go for the conversion into x402.Log /
 // x402.Transaction / x402.Block.
 type HyperSyncBatch struct {
-	Data          HyperSyncBatchData `json:"data"`
-	ArchiveHeight uint64             `json:"archive_height,omitempty"`
-	NextBlock     uint64             `json:"next_block,omitempty"`
+	Data          HyperSyncBatchData
+	ArchiveHeight uint64
+	NextBlock     uint64
+}
+
+// UnmarshalJSON flattens HyperSync's wire response into a single batch.
+// HyperSync returns `data` as an ARRAY of {logs,transactions,blocks} chunks
+// (one query response may carry several), not a single object — so we
+// concatenate them and present one flat HyperSyncBatchData to downstream
+// consumers (backfill.go, probe.go, MaxBlock).
+func (b *HyperSyncBatch) UnmarshalJSON(raw []byte) error {
+	var wire struct {
+		Data          []HyperSyncBatchData `json:"data"`
+		ArchiveHeight uint64               `json:"archive_height"`
+		NextBlock     uint64               `json:"next_block"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return err
+	}
+	var flat HyperSyncBatchData
+	for _, d := range wire.Data {
+		flat.Logs = append(flat.Logs, d.Logs...)
+		flat.Transactions = append(flat.Transactions, d.Transactions...)
+		flat.Blocks = append(flat.Blocks, d.Blocks...)
+	}
+	*b = HyperSyncBatch{
+		Data:          flat,
+		ArchiveHeight: wire.ArchiveHeight,
+		NextBlock:     wire.NextBlock,
+	}
+	return nil
 }
 
 // MaxBlock returns the highest block contained in the batch (0 if empty).
@@ -93,18 +128,65 @@ type HyperSyncBatchData struct {
 // HyperSyncLog holds raw wire-format log fields. Numeric fields under 64-bit
 // width (TxIndex, LogIndex) and byte/256-bit fields (Address, Topics, Data,
 // TxHash) arrive as JSON numbers and 0x-prefixed hex strings respectively;
-// conversion to x402 types happens in hypersync_decode.go (Task 3).
+// conversion to x402 types happens in hypersync_decode.go.
+//
+// Topics is the in-memory representation; on the wire HyperSync ships indexed
+// topics as separate topic0..topic3 fields (NOT a `topics` array) — see
+// UnmarshalJSON.
 type HyperSyncLog struct {
-	Address     string   `json:"address"`
-	Topics      []string `json:"topics"`
-	Data        string   `json:"data"`
-	BlockNumber uint64   `json:"block_number"`
-	TxHash      string   `json:"transaction_hash"`
-	TxIndex     uint32   `json:"transaction_index"`
-	LogIndex    uint32   `json:"log_index"`
+	Address     string
+	Topics      []string
+	Data        string
+	BlockNumber uint64
+	TxHash      string
+	TxIndex     uint32
+	LogIndex    uint32
 }
 
-// HyperSyncTransaction holds wire-format transaction fields with stringly-typed numerics.
+// UnmarshalJSON maps HyperSync's wire log shape into a HyperSyncLog. Indexed
+// topics arrive as discrete topic0..topic3 fields; EVM topics are contiguous
+// from topic0 (a log can't have topic2 without topic1), so we append the
+// non-empty leading slots in order. Requesting "topics" in field_selection is
+// rejected by HyperSync with HTTP 400 — see BuildBackfillQuery.
+func (l *HyperSyncLog) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		Address     string `json:"address"`
+		Topic0      string `json:"topic0"`
+		Topic1      string `json:"topic1"`
+		Topic2      string `json:"topic2"`
+		Topic3      string `json:"topic3"`
+		Data        string `json:"data"`
+		BlockNumber uint64 `json:"block_number"`
+		TxHash      string `json:"transaction_hash"`
+		TxIndex     uint32 `json:"transaction_index"`
+		LogIndex    uint32 `json:"log_index"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	topics := make([]string, 0, 4)
+	for _, t := range []string{raw.Topic0, raw.Topic1, raw.Topic2, raw.Topic3} {
+		if t == "" {
+			break
+		}
+		topics = append(topics, t)
+	}
+	*l = HyperSyncLog{
+		Address:     raw.Address,
+		Topics:      topics,
+		Data:        raw.Data,
+		BlockNumber: raw.BlockNumber,
+		TxHash:      raw.TxHash,
+		TxIndex:     raw.TxIndex,
+		LogIndex:    raw.LogIndex,
+	}
+	return nil
+}
+
+// HyperSyncTransaction holds wire-format transaction fields. HyperSync returns
+// EVM quantity fields (nonce, gas_used, effective_gas_price) as 0x-prefixed hex
+// STRINGS, while block_number and type arrive as JSON numbers; conversion to
+// typed values happens in ConvertTransaction.
 type HyperSyncTransaction struct {
 	Hash              string `json:"hash"`
 	BlockNumber       uint64 `json:"block_number"`
@@ -112,17 +194,20 @@ type HyperSyncTransaction struct {
 	To                string `json:"to"`
 	Input             string `json:"input"`
 	Type              uint8  `json:"type"`
-	Nonce             uint64 `json:"nonce"`
-	GasUsed           uint64 `json:"gas_used"`
+	Nonce             string `json:"nonce"`
+	GasUsed           string `json:"gas_used"`
 	EffectiveGasPrice string `json:"effective_gas_price"`
-	BaseFeePerGas     string `json:"base_fee_per_gas"`
 }
 
-// HyperSyncBlock holds wire-format block fields.
+// HyperSyncBlock holds wire-format block fields. timestamp and base_fee_per_gas
+// arrive as 0x-prefixed hex STRINGS (number is a JSON number); conversion
+// happens in ConvertBlock. base_fee_per_gas is a block-level field in
+// HyperSync's schema (it is NOT valid under the transaction field selection).
 type HyperSyncBlock struct {
-	Number    uint64 `json:"number"`
-	Timestamp uint64 `json:"timestamp"`
-	Hash      string `json:"hash"`
+	Number        uint64 `json:"number"`
+	Timestamp     string `json:"timestamp"`
+	Hash          string `json:"hash"`
+	BaseFeePerGas string `json:"base_fee_per_gas"`
 }
 
 // BuildBackfillQuery constructs the HyperSync query base-collector uses.
@@ -140,6 +225,7 @@ func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 	return HyperSyncQuery{
 		FromBlock: fromBlock,
 		ToBlock:   toBlock,
+		JoinMode:  "JoinAll",
 		Logs: []LogFilter{
 			{
 				Address: []string{strings.ToLower(x402.USDCProxyBase.Hex())},
@@ -152,9 +238,9 @@ func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 			{Sighash: sighashes},
 		},
 		FieldSelection: HyperSyncFieldSelection{
-			Log:         []string{"address", "topics", "data", "block_number", "transaction_hash", "transaction_index", "log_index"},
-			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price", "base_fee_per_gas"},
-			Block:       []string{"number", "timestamp", "hash"},
+			Log:         []string{"address", "topic0", "topic1", "topic2", "topic3", "data", "block_number", "transaction_hash", "transaction_index", "log_index"},
+			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price"},
+			Block:       []string{"number", "timestamp", "hash", "base_fee_per_gas"},
 		},
 	}
 }
