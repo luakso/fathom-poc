@@ -1,7 +1,7 @@
 // Package base owns Postgres persistence for base-collector. The Store is the
-// sole consumer of pgx in this binary; Backfill (Plan 2) and Live (Plan 3) both
-// call Store.InsertBatch with a []x402.Payment slice plus the max block
-// observed in the batch. Inserts + cursor advance happen in one transaction.
+// sole consumer of pgx in this binary; Backfill calls Store.InsertBatch with a
+// []x402.Payment slice plus the max block observed in the batch. Inserts +
+// cursor advance happen in one transaction.
 package base
 
 import (

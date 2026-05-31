@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Log is a chain-agnostic event log shape. Both the HyperSync stream and
-// go-ethereum's types.Log fields project into this; converters in Plans 2/3
-// adapt their respective wire types.
+// Log is a chain-agnostic event log shape. The HyperSync stream projects into
+// this via the converter in hypersync_decode.go; the shape stays wire-agnostic
+// so other sources could adapt into it without changing downstream code.
 type Log struct {
 	Address     common.Address
 	Topics      []common.Hash

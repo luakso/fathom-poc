@@ -28,8 +28,7 @@ import (
 //     Assemble filters internally — callers don't need to pre-filter.
 //   - txByHash:      parent transactions keyed by tx hash.
 //   - receiptByHash: full ordered log list per receipt, keyed by tx hash.
-//     Plan 2 (HyperSync) populates this from the per-tx log slice; Plan 3
-//     (RPC) populates it from eth_getBlockReceipts.
+//     Populated from the HyperSync per-tx log slice.
 //   - blockByNumber: block metadata keyed by block number.
 //
 // Output is ordered by (block_number, log_index).
