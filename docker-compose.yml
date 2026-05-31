@@ -39,12 +39,10 @@ services:
       args:
         BINARY: base-collector
     image: fathom-base-collector:dev
-    command: ["live"]
-    restart: unless-stopped
+    restart: "no"  # on-demand: docker compose run --rm base-collector backfill --from-block X --to-block Y
     environment:
       APP_ENV: local
       DATABASE__URL: ${DB_URL}
-      BASE__RPC_URL: ${BASE_RPC_URL}
       BASE__HYPERSYNC_URL: ${BASE_HYPERSYNC_URL:-https://base.hypersync.xyz}
       BASE__HYPERSYNC_BEARER_TOKEN: ${BASE_HYPERSYNC_BEARER_TOKEN:-}
     depends_on:
