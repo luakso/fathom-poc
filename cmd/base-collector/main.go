@@ -100,12 +100,18 @@ func run() error {
 func runBackfillCmd(ctx context.Context, args []string, cfg Config, store *base.Store, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("backfill", flag.ExitOnError)
 	fromBlock := fs.Uint64("from-block", 0, "first block to backfill (required, > 0)")
-	toBlock := fs.Uint64("to-block", 0, "last block to backfill (0 = follow stream to its end)")
+	toBlock := fs.Uint64("to-block", 0, "last block to backfill (required, >= from-block)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *fromBlock == 0 {
 		return errors.New("backfill: --from-block is required")
+	}
+	if *toBlock == 0 {
+		return errors.New("backfill: --to-block is required (> 0)")
+	}
+	if *toBlock < *fromBlock {
+		return fmt.Errorf("backfill: --to-block (%d) < --from-block (%d)", *toBlock, *fromBlock)
 	}
 
 	if cfg.Base.HyperSyncURL == "" {

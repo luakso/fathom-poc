@@ -13,7 +13,7 @@ type BackfillDeps struct {
 	Fetcher   Fetcher
 	Store     *Store
 	FromBlock uint64
-	ToBlock   uint64 // 0 means "to current tip - 500", resolved before calling RunBackfill
+	ToBlock   uint64 // required (> 0); inclusive last block. Operator subtracts their own reorg margin.
 }
 
 // RunBackfill validates dependencies and drives one backfill pass. Returns
@@ -26,7 +26,10 @@ func RunBackfill(ctx context.Context, d BackfillDeps) error {
 	if d.FromBlock == 0 {
 		return fmt.Errorf("backfill: from_block must be > 0")
 	}
-	if d.ToBlock != 0 && d.ToBlock < d.FromBlock {
+	if d.ToBlock == 0 {
+		return fmt.Errorf("backfill: to_block is required (> 0)")
+	}
+	if d.ToBlock < d.FromBlock {
 		return fmt.Errorf("backfill: to_block (%d) < from_block (%d)", d.ToBlock, d.FromBlock)
 	}
 	if d.Store == nil {

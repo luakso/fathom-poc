@@ -37,3 +37,15 @@ func TestRunBackfill_ValidatesFromBlock(t *testing.T) {
 	}
 	require.Error(t, base.RunBackfill(context.Background(), deps))
 }
+
+func TestRunBackfill_ValidatesToBlock(t *testing.T) {
+	t.Parallel()
+	deps := base.BackfillDeps{
+		Fetcher:   &fakeFetcher{},
+		Store:     nil, // unused: to_block check fires before the store check
+		FromBlock: 100,
+		ToBlock:   0,
+	}
+	err := base.RunBackfill(context.Background(), deps)
+	require.ErrorContains(t, err, "to_block")
+}
