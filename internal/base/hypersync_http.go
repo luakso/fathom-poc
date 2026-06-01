@@ -136,39 +136,58 @@ func (s *httpStream) Close() error {
 	return nil
 }
 
-// postWithRetry posts the query body to {baseURL}/query, retrying on HTTP 429
-// with exponential backoff (honoring a Retry-After header when the server sends
-// one). Non-429 failures, and 429s that outlast maxRetries, surface to the
-// caller as an error. A successful (200) response returns its body.
+// postWithRetry posts the query body to {baseURL}/query, retrying transient
+// failures with exponential backoff. Two things are retried:
+//   - HTTP 429 (rate limit), honoring a Retry-After header when present, and
+//   - transport errors (connection reset, unexpected EOF, timeout, DNS blip) —
+//     common over a multi-hour backfill, and fatal to the whole run if not
+//     ridden out.
+//
+// Other non-200 statuses (4xx/5xx) and any failure outlasting maxRetries surface
+// to the caller as an error. A successful (200) response returns its body.
 func (f *HTTPFetcher) postWithRetry(query []byte) ([]byte, error) {
 	delay := f.baseDelay
 	for attempt := 0; ; attempt++ {
 		body, status, retryAfter, err := f.post(query)
-		if err != nil {
-			return nil, err
-		}
-		if status == http.StatusOK {
+		switch {
+		case err != nil:
+			// Transport-level failure — retryable.
+			if attempt >= f.maxRetries {
+				return nil, err
+			}
+			delay = f.backoff(delay, 0, attempt, err.Error())
+		case status == http.StatusOK:
 			return body, nil
-		}
-		if status != http.StatusTooManyRequests || attempt >= f.maxRetries {
+		case status == http.StatusTooManyRequests && attempt < f.maxRetries:
+			delay = f.backoff(delay, retryAfter, attempt, "http 429")
+		default:
+			// Non-retryable status, or retries exhausted.
 			return nil, fmt.Errorf("hypersync status %d: %s", status, string(body))
 		}
-		wait := jitter(delay)
-		if retryAfter > 0 {
-			wait = retryAfter // honor the server's explicit value precisely (no jitter)
-		}
-		if wait > maxRetryDelay {
-			wait = maxRetryDelay
-		}
-		slog.Warn(
-			"hypersync rate-limited (429); backing off",
-			"attempt", attempt+1,
-			"max_retries", f.maxRetries,
-			"wait", wait.Round(time.Millisecond).String(),
-		)
-		f.sleep(wait)
-		delay *= 2
 	}
+}
+
+// backoff sleeps before the next retry and returns the next delay (doubled).
+// The wait is jittered ±20%, capped at maxRetryDelay; a server Retry-After (>0)
+// overrides the computed wait precisely (no jitter). reason is logged so a long
+// stall is explained (rate limit vs network drop).
+func (f *HTTPFetcher) backoff(delay, retryAfter time.Duration, attempt int, reason string) time.Duration {
+	wait := jitter(delay)
+	if retryAfter > 0 {
+		wait = retryAfter
+	}
+	if wait > maxRetryDelay {
+		wait = maxRetryDelay
+	}
+	slog.Warn(
+		"hypersync: transient failure, backing off",
+		"reason", reason,
+		"attempt", attempt+1,
+		"max_retries", f.maxRetries,
+		"wait", wait.Round(time.Millisecond).String(),
+	)
+	f.sleep(wait)
+	return delay * 2
 }
 
 // post issues one POST and returns the body, HTTP status, and parsed

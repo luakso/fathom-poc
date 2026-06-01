@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -161,6 +162,56 @@ func TestHTTPFetcher_429ExhaustsRetriesReturnsError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "429")
 	require.Equal(t, 3, calls, "initial attempt + 2 retries")
+}
+
+// A transport-level failure (here: the server hijacks and closes the connection
+// mid-request, producing an unexpected EOF on the client) must be retried, not
+// fatal — this is the failure mode that killed a multi-hour backfill.
+func TestHTTPFetcher_RetriesTransportErrorThenSucceeds(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32 // each retry opens a new connection -> new server goroutine
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			hj, _ := w.(http.Hijacker)
+			conn, _, _ := hj.Hijack()
+			_ = conn.Close() // close without a response -> client sees EOF
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":200}`))
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(5, time.Millisecond))
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	require.NoError(t, err)
+	defer stream.Close()
+
+	_, ok, err := stream.Next()
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, int32(2), calls.Load(), "one transport failure then success")
+}
+
+func TestHTTPFetcher_TransportErrorExhaustsRetriesReturnsError(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		hj, _ := w.(http.Hijacker)
+		conn, _, _ := hj.Hijack()
+		_ = conn.Close()
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(2, time.Millisecond))
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	require.NoError(t, err)
+	defer stream.Close()
+
+	_, _, err = stream.Next()
+	require.Error(t, err)
+	require.Equal(t, int32(3), calls.Load(), "initial attempt + 2 retries")
 }
 
 func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {
