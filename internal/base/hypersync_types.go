@@ -211,10 +211,15 @@ type HyperSyncBlock struct {
 }
 
 // BuildBackfillQuery constructs the HyperSync query base-collector uses.
-// The transaction-level sighash filter is multi-value: allow-list ∪ deny-list
-// is applied client-side too (see x402.KeepAuthorizationUsed); HyperSync's
-// server-side filter narrows the response so we don't pay bandwidth on
-// every AuthorizationUsed-emitting tx whose sighash is unrelated.
+//
+// The client keep-policy is topic-only (see x402.KeepAuthorizationUsed): every
+// AuthorizationUsed-on-USDC log is kept except a direct receiveWithAuthorization.
+// The transaction-level sighash hint below does NOT gate the response —
+// JoinMode "JoinAll" returns each matched log's parent tx regardless of its
+// selector (the probe observed handleOps/charge/etc. parent txs come through),
+// so the hint is effectively vestigial. It is left in place because it is proven
+// not to drop data; a follow-up can remove it once join semantics are
+// reconfirmed against the live endpoint.
 //
 // fromBlock is inclusive; toBlock is inclusive (HyperSync convention).
 func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {

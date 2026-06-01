@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -115,6 +116,51 @@ func TestHTTPFetcher_ServerErrorBubblesUp(t *testing.T) {
 	defer stream.Close()
 	_, _, err = stream.Next()
 	require.Error(t, err)
+}
+
+func TestHTTPFetcher_RetriesOn429ThenSucceeds(t *testing.T) {
+	t.Parallel()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls <= 2 {
+			http.Error(w, "rate limited", http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":200}`))
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(5, time.Millisecond))
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	require.NoError(t, err)
+	defer stream.Close()
+
+	_, ok, err := stream.Next()
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 3, calls, "two 429s then success = three calls")
+}
+
+func TestHTTPFetcher_429ExhaustsRetriesReturnsError(t *testing.T) {
+	t.Parallel()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(2, time.Millisecond))
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	require.NoError(t, err)
+	defer stream.Close()
+
+	_, _, err = stream.Next()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "429")
+	require.Equal(t, 3, calls, "initial attempt + 2 retries")
 }
 
 func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {

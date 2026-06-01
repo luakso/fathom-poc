@@ -163,6 +163,7 @@ func runProbeCmd(ctx context.Context, args []string, cfg Config, logger *slog.Lo
 		"from_block", *fromBlock,
 		"to_block", *toBlock,
 		"matched_events", report.MatchedEvents,
+		"elapsed", report.Elapsed,
 	)
 	return nil
 }

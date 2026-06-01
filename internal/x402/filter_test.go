@@ -57,13 +57,40 @@ func TestKeepAuthorizationUsed_DroppedByReceiveSelector(t *testing.T) {
 	require.False(t, KeepAuthorizationUsed(authLog, []byte{0x88, 0xb7, 0xab, 0x63}))
 }
 
-func TestKeepAuthorizationUsed_DroppedByUnknownSelector(t *testing.T) {
+// Topic-only policy (c-simple): a selector we've never catalogued still emits a
+// real AuthorizationUsed-on-USDC payment, so it is KEPT. This is the opposite of
+// the old allow-list behavior and is what recovers the ~4.5% coverage gap.
+func TestKeepAuthorizationUsed_UnknownSelectorKept(t *testing.T) {
 	t.Parallel()
 	authLog := Log{
 		Address: USDCProxyBase,
 		Topics:  []common.Hash{AuthorizationUsedTopic, common.HexToHash("0x01")},
 	}
-	require.False(t, KeepAuthorizationUsed(authLog, []byte{0xde, 0xad, 0xbe, 0xef}))
+	require.True(t, KeepAuthorizationUsed(authLog, []byte{0xde, 0xad, 0xbe, 0xef}))
+}
+
+// ERC-4337 handleOps wraps a transferWithAuthorization settlement — the dominant
+// previously-dropped selector. Topic-only keeps it.
+func TestKeepAuthorizationUsed_HandleOpsKept(t *testing.T) {
+	t.Parallel()
+	authLog := Log{
+		Address: USDCProxyBase,
+		Topics:  []common.Hash{AuthorizationUsedTopic, common.HexToHash("0x01")},
+	}
+	require.True(t, KeepAuthorizationUsed(authLog, []byte{0x1f, 0xad, 0x94, 0x8c}))
+}
+
+// An input too short to carry a 4-byte selector is dropped: it can't be a real
+// USDC settlement, and downstream row-building reads parentTxInput[:4], so
+// keeping it would feed a malformed row (and previously could panic). Dropping
+// here preserves the invariant that a kept event always has a >=4-byte selector.
+func TestKeepAuthorizationUsed_ShortInputDropped(t *testing.T) {
+	t.Parallel()
+	authLog := Log{
+		Address: USDCProxyBase,
+		Topics:  []common.Hash{AuthorizationUsedTopic, common.HexToHash("0x01")},
+	}
+	require.False(t, KeepAuthorizationUsed(authLog, []byte{0x01, 0x02}))
 }
 
 func TestKeepAuthorizationUsed_DroppedByWrongAddress(t *testing.T) {

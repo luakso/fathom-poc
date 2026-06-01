@@ -49,17 +49,22 @@ const (
 	SighashReceiveWithAuthB  uint32 = 0x88b7ab63 // payee-pull, NOT x402
 	SighashAggregate3        uint32 = 0x82ad56cb // Multicall3.aggregate3
 
-	// Empirical — appears in prior project's data, attribution unconfirmed.
-	// See docs/x402-indexing-findings.md Appendix A. The probe subcommand
-	// (Plan 4) confirms whether it carries real AuthorizationUsed traffic;
-	// if it produces zero rows after probe, remove it from AllowSighashes.
+	// Empirical — appears in observed Base data; 4byte attributes it to
+	// settleAndExecute(...), attribution still unconfirmed. The probe confirmed
+	// it carries real AuthorizationUsed traffic (thousands of events), so it is
+	// a real x402 settlement path. Kept here only as a HyperSync query hint; the
+	// client keep-policy is topic-only (see filter.go) and no longer depends on
+	// this list. See docs/x402-indexing-findings.md Appendix A.
 	SighashUnattributedX uint32 = 0x93d9c747
 )
 
-// AllowSighashes are outer-tx selectors we keep. Permissive on purpose — the
-// AuthorizationUsed-topic match on the USDC proxy is the actual filter (see
-// findings §6.4). Widening the allow-list lets some non-x402 calldata through
-// the sighash gate, but it never emits the event so it never becomes a row.
+// AllowSighashes is NO LONGER a keep-filter. The client keep-policy is
+// topic-only (see KeepAuthorizationUsed): every AuthorizationUsed-on-USDC log is
+// a payment except a direct receiveWithAuthorization. This list survives only as
+// the HyperSync server-side transaction hint in BuildBackfillQuery — and the
+// probe showed even that doesn't actually restrict the response (JoinAll pulls
+// every matched log's parent tx regardless of its selector), so it is
+// effectively vestigial and safe to drop once join semantics are reconfirmed.
 var AllowSighashes = []uint32{
 	SighashTransferWithAuthV,
 	SighashTransferWithAuthB,
