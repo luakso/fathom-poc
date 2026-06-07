@@ -32,11 +32,14 @@ docker-compose.override.yml
 # Local AI agent context
 CLAUDE.md
 
-# Internal planning artifacts (not for public repo)
-/docs/superpowers/
+# Docs (kept local, not in repo)
+/docs/
 
 # Stray top-level binaries (build via `just build` into bin/)
 /base-collector
 /solana-collector
 /probe-collector
 /publisher
+
+# Visual brainstorming companion
+.superpowers/
