@@ -146,32 +146,34 @@ func TestStore_GetCursor_EmptyReturnsZero(t *testing.T) {
 // equality is compared numerically (scale-insensitive), proving no precision
 // is lost across the COPY → cast path.
 type storedPayment struct {
-	Chain             string
-	TxHash            string
-	LogIndex          uint32
-	BlockNumber       uint64
-	BlockTimestamp    time.Time
-	ObservedAt        time.Time
-	Source            string
-	Protocol          string
-	Facilitator       string
-	Payer             string
-	Payee             string
-	PayeeServiceID    *int64
-	Asset             string
-	TokenAddress      string
-	AmountRaw         decimal.Decimal
-	AmountUSDC        decimal.Decimal
-	AssetUSDAtTime    decimal.Decimal
-	AuthNonce         []byte
-	MethodSelector    []byte
-	CalledContract    string
-	TxType            uint8
-	TxNonce           uint64
-	GasUsed           uint64
-	EffectiveGasPrice decimal.Decimal
-	GasCostWei        decimal.Decimal
-	BaseFeePerGas     *decimal.Decimal
+	Chain                string
+	TxHash               string
+	LogIndex             uint32
+	BlockNumber          uint64
+	BlockTimestamp       time.Time
+	ObservedAt           time.Time
+	Source               string
+	Protocol             string
+	Facilitator          string
+	Payer                string
+	Payee                string
+	PayeeServiceID       *int64
+	Asset                string
+	TokenAddress         string
+	AmountRaw            decimal.Decimal
+	AmountUSDC           decimal.Decimal
+	AssetUSDAtTime       decimal.Decimal
+	AuthNonce            []byte
+	MethodSelector       []byte
+	CalledContract       string
+	TxType               uint8
+	TxNonce              uint64
+	GasUsed              uint64
+	EffectiveGasPrice    decimal.Decimal
+	GasCostWei           decimal.Decimal
+	BaseFeePerGas        *decimal.Decimal
+	MaxFeePerGas         *decimal.Decimal
+	MaxPriorityFeePerGas *decimal.Decimal
 }
 
 // readPayment fetches one payments row by its PK. NUMERIC columns are cast to
@@ -185,7 +187,7 @@ func readPayment(ctx context.Context, t *testing.T, store *base.Store, txHash st
 		blockNumber, txNonce, gasUsed                         int64
 		txType                                                int16
 		amountRaw, amountUSDC, assetUSD, effGasPrice, gasCost string
-		baseFee                                               *string
+		baseFee, maxFee, maxPriorityFee                       *string
 	)
 	err := store.Pool().QueryRow(ctx, `
         SELECT
@@ -194,7 +196,8 @@ func readPayment(ctx context.Context, t *testing.T, store *base.Store, txHash st
             asset, token_address,
             amount_raw::text, amount_usdc::text, asset_usd_at_time::text,
             auth_nonce, method_selector, called_contract, tx_type, tx_nonce,
-            gas_used, effective_gas_price::text, gas_cost_wei::text, base_fee_per_gas::text
+            gas_used, effective_gas_price::text, gas_cost_wei::text, base_fee_per_gas::text,
+            max_fee_per_gas::text, max_priority_fee_per_gas::text
         FROM payments
         WHERE chain = $1 AND tx_hash = $2 AND log_index = $3
     `, string(x402.ChainBase), txHash, int32(logIndex)).Scan(
@@ -204,6 +207,7 @@ func readPayment(ctx context.Context, t *testing.T, store *base.Store, txHash st
 		&amountRaw, &amountUSDC, &assetUSD,
 		&out.AuthNonce, &out.MethodSelector, &out.CalledContract, &txType, &txNonce,
 		&gasUsed, &effGasPrice, &gasCost, &baseFee,
+		&maxFee, &maxPriorityFee,
 	)
 	require.NoError(t, err)
 
@@ -220,6 +224,14 @@ func readPayment(ctx context.Context, t *testing.T, store *base.Store, txHash st
 	if baseFee != nil {
 		d := decimal.RequireFromString(*baseFee)
 		out.BaseFeePerGas = &d
+	}
+	if maxFee != nil {
+		d := decimal.RequireFromString(*maxFee)
+		out.MaxFeePerGas = &d
+	}
+	if maxPriorityFee != nil {
+		d := decimal.RequireFromString(*maxPriorityFee)
+		out.MaxPriorityFeePerGas = &d
 	}
 	return out
 }
@@ -245,11 +257,15 @@ func TestStore_InsertBatch_ColumnsRoundTripExactly(t *testing.T) {
 	full.EffectiveGasPrice = big.NewInt(1_234_567_890)
 	full.GasCostWei, _ = new(big.Int).SetString("987654321098765432109876", 10)
 	full.BaseFeePerGas = big.NewInt(424_242)
+	full.MaxFeePerGas = big.NewInt(2_000_000_000)
+	full.MaxPriorityFeePerGas = big.NewInt(1_500_000)
 	svc := int64(7)
 	full.PayeeServiceID = &svc
 
-	legacy := samplePayment(2) // EIP-2930/legacy-style: no base fee
+	legacy := samplePayment(2) // EIP-2930/legacy-style: no 1559 fee market
 	legacy.BaseFeePerGas = nil
+	legacy.MaxFeePerGas = nil
+	legacy.MaxPriorityFeePerGas = nil
 	legacy.PayeeServiceID = nil
 
 	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{full, legacy}, 100))
@@ -283,9 +299,15 @@ func TestStore_InsertBatch_ColumnsRoundTripExactly(t *testing.T) {
 	require.True(t, decimal.NewFromBigInt(full.GasCostWei, 0).Equal(got.GasCostWei), "gas_cost_wei exact")
 	require.NotNil(t, got.BaseFeePerGas)
 	require.True(t, decimal.NewFromBigInt(full.BaseFeePerGas, 0).Equal(*got.BaseFeePerGas), "base_fee_per_gas exact")
+	require.NotNil(t, got.MaxFeePerGas)
+	require.True(t, decimal.NewFromBigInt(full.MaxFeePerGas, 0).Equal(*got.MaxFeePerGas), "max_fee_per_gas exact")
+	require.NotNil(t, got.MaxPriorityFeePerGas)
+	require.True(t, decimal.NewFromBigInt(full.MaxPriorityFeePerGas, 0).Equal(*got.MaxPriorityFeePerGas), "max_priority_fee_per_gas exact")
 
 	legacyGot := readPayment(ctx, t, store, legacy.TxHash, legacy.LogIndex)
 	require.Nil(t, legacyGot.BaseFeePerGas, "nullable base_fee_per_gas stays NULL")
+	require.Nil(t, legacyGot.MaxFeePerGas, "nullable max_fee_per_gas stays NULL")
+	require.Nil(t, legacyGot.MaxPriorityFeePerGas, "nullable max_priority_fee_per_gas stays NULL")
 	require.Nil(t, legacyGot.PayeeServiceID, "nullable payee_service_id stays NULL")
 }
 

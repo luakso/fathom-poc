@@ -35,15 +35,17 @@ func TestConvertHyperSyncLog(t *testing.T) {
 func TestConvertHyperSyncTransaction(t *testing.T) {
 	t.Parallel()
 	htx := base.HyperSyncTransaction{
-		Hash:              "0xdead",
-		BlockNumber:       42,
-		From:              "0xfac1000000000000000000000000000000000001",
-		To:                "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-		Input:             "0xe3ee160edeadbeef",
-		Type:              2,
-		Nonce:             "0x7",        // 7
-		GasUsed:           "0xc350",     // 50_000
-		EffectiveGasPrice: "0x3b9aca00", // 1_000_000_000
+		Hash:                 "0xdead",
+		BlockNumber:          42,
+		From:                 "0xfac1000000000000000000000000000000000001",
+		To:                   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		Input:                "0xe3ee160edeadbeef",
+		Type:                 2,
+		Nonce:                "0x7",        // 7
+		GasUsed:              "0xc350",     // 50_000
+		EffectiveGasPrice:    "0x3b9aca00", // 1_000_000_000
+		MaxFeePerGas:         "0x77359400", // 2_000_000_000
+		MaxPriorityFeePerGas: "0x16e360",   // 1_500_000
 	}
 	got, err := base.ConvertTransaction(htx)
 	require.NoError(t, err)
@@ -52,8 +54,32 @@ func TestConvertHyperSyncTransaction(t *testing.T) {
 	require.Equal(t, x402.USDCProxyBase, got.To)
 	require.Equal(t, []byte{0xe3, 0xee, 0x16, 0x0e, 0xde, 0xad, 0xbe, 0xef}, got.Input)
 	require.Equal(t, big.NewInt(1_000_000_000), got.EffectiveGasPrice)
+	require.Equal(t, big.NewInt(2_000_000_000), got.MaxFeePerGas)
+	require.Equal(t, big.NewInt(1_500_000), got.MaxPriorityFeePerGas)
 	require.Equal(t, uint64(7), got.Nonce)
 	require.Equal(t, uint64(50_000), got.GasUsed)
+}
+
+// TestConvertHyperSyncTransaction_LegacyNilFeeCaps locks in that a legacy/
+// EIP-2930 tx — which carries no EIP-1559 fee market — leaves MaxFeePerGas and
+// MaxPriorityFeePerGas nil (→ SQL NULL) rather than coercing empty to 0.
+func TestConvertHyperSyncTransaction_LegacyNilFeeCaps(t *testing.T) {
+	t.Parallel()
+	htx := base.HyperSyncTransaction{
+		Hash:              "0xdead",
+		From:              "0xfac1000000000000000000000000000000000001",
+		To:                "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		Input:             "0xe3ee160e",
+		Type:              0,
+		Nonce:             "0x1",
+		GasUsed:           "0xc350",
+		EffectiveGasPrice: "0x3b9aca00",
+		// MaxFeePerGas / MaxPriorityFeePerGas absent → empty strings.
+	}
+	got, err := base.ConvertTransaction(htx)
+	require.NoError(t, err)
+	require.Nil(t, got.MaxFeePerGas, "legacy tx has no max_fee_per_gas")
+	require.Nil(t, got.MaxPriorityFeePerGas, "legacy tx has no max_priority_fee_per_gas")
 }
 
 func TestConvertHyperSyncBlock(t *testing.T) {

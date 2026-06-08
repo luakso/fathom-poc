@@ -75,16 +75,34 @@ func ConvertTransaction(in HyperSyncTransaction) (x402.Transaction, error) {
 	if err != nil {
 		return x402.Transaction{}, fmt.Errorf("tx.gas_used: %w", err)
 	}
+	// EIP-1559 fee caps are absent on legacy/EIP-2930 txs — leave them nil
+	// (→ SQL NULL) rather than coercing an empty string to 0, mirroring the
+	// nullable base_fee_per_gas handling in ConvertBlock.
+	var maxFee, maxPriorityFee *big.Int
+	if in.MaxFeePerGas != "" {
+		maxFee, err = ParseHexInt(in.MaxFeePerGas)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.max_fee_per_gas: %w", err)
+		}
+	}
+	if in.MaxPriorityFeePerGas != "" {
+		maxPriorityFee, err = ParseHexInt(in.MaxPriorityFeePerGas)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.max_priority_fee_per_gas: %w", err)
+		}
+	}
 	return x402.Transaction{
-		Hash:              hash,
-		BlockNumber:       in.BlockNumber,
-		From:              from,
-		To:                to,
-		Input:             input,
-		Type:              in.Type,
-		Nonce:             nonce,
-		GasUsed:           gasUsed,
-		EffectiveGasPrice: gasPrice,
+		Hash:                 hash,
+		BlockNumber:          in.BlockNumber,
+		From:                 from,
+		To:                   to,
+		Input:                input,
+		Type:                 in.Type,
+		Nonce:                nonce,
+		GasUsed:              gasUsed,
+		EffectiveGasPrice:    gasPrice,
+		MaxFeePerGas:         maxFee,
+		MaxPriorityFeePerGas: maxPriorityFee,
 	}, nil
 }
 

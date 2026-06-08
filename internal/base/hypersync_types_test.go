@@ -54,6 +54,13 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	require.Contains(t, logFields, "topic3")
 	require.NotContains(t, logFields, "topics")
 
+	// field_selection.transaction must request the EIP-1559 fee caps so we can
+	// reconstruct facilitator bid-vs-paid economics, not just what was paid.
+	txFields := fieldSel["transaction"].([]any)
+	require.Contains(t, txFields, "effective_gas_price")
+	require.Contains(t, txFields, "max_fee_per_gas")
+	require.Contains(t, txFields, "max_priority_fee_per_gas")
+
 	// join_mode must be JoinAll so HyperSync returns ALL logs of the
 	// sighash-matched transactions — including the companion Transfer that
 	// pairing needs. The log filter alone returns only AuthorizationUsed logs.

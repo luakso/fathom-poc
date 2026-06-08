@@ -23,15 +23,17 @@ type Log struct {
 
 // Transaction is a chain-agnostic transaction shape — same idea as Log.
 type Transaction struct {
-	Hash              common.Hash
-	BlockNumber       uint64
-	From              common.Address // facilitator for x402
-	To                common.Address // USDC, Multicall3, or wrapper
-	Input             []byte         // calldata; Input[0:4] = sighash
-	Type              uint8
-	Nonce             uint64
-	GasUsed           uint64
-	EffectiveGasPrice *big.Int
+	Hash                 common.Hash
+	BlockNumber          uint64
+	From                 common.Address // facilitator for x402
+	To                   common.Address // USDC, Multicall3, or wrapper
+	Input                []byte         // calldata; Input[0:4] = sighash
+	Type                 uint8
+	Nonce                uint64
+	GasUsed              uint64
+	EffectiveGasPrice    *big.Int
+	MaxFeePerGas         *big.Int // nil on legacy/EIP-2930 txs (no EIP-1559 fee cap)
+	MaxPriorityFeePerGas *big.Int // nil on legacy/EIP-2930 txs
 }
 
 // Block carries only the per-block context we actually use. BaseFeePerGas is a

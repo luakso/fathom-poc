@@ -188,15 +188,17 @@ func (l *HyperSyncLog) UnmarshalJSON(b []byte) error {
 // STRINGS, while block_number and type arrive as JSON numbers; conversion to
 // typed values happens in ConvertTransaction.
 type HyperSyncTransaction struct {
-	Hash              string `json:"hash"`
-	BlockNumber       uint64 `json:"block_number"`
-	From              string `json:"from"`
-	To                string `json:"to"`
-	Input             string `json:"input"`
-	Type              uint8  `json:"type"`
-	Nonce             string `json:"nonce"`
-	GasUsed           string `json:"gas_used"`
-	EffectiveGasPrice string `json:"effective_gas_price"`
+	Hash                 string `json:"hash"`
+	BlockNumber          uint64 `json:"block_number"`
+	From                 string `json:"from"`
+	To                   string `json:"to"`
+	Input                string `json:"input"`
+	Type                 uint8  `json:"type"`
+	Nonce                string `json:"nonce"`
+	GasUsed              string `json:"gas_used"`
+	EffectiveGasPrice    string `json:"effective_gas_price"`
+	MaxFeePerGas         string `json:"max_fee_per_gas"`          // empty on legacy/EIP-2930 txs
+	MaxPriorityFeePerGas string `json:"max_priority_fee_per_gas"` // empty on legacy/EIP-2930 txs
 }
 
 // HyperSyncBlock holds wire-format block fields. timestamp and base_fee_per_gas
@@ -244,7 +246,7 @@ func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 		},
 		FieldSelection: HyperSyncFieldSelection{
 			Log:         []string{"address", "topic0", "topic1", "topic2", "topic3", "data", "block_number", "transaction_hash", "transaction_index", "log_index"},
-			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price"},
+			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price", "max_fee_per_gas", "max_priority_fee_per_gas"},
 			Block:       []string{"number", "timestamp", "hash", "base_fee_per_gas"},
 		},
 	}

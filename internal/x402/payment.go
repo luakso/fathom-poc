@@ -52,10 +52,12 @@ type Payment struct {
 	TxNonce        uint64 // tx.from's sequence number — NOT AuthNonce
 
 	// Gas economics
-	GasUsed           uint64
-	EffectiveGasPrice *big.Int // wei
-	GasCostWei        *big.Int // GasUsed * EffectiveGasPrice
-	BaseFeePerGas     *big.Int // nullable on legacy txs
+	GasUsed              uint64
+	EffectiveGasPrice    *big.Int // wei
+	GasCostWei           *big.Int // GasUsed * EffectiveGasPrice
+	BaseFeePerGas        *big.Int // nullable on legacy txs
+	MaxFeePerGas         *big.Int // EIP-1559 fee cap the sender bid; nil on legacy/EIP-2930
+	MaxPriorityFeePerGas *big.Int // EIP-1559 tip cap the sender bid; nil on legacy/EIP-2930
 }
 
 // USDCFromRaw converts a USDC base-unit amount to a six-decimal decimal.

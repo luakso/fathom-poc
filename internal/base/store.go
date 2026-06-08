@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,6 +35,7 @@ var copyColumns = []string{
 	"auth_nonce",
 	"method_selector", "called_contract", "tx_type", "tx_nonce",
 	"gas_used", "effective_gas_price", "gas_cost_wei", "base_fee_per_gas",
+	"max_fee_per_gas", "max_priority_fee_per_gas",
 }
 
 // createStageTable types the six NUMERIC columns (amount_raw, amount_usdc,
@@ -68,7 +70,9 @@ CREATE TEMP TABLE ` + stageTable + ` (
     gas_used            bigint,
     effective_gas_price text,
     gas_cost_wei        text,
-    base_fee_per_gas    text
+    base_fee_per_gas    text,
+    max_fee_per_gas          text,
+    max_priority_fee_per_gas text
 ) ON COMMIT DROP`
 
 // insertFromStage moves staged rows into payments with the same dedupe
@@ -84,7 +88,8 @@ INSERT INTO payments (
     asset, token_address, amount_raw, amount_usdc, asset_usd_at_time,
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
-    gas_used, effective_gas_price, gas_cost_wei, base_fee_per_gas
+    gas_used, effective_gas_price, gas_cost_wei, base_fee_per_gas,
+    max_fee_per_gas, max_priority_fee_per_gas
 )
 SELECT
     chain, tx_hash, log_index,
@@ -95,7 +100,8 @@ SELECT
     amount_raw::numeric, amount_usdc::numeric, asset_usd_at_time::numeric,
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
-    gas_used, effective_gas_price::numeric, gas_cost_wei::numeric, base_fee_per_gas::numeric
+    gas_used, effective_gas_price::numeric, gas_cost_wei::numeric, base_fee_per_gas::numeric,
+    max_fee_per_gas::numeric, max_priority_fee_per_gas::numeric
 FROM ` + stageTable + `
 ON CONFLICT (chain, tx_hash, log_index) DO NOTHING`
 
@@ -203,9 +209,13 @@ func (s *Store) GetCursor(ctx context.Context) (uint64, error) {
 // NUMERIC on the INSERT … SELECT. base_fee_per_gas stays nil (→ SQL NULL) when
 // the source tx carried no base fee, preserving the nullable column.
 func copyRow(p *x402.Payment) []any {
-	var baseFee any
-	if p.BaseFeePerGas != nil {
-		baseFee = p.BaseFeePerGas.String()
+	// Nullable big.Int columns: emit nil (→ SQL NULL) when the source tx/block
+	// carried no value, preserving the nullable columns.
+	nullableWei := func(v *big.Int) any {
+		if v == nil {
+			return nil
+		}
+		return v.String()
 	}
 
 	return []any{
@@ -216,7 +226,8 @@ func copyRow(p *x402.Payment) []any {
 		p.Asset, p.TokenAddress, p.AmountRaw.String(), p.AmountUSDC.String(), p.AssetUSDAtTime.String(),
 		p.AuthNonce,
 		p.MethodSelector, p.CalledContract, int16(p.TxType), int64(p.TxNonce), //nolint:gosec // tx_nonce fits in int64 for centuries
-		int64(p.GasUsed), p.EffectiveGasPrice.String(), p.GasCostWei.String(), baseFee, //nolint:gosec // gas_used realistic blocks << 2^63
+		int64(p.GasUsed), p.EffectiveGasPrice.String(), p.GasCostWei.String(), nullableWei(p.BaseFeePerGas), //nolint:gosec // gas_used realistic blocks << 2^63
+		nullableWei(p.MaxFeePerGas), nullableWei(p.MaxPriorityFeePerGas),
 	}
 }
 
