@@ -58,13 +58,13 @@ const (
 	SighashUnattributedX uint32 = 0x93d9c747
 )
 
-// AllowSighashes is NO LONGER a keep-filter. The client keep-policy is
-// topic-only (see KeepAuthorizationUsed): every AuthorizationUsed-on-USDC log is
-// a payment except a direct receiveWithAuthorization. This list survives only as
-// the HyperSync server-side transaction hint in BuildBackfillQuery — and the
-// probe showed even that doesn't actually restrict the response (JoinAll pulls
-// every matched log's parent tx regardless of its selector), so it is
-// effectively vestigial and safe to drop once join semantics are reconfirmed.
+// AllowSighashes is NOT a keep-filter and is no longer used to build the
+// HyperSync query (the vestigial transaction hint was removed — selection is
+// log-only). The client keep-policy is topic-only (see KeepAuthorizationUsed):
+// every AuthorizationUsed-on-USDC log is a payment except a direct
+// receiveWithAuthorization. This list is retained as the documented set of
+// known x402 outer selectors and as the disjointness anchor for
+// TestAllowDenyDisjoint against DenySighashes.
 var AllowSighashes = []uint32{
 	SighashTransferWithAuthV,
 	SighashTransferWithAuthB,

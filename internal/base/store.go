@@ -31,19 +31,21 @@ var copyColumns = []string{
 	"block_number", "block_timestamp",
 	"source", "protocol",
 	"facilitator", "payer", "payee", "payee_service_id",
-	"asset", "token_address", "amount_raw", "amount_usdc", "asset_usd_at_time",
+	"asset", "token_address", "amount_raw", "asset_usd_at_time",
 	"auth_nonce",
 	"method_selector", "called_contract", "tx_type", "tx_nonce",
 	"gas_used", "effective_gas_price", "gas_cost_wei", "base_fee_per_gas",
 	"max_fee_per_gas", "max_priority_fee_per_gas",
 }
 
-// createStageTable types the six NUMERIC columns (amount_raw, amount_usdc,
-// asset_usd_at_time, effective_gas_price, gas_cost_wei, base_fee_per_gas) as
-// TEXT. pgx's COPY uses the binary wire format and there is no shopspring
-// decimal codec registered on the pool, so decimals cannot be binary-encoded
-// into NUMERIC directly. Staging them as TEXT and casting ::numeric on the
-// INSERT … SELECT keeps full precision without a codec dependency.
+// createStageTable types the NUMERIC columns (amount_raw, asset_usd_at_time,
+// effective_gas_price, gas_cost_wei, base_fee_per_gas, max_fee_per_gas,
+// max_priority_fee_per_gas) as TEXT. pgx's COPY uses the binary wire format and
+// there is no shopspring decimal codec registered on the pool, so decimals
+// cannot be binary-encoded into NUMERIC directly. Staging them as TEXT and
+// casting ::numeric on the INSERT … SELECT keeps full precision without a codec
+// dependency. amount_usdc is absent: it is a GENERATED column derived from
+// amount_raw (see migration 00008) and must not be written.
 const createStageTable = `
 CREATE TEMP TABLE ` + stageTable + ` (
     chain               text,
@@ -60,7 +62,6 @@ CREATE TEMP TABLE ` + stageTable + ` (
     asset               text,
     token_address       text,
     amount_raw          text,
-    amount_usdc         text,
     asset_usd_at_time   text,
     auth_nonce          bytea,
     method_selector     bytea,
@@ -85,7 +86,7 @@ INSERT INTO payments (
     block_number, block_timestamp,
     source, protocol,
     facilitator, payer, payee, payee_service_id,
-    asset, token_address, amount_raw, amount_usdc, asset_usd_at_time,
+    asset, token_address, amount_raw, asset_usd_at_time,
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
     gas_used, effective_gas_price, gas_cost_wei, base_fee_per_gas,
@@ -97,7 +98,7 @@ SELECT
     source, protocol,
     facilitator, payer, payee, payee_service_id,
     asset, token_address,
-    amount_raw::numeric, amount_usdc::numeric, asset_usd_at_time::numeric,
+    amount_raw::numeric, asset_usd_at_time::numeric,
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
     gas_used, effective_gas_price::numeric, gas_cost_wei::numeric, base_fee_per_gas::numeric,
@@ -204,10 +205,13 @@ func (s *Store) GetCursor(ctx context.Context) (uint64, error) {
 }
 
 // copyRow flattens a Payment into the staging table's column order (see
-// copyColumns). The six NUMERIC columns are emitted as text so COPY's binary
+// copyColumns). The NUMERIC columns are emitted as text so COPY's binary
 // encoder never has to encode a shopspring decimal; Postgres casts them back to
-// NUMERIC on the INSERT … SELECT. base_fee_per_gas stays nil (→ SQL NULL) when
-// the source tx carried no base fee, preserving the nullable column.
+// NUMERIC on the INSERT … SELECT. The nullable big.Int columns
+// (base_fee_per_gas, max_fee_per_gas, max_priority_fee_per_gas) stay nil
+// (→ SQL NULL) when the source carried no value. amount_usdc is intentionally
+// omitted — it is a GENERATED column (migration 00008) the DB derives from
+// amount_raw.
 func copyRow(p *x402.Payment) []any {
 	// Nullable big.Int columns: emit nil (→ SQL NULL) when the source tx/block
 	// carried no value, preserving the nullable columns.
@@ -223,7 +227,7 @@ func copyRow(p *x402.Payment) []any {
 		int64(p.BlockNumber), p.BlockTimestamp, //nolint:gosec // Base block numbers will never approach 2^63
 		p.Source, p.Protocol,
 		p.Facilitator, p.Payer, p.Payee, p.PayeeServiceID,
-		p.Asset, p.TokenAddress, p.AmountRaw.String(), p.AmountUSDC.String(), p.AssetUSDAtTime.String(),
+		p.Asset, p.TokenAddress, p.AmountRaw.String(), p.AssetUSDAtTime.String(),
 		p.AuthNonce,
 		p.MethodSelector, p.CalledContract, int16(p.TxType), int64(p.TxNonce), //nolint:gosec // tx_nonce fits in int64 for centuries
 		int64(p.GasUsed), p.EffectiveGasPrice.String(), p.GasCostWei.String(), nullableWei(p.BaseFeePerGas), //nolint:gosec // gas_used realistic blocks << 2^63

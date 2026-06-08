@@ -311,6 +311,23 @@ func TestStore_InsertBatch_ColumnsRoundTripExactly(t *testing.T) {
 	require.Nil(t, legacyGot.PayeeServiceID, "nullable payee_service_id stays NULL")
 }
 
+// TestStore_AmountUSDC_IsGenerated proves amount_usdc is derived by the database
+// from amount_raw (migration 00008), not by the writer: a deliberately wrong
+// Go-side AmountUSDC is discarded and the stored value is amount_raw / 10^6.
+func TestStore_AmountUSDC_IsGenerated(t *testing.T) {
+	ctx, store := setup(t)
+
+	p := samplePayment(1)
+	p.AmountRaw = big.NewInt(2_500_000)    // 2.5 USDC
+	p.AmountUSDC = decimal.NewFromInt(999) // wrong on purpose — must be ignored
+
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{p}, 100))
+
+	got := readPayment(ctx, t, store, p.TxHash, p.LogIndex)
+	require.Equal(t, "2.500000", got.AmountUSDC.StringFixed(6),
+		"amount_usdc is GENERATED from amount_raw, not the writer-supplied value")
+}
+
 // TestStore_InsertBatch_MixedNewAndExisting verifies a batch carrying both an
 // already-present row and a new one inserts only the new one, and that the
 // existing row is left untouched (ON CONFLICT DO NOTHING, not DO UPDATE).

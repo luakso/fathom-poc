@@ -39,7 +39,7 @@ type HyperSyncQuery struct {
 	FromBlock      uint64                  `json:"from_block"`
 	ToBlock        uint64                  `json:"to_block,omitempty"`
 	Logs           []LogFilter             `json:"logs"`
-	Transactions   []TransactionFilter     `json:"transactions"`
+	Transactions   []TransactionFilter     `json:"transactions,omitempty"`
 	FieldSelection HyperSyncFieldSelection `json:"field_selection"`
 	// JoinMode controls which related rows HyperSync returns. "JoinAll" makes it
 	// return ALL logs of the matched transactions (not just the topic-matched
@@ -214,21 +214,22 @@ type HyperSyncBlock struct {
 
 // BuildBackfillQuery constructs the HyperSync query base-collector uses.
 //
+// Selection is log-only: the single LogFilter matches AuthorizationUsed-on-USDC
+// logs, and JoinMode "JoinAll" returns each matched log's parent tx AND that
+// tx's sibling logs — including the companion USDC Transfer that pairing needs.
 // The client keep-policy is topic-only (see x402.KeepAuthorizationUsed): every
 // AuthorizationUsed-on-USDC log is kept except a direct receiveWithAuthorization.
-// The transaction-level sighash hint below does NOT gate the response —
-// JoinMode "JoinAll" returns each matched log's parent tx regardless of its
-// selector (the probe observed handleOps/charge/etc. parent txs come through),
-// so the hint is effectively vestigial. It is left in place because it is proven
-// not to drop data; a follow-up can remove it once join semantics are
-// reconfirmed against the live endpoint.
+//
+// There is deliberately no transaction-level sighash filter. It used to be sent
+// as a "hint" but never gated the response (the probe saw handleOps/charge
+// parent txs — selectors NOT in the allow-list — arrive via the log join), so
+// it was pure redundancy that risked being mistaken for a keep-filter. Removing
+// it is backstopped by the assemble drop-guard (see Backfiller.Run): if the log
+// join ever stopped delivering companions, the run halts loudly instead of
+// silently losing rows.
 //
 // fromBlock is inclusive; toBlock is inclusive (HyperSync convention).
 func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
-	sighashes := make([]string, 0, len(x402.AllowSighashes))
-	for _, s := range x402.AllowSighashes {
-		sighashes = append(sighashes, SighashHex(s))
-	}
 	return HyperSyncQuery{
 		FromBlock: fromBlock,
 		ToBlock:   toBlock,
@@ -240,9 +241,6 @@ func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 					{x402.AuthorizationUsedTopic.Hex()},
 				},
 			},
-		},
-		Transactions: []TransactionFilter{
-			{Sighash: sighashes},
 		},
 		FieldSelection: HyperSyncFieldSelection{
 			Log:         []string{"address", "topic0", "topic1", "topic2", "topic3", "data", "block_number", "transaction_hash", "transaction_index", "log_index"},

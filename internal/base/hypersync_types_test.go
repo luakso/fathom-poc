@@ -37,12 +37,11 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	require.Len(t, topic0, 1)
 	require.Equal(t, x402.AuthorizationUsedTopic.Hex(), topic0[0])
 
-	txFilters := got["transactions"].([]any)
-	require.Len(t, txFilters, 1)
-	txFilter := txFilters[0].(map[string]any)
-	sigList := txFilter["sighash"].([]any)
-	require.Len(t, sigList, len(x402.AllowSighashes))
-	require.Equal(t, SighashHex(x402.AllowSighashes[0]), sigList[0])
+	// Selection is log-only — no transaction-level sighash filter. The query
+	// must omit "transactions" entirely (companions arrive via the JoinAll log
+	// join, not a tx match), so a reader can't mistake a hint for a keep-filter.
+	_, hasTxFilter := got["transactions"]
+	require.False(t, hasTxFilter, "query must not carry a transactions filter")
 
 	// field_selection.log must use discrete topic0..topic3 columns — HyperSync
 	// rejects the "topics" variant with HTTP 400.
@@ -61,9 +60,9 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	require.Contains(t, txFields, "max_fee_per_gas")
 	require.Contains(t, txFields, "max_priority_fee_per_gas")
 
-	// join_mode must be JoinAll so HyperSync returns ALL logs of the
-	// sighash-matched transactions — including the companion Transfer that
-	// pairing needs. The log filter alone returns only AuthorizationUsed logs.
+	// join_mode must be JoinAll so HyperSync returns each matched log's parent
+	// tx AND that tx's sibling logs — including the companion Transfer pairing
+	// needs. The log filter alone returns only AuthorizationUsed logs.
 	require.Equal(t, "JoinAll", got["join_mode"])
 }
 

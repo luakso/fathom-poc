@@ -131,13 +131,13 @@ func TestBaseCollector_PaymentsTableExists(t *testing.T) {
         INSERT INTO payments (
             chain, tx_hash, log_index, block_number, block_timestamp, source, protocol,
             facilitator, payer, payee,
-            asset, token_address, amount_raw, amount_usdc, asset_usd_at_time,
+            asset, token_address, amount_raw, asset_usd_at_time,
             auth_nonce, method_selector, called_contract, tx_type, tx_nonce,
             gas_used, effective_gas_price, gas_cost_wei
         ) VALUES (
             'base', '0xdead', $1, 1, now(), 'base-collector', 'x402',
             '0xfac', '0xpay', '0xrec',
-            'USDC', '0xusdc', 1000000, 1, 1,
+            'USDC', '0xusdc', 1000000, 1,
             E'\\\\x00', E'\\\\xe3ee160e', '0xusdc', 2, 1,
             50000, 1000000000, 50000000000000
         )`
