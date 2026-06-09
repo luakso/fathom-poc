@@ -64,6 +64,18 @@ docs/                       # spec, architecture, plans
 
 The split between `database/migrations/` (tables) and `database/views/` (methodology) is load-bearing — see the architecture doc.
 
+## Dashboard data (publisher)
+
+The dashboard is served from precomputed static JSON — the DB is never queried at
+request time. Regenerate after a backfill:
+
+    go run ./cmd/publisher/ rollup            # recompute metrics_daily_v1 from payment_classified_v1
+    go run ./cmd/publisher/ emit --out dist   # write dist/*.json
+
+`metrics_daily_v1` is the rollup cube (`day × chain × facilitator × attribution ×
+amount_band`). Artifacts are stamped with `methodology_version` and the latest data day.
+See `docs/superpowers/specs/2026-06-08-exploration-dashboard-design.md`.
+
 ## Conventions
 
 - **Commits:** `<type>: <description>` where type is one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`.
