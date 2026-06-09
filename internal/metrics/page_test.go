@@ -32,6 +32,19 @@ func TestBuildEconomy_WindowAndAttribution(t *testing.T) {
 	require.Len(t, econ.DailySeries, 2) // two distinct days seeded
 }
 
+func TestBuildEconomy_WindowIsSevenDaysInclusive(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	seedPayments(t, ctx, db, []seedRow{
+		{"in", 0, "2026-06-03T12:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},  // exactly 7th day back from 06-09 → included
+		{"out", 0, "2026-06-02T12:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // 8th day back → excluded
+	})
+	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	asOf := mustTime(t, "2026-06-09T00:00:00Z")
+	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), econ.Windows["7d"].TxnCount, "7d must include 06-03 but exclude 06-02")
+}
+
 func TestBuildFacilitators_TopN(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")

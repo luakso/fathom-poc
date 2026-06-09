@@ -39,25 +39,26 @@ type EconomyPage struct {
 }
 
 // lowerBound returns the inclusive lower timestamp for a window, or zero time for "all".
+// "7d" means asOf's day plus the 6 preceding days = 7 days total, so we subtract d-1.
 func lowerBound(asOf time.Time, window string) time.Time {
 	d := windowDays[window]
 	if d == 0 {
 		return time.Time{}
 	}
-	return asOf.AddDate(0, 0, -d)
+	return asOf.AddDate(0, 0, -(d - 1))
 }
 
 // BuildEconomy rolls the cube up into the economy page. asOf pins "now" so
 // windows are deterministic (pass time.Now().UTC() in production).
 func BuildEconomy(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (EconomyPage, error) {
-	page := EconomyPage{Windows: map[string]WindowEconomy{}}
+	page := EconomyPage{Windows: map[string]WindowEconomy{}, DailySeries: []DailyPoint{}}
 
 	for window := range windowDays {
 		lb := lowerBound(asOf, window)
 		we := WindowEconomy{ByAttribution: map[string]Measure{}, ByBand: map[string]Measure{}}
 
 		if err := pool.QueryRow(ctx, `
-			SELECT coalesce(sum(txn_count),0), coalesce(sum(volume_usdc),0)::text
+			SELECT coalesce(sum(txn_count),0), coalesce(sum(volume_usdc), 0::numeric(38,6))::text
 			FROM metrics_daily_v1
 			WHERE ($1::date IS NULL OR day >= $1::date)`,
 			nullableDate(lb)).Scan(&we.TxnCount, &we.VolumeUSDC); err != nil {
@@ -72,6 +73,8 @@ func BuildEconomy(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (Econ
 		page.Windows[window] = we
 	}
 
+	// Daily series is deliberately unbounded — the chart shows full history
+	// independent of the selected window; the UI can window it client-side.
 	rows, err := pool.Query(ctx, `
 		SELECT day::text, sum(txn_count), sum(volume_usdc)::text
 		FROM metrics_daily_v1 GROUP BY day ORDER BY day`)
@@ -91,6 +94,11 @@ func BuildEconomy(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (Econ
 
 // fillBreakdown groups the cube by one column within a window into dst.
 func fillBreakdown(ctx context.Context, pool *pgxpool.Pool, lb time.Time, col string, dst map[string]Measure) error {
+	switch col {
+	case "attribution", "amount_band":
+	default:
+		return fmt.Errorf("fillBreakdown: unknown column %q", col)
+	}
 	// col is a fixed internal value ('attribution' | 'amount_band'), never user input.
 	q := fmt.Sprintf(`
 		SELECT %s, sum(txn_count), sum(volume_usdc)::text
@@ -131,19 +139,25 @@ type FacilitatorsPage struct {
 func BuildFacilitators(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (FacilitatorsPage, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT facilitator,
-		       (array_agg(attribution ORDER BY volume_usdc DESC))[1] AS attribution,
-		       sum(txn_count),
-		       sum(volume_usdc)::text
-		FROM metrics_daily_v1
+		       (array_agg(attribution ORDER BY att_volume DESC))[1] AS attribution,
+		       sum(att_txn_count),
+		       sum(att_volume)::text
+		FROM (
+		    SELECT facilitator, attribution,
+		           sum(volume_usdc) AS att_volume,
+		           sum(txn_count)   AS att_txn_count
+		    FROM metrics_daily_v1
+		    GROUP BY facilitator, attribution
+		) sub
 		GROUP BY facilitator
-		ORDER BY sum(volume_usdc) DESC
+		ORDER BY sum(att_volume) DESC
 		LIMIT 100`)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)
 	}
 	defer rows.Close()
 
-	var page FacilitatorsPage
+	page := FacilitatorsPage{Rows: []FacilitatorRow{}}
 	for rows.Next() {
 		var r FacilitatorRow
 		if err := rows.Scan(&r.Facilitator, &r.Attribution, &r.TxnCount, &r.VolumeUSDC); err != nil {
