@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -57,4 +58,11 @@ func allowlist(t *testing.T, ctx context.Context, db *sql.DB, addr string) {
 	_, err := db.ExecContext(ctx,
 		`INSERT INTO facilitator_allowlist (chain, address, source, since_version) VALUES ('base',$1,'test',1)`, addr)
 	require.NoError(t, err)
+}
+
+func mustTime(t *testing.T, iso string) time.Time {
+	t.Helper()
+	ts, err := time.Parse(time.RFC3339, iso)
+	require.NoError(t, err)
+	return ts
 }
