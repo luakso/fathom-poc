@@ -95,6 +95,12 @@ func TestRebuildDaily_Conservation(t *testing.T) {
 		`SELECT txn_count FROM metrics_daily_v1
 		  WHERE day='2026-06-01' AND attribution='agentic' AND amount_band='dust'`).Scan(&n))
 	require.Equal(t, int64(1), n)
+
+	// The cube carries the view's methodology version, single-valued.
+	var version int16
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT DISTINCT methodology_version FROM metrics_daily_v1`).Scan(&version))
+	require.Equal(t, int16(1), version)
 }
 
 func TestRebuildDaily_Idempotent(t *testing.T) {

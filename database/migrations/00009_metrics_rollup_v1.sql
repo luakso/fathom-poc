@@ -25,12 +25,17 @@ CREATE TABLE IF NOT EXISTS metrics_daily_v1 (
     facilitator  TEXT          NOT NULL,
     attribution  TEXT          NOT NULL,
     amount_band  TEXT          NOT NULL,
+    -- Carried through from the classification view so artifact stamps are
+    -- derived from the data, not re-declared in Go. Single-valued per rebuild;
+    -- emit asserts that.
+    methodology_version SMALLINT NOT NULL,
     txn_count    BIGINT        NOT NULL,
     volume_usdc  NUMERIC(38,6) NOT NULL,
     max_amount_usdc NUMERIC(38,6) NOT NULL,
     PRIMARY KEY (day, chain, facilitator, attribution, amount_band)
 );
-CREATE INDEX IF NOT EXISTS idx_metrics_daily_day         ON metrics_daily_v1(day);
+-- No separate index on (day): the primary key's leading column already serves
+-- every day-range scan.
 CREATE INDEX IF NOT EXISTS idx_metrics_daily_facilitator ON metrics_daily_v1(facilitator);
 -- +goose StatementEnd
 

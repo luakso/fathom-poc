@@ -5,8 +5,22 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
+
+	"github.com/lukostrobl/fathom/internal/x402"
 )
+
+// dayFormat is the YYYY-MM-DD layout the cube's day column round-trips through.
+const dayFormat = "2006-01-02"
+
+// Querier is the read surface the page builders need. Both *pgxpool.Pool and
+// pgx.Tx satisfy it; Emit passes a REPEATABLE READ transaction so every page
+// is built from one consistent cube snapshot.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 // windowDays maps a window name to its lookback in days. "all" (0) has no lower bound.
 var windowDays = map[string]int{"7d": 7, "30d": 30, "all": 0}
@@ -38,87 +52,143 @@ type EconomyPage struct {
 	DailySeries []DailyPoint             `json:"daily_series"`
 }
 
-// lowerBound returns the inclusive lower timestamp for a window, or zero time for "all".
-// "7d" means asOf's day plus the 6 preceding days = 7 days total, so we subtract d-1.
-func lowerBound(asOf time.Time, window string) time.Time {
+// lowerBound returns the inclusive lower day (YYYY-MM-DD) for a window, or ""
+// for "all" (no lower bound). "7d" means asOf's day plus the 6 preceding days
+// = 7 days total, so we subtract d-1. YYYY-MM-DD strings order lexicographically,
+// so day-range checks are plain string comparisons.
+func lowerBound(asOf time.Time, window string) string {
 	d := windowDays[window]
 	if d == 0 {
-		return time.Time{}
+		return ""
 	}
-	return asOf.AddDate(0, 0, -(d - 1))
+	return asOf.AddDate(0, 0, -(d - 1)).Format(dayFormat)
+}
+
+// cubeSlice is one (day, attribution, amount_band) cell of the cube, bounded
+// above by asOf. Every window, breakdown, and series point is a sum of these.
+type cubeSlice struct {
+	day         string // YYYY-MM-DD
+	attribution string
+	band        string
+	txns        int64
+	volume      decimal.Decimal
+}
+
+// accum is a Measure under construction: integer count plus exact decimal sum,
+// formatted to the cube's scale exactly once at the end.
+type accum struct {
+	txns int64
+	vol  decimal.Decimal
+}
+
+func (a accum) add(s cubeSlice) accum {
+	return accum{txns: a.txns + s.txns, vol: a.vol.Add(s.volume)}
+}
+
+func (a accum) measure() Measure {
+	return Measure{TxnCount: a.txns, VolumeUSDC: a.vol.StringFixed(x402.USDCDecimals)}
 }
 
 // BuildEconomy rolls the cube up into the economy page. asOf pins "now" so
-// windows are deterministic (pass time.Now().UTC() in production).
-func BuildEconomy(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (EconomyPage, error) {
-	page := EconomyPage{Windows: map[string]WindowEconomy{}, DailySeries: []DailyPoint{}}
-
-	for window := range windowDays {
-		lb := lowerBound(asOf, window)
-		we := WindowEconomy{ByAttribution: map[string]Measure{}, ByBand: map[string]Measure{}}
-
-		if err := pool.QueryRow(ctx, `
-			SELECT coalesce(sum(txn_count),0), coalesce(sum(volume_usdc), 0::numeric(38,6))::text
-			FROM metrics_daily_v1
-			WHERE ($1::date IS NULL OR day >= $1::date)`,
-			nullableDate(lb)).Scan(&we.TxnCount, &we.VolumeUSDC); err != nil {
-			return EconomyPage{}, fmt.Errorf("economy totals %s: %w", window, err)
-		}
-		if err := fillBreakdown(ctx, pool, lb, "attribution", we.ByAttribution); err != nil {
-			return EconomyPage{}, fmt.Errorf("economy by_attribution %s: %w", window, err)
-		}
-		if err := fillBreakdown(ctx, pool, lb, "amount_band", we.ByBand); err != nil {
-			return EconomyPage{}, fmt.Errorf("economy by_band %s: %w", window, err)
-		}
-		page.Windows[window] = we
-	}
-
-	// Daily series is deliberately unbounded — the chart shows full history
-	// independent of the selected window; the UI can window it client-side.
-	rows, err := pool.Query(ctx, `
-		SELECT day::text, sum(txn_count), sum(volume_usdc)::text
-		FROM metrics_daily_v1 GROUP BY day ORDER BY day`)
+// windows are deterministic: every window (including "all" and the daily
+// series) is bounded above by asOf's day, and "7d"/"30d" reach back from it.
+// Emit passes the cube's own data_through_day, so windows always end at the
+// data's edge regardless of when the artifacts are regenerated.
+//
+// One query reads the day × attribution × amount_band slices; windows,
+// breakdowns, and the daily series are Go-side sums over them. shopspring
+// decimals keep the math exact — the cube's NUMERIC(38,6) text round-trips
+// losslessly.
+func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, error) {
+	slices, err := readCubeSlices(ctx, q, asOf)
 	if err != nil {
-		return EconomyPage{}, fmt.Errorf("economy daily series: %w", err)
+		return EconomyPage{}, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var p DailyPoint
-		if err := rows.Scan(&p.Day, &p.TxnCount, &p.VolumeUSDC); err != nil {
-			return EconomyPage{}, fmt.Errorf("scan daily point: %w", err)
-		}
-		page.DailySeries = append(page.DailySeries, p)
+
+	page := EconomyPage{Windows: map[string]WindowEconomy{}, DailySeries: dailySeries(slices)}
+	for window := range windowDays {
+		page.Windows[window] = windowEconomy(slices, lowerBound(asOf, window))
 	}
-	return page, rows.Err()
+	return page, nil
 }
 
-// fillBreakdown groups the cube by one column within a window into dst.
-func fillBreakdown(ctx context.Context, pool *pgxpool.Pool, lb time.Time, col string, dst map[string]Measure) error {
-	switch col {
-	case "attribution", "amount_band":
-	default:
-		return fmt.Errorf("fillBreakdown: unknown column %q", col)
-	}
-	// col is a fixed internal value ('attribution' | 'amount_band'), never user input.
-	q := fmt.Sprintf(`
-		SELECT %s, sum(txn_count), sum(volume_usdc)::text
+// readCubeSlices fetches the cube cells up to and including asOf's day, in day order.
+func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice, error) {
+	rows, err := q.Query(ctx, `
+		SELECT day::text, attribution, amount_band, sum(txn_count), sum(volume_usdc)::text
 		FROM metrics_daily_v1
-		WHERE ($1::date IS NULL OR day >= $1::date)
-		GROUP BY %s`, col, col)
-	rows, err := pool.Query(ctx, q, nullableDate(lb))
+		WHERE day <= $1::date
+		GROUP BY day, attribution, amount_band
+		ORDER BY day`, asOf.Format(dayFormat))
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("economy cube read: %w", err)
 	}
 	defer rows.Close()
+
+	var slices []cubeSlice
 	for rows.Next() {
-		var key string
-		var m Measure
-		if err := rows.Scan(&key, &m.TxnCount, &m.VolumeUSDC); err != nil {
-			return err
+		var s cubeSlice
+		var vol string
+		if err := rows.Scan(&s.day, &s.attribution, &s.band, &s.txns, &vol); err != nil {
+			return nil, fmt.Errorf("scan cube slice: %w", err)
 		}
-		dst[key] = m
+		if s.volume, err = decimal.NewFromString(vol); err != nil {
+			return nil, fmt.Errorf("parse cube volume %q: %w", vol, err)
+		}
+		slices = append(slices, s)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("economy cube read: %w", err)
+	}
+	return slices, nil
+}
+
+// windowEconomy sums the slices at or after lb ("" = no lower bound) into one
+// window's totals and its by-attribution / by-band splits.
+func windowEconomy(slices []cubeSlice, lb string) WindowEconomy {
+	var total accum
+	byAttr := map[string]accum{}
+	byBand := map[string]accum{}
+	for _, s := range slices {
+		if lb != "" && s.day < lb {
+			continue
+		}
+		total = total.add(s)
+		byAttr[s.attribution] = byAttr[s.attribution].add(s)
+		byBand[s.band] = byBand[s.band].add(s)
+	}
+
+	we := WindowEconomy{Measure: total.measure(), ByAttribution: map[string]Measure{}, ByBand: map[string]Measure{}}
+	for k, a := range byAttr {
+		we.ByAttribution[k] = a.measure()
+	}
+	for k, a := range byBand {
+		we.ByBand[k] = a.measure()
+	}
+	return we
+}
+
+// dailySeries collapses the day-ordered slices into one point per day. It has
+// no lower bound — the chart shows full history independent of the selected
+// window; the UI can window it client-side.
+func dailySeries(slices []cubeSlice) []DailyPoint {
+	series := []DailyPoint{}
+	var cur accum
+	day := ""
+	flush := func() {
+		if day != "" {
+			series = append(series, DailyPoint{Day: day, Measure: cur.measure()})
+		}
+	}
+	for _, s := range slices {
+		if s.day != day {
+			flush()
+			day, cur = s.day, accum{}
+		}
+		cur = cur.add(s)
+	}
+	flush()
+	return series
 }
 
 // FacilitatorRow is one facilitator's 'all'-window totals.
@@ -133,13 +203,14 @@ type FacilitatorsPage struct {
 	Rows []FacilitatorRow `json:"rows"`
 }
 
-// BuildFacilitators ranks facilitators by all-time volume. asOf is accepted for
-// signature symmetry with BuildEconomy / future windowing; the ranking is
-// all-window for Phase 1a.
-func BuildFacilitators(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) (FacilitatorsPage, error) {
-	rows, err := pool.Query(ctx, `
+// BuildFacilitators ranks facilitators by all-time volume. The ranking is
+// all-window for Phase 1a; windowed rankings can add an asOf parameter when
+// they exist. The attribution tie-break (`, attribution`) keeps the label
+// deterministic when a facilitator has equal volume under two attributions.
+func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error) {
+	rows, err := q.Query(ctx, `
 		SELECT facilitator,
-		       (array_agg(attribution ORDER BY att_volume DESC))[1] AS attribution,
+		       (array_agg(attribution ORDER BY att_volume DESC, attribution))[1] AS attribution,
 		       sum(att_txn_count),
 		       sum(att_volume)::text
 		FROM (
@@ -166,15 +237,4 @@ func BuildFacilitators(ctx context.Context, pool *pgxpool.Pool, asOf time.Time) 
 		page.Rows = append(page.Rows, r)
 	}
 	return page, rows.Err()
-}
-
-// nullableDate returns nil for the zero time (→ SQL NULL, meaning "no lower
-// bound" / all history) and a YYYY-MM-DD string otherwise. A string (not a
-// time.Time) is used so `$1::date` is a clean text→date cast with no server
-// timezone in play.
-func nullableDate(t time.Time) any {
-	if t.IsZero() {
-		return nil
-	}
-	return t.Format("2006-01-02")
 }

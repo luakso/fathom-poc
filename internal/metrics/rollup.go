@@ -15,18 +15,19 @@ import (
 const rebuildDailySQL = `
 TRUNCATE metrics_daily_v1;
 INSERT INTO metrics_daily_v1
-    (day, chain, facilitator, attribution, amount_band, txn_count, volume_usdc, max_amount_usdc)
+    (day, chain, facilitator, attribution, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
 SELECT
     (block_timestamp AT TIME ZONE 'UTC')::date AS day,
     chain,
     facilitator,
     attribution,
     amount_band(amount_usdc) AS amount_band,
+    methodology_version,
     count(*)                  AS txn_count,
     sum(amount_usdc)          AS volume_usdc,
     max(amount_usdc)          AS max_amount_usdc
 FROM payment_classified_v1
-GROUP BY 1, 2, 3, 4, 5`
+GROUP BY 1, 2, 3, 4, 5, 6`
 
 // RebuildDaily fully recomputes metrics_daily_v1 from payment_classified_v1.
 // Runs TRUNCATE + INSERT in one transaction so a failure leaves the previous

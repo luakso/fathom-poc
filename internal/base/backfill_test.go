@@ -108,3 +108,32 @@ func TestBackfill_Run_Idempotent(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM payments`).Scan(&n))
 	require.Equal(t, 1, n)
 }
+
+func TestBackfill_Run_AllowCandidateLossAdvances(t *testing.T) {
+	ctx, store := setupStore(t)
+
+	// Same poisoned shape that halts the run by default (see
+	// TestBackfill_Run_HaltsWhenAllCandidatesDrop): with the explicit escape
+	// hatch the batch commits empty and the cursor steps past it.
+	f := &fakeFetcher{batches: []base.HyperSyncBatch{candidateNoCompanionBatch()}}
+	bf := base.NewBackfiller(f, store, base.AllowCandidateLoss())
+
+	require.NoError(t, bf.Run(ctx, 100, 100))
+
+	cur, err := store.GetCursor(ctx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(100), cur, "cursor must advance past the lossy batch when explicitly allowed")
+}
+
+func TestStore_AssertSchema(t *testing.T) {
+	ctx, store := setupStore(t)
+
+	// Fully migrated schema: amount_usdc is GENERATED — the check passes.
+	require.NoError(t, store.AssertSchema(ctx))
+
+	// Simulate a pre-00008 schema (plain column): the check must fail with a
+	// migration pointer instead of letting InsertBatch error per batch.
+	_, err := store.Pool().Exec(ctx, `ALTER TABLE payments ALTER COLUMN amount_usdc DROP EXPRESSION`)
+	require.NoError(t, err)
+	require.ErrorContains(t, store.AssertSchema(ctx), "GENERATED")
+}

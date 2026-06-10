@@ -14,6 +14,10 @@ type BackfillDeps struct {
 	Store     *Store
 	FromBlock uint64
 	ToBlock   uint64 // required (> 0); inclusive last block. Operator subtracts their own reorg margin.
+
+	// AllowCandidateLoss downgrades the all-candidates-lost halt to a warning
+	// so a single poisoned batch can be stepped past. See AllowCandidateLoss().
+	AllowCandidateLoss bool
 }
 
 // RunBackfill validates dependencies and drives one backfill pass. Returns
@@ -43,7 +47,11 @@ func RunBackfill(ctx context.Context, d BackfillDeps) error {
 		"to_block", d.ToBlock,
 	)
 
-	bf := NewBackfiller(d.Fetcher, d.Store)
+	var opts []BackfillerOption
+	if d.AllowCandidateLoss {
+		opts = append(opts, AllowCandidateLoss())
+	}
+	bf := NewBackfiller(d.Fetcher, d.Store, opts...)
 	if err := bf.Run(ctx, d.FromBlock, d.ToBlock); err != nil {
 		slog.Error(
 			"backfill: failed",

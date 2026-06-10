@@ -24,11 +24,30 @@ import (
 type Backfiller struct {
 	fetcher Fetcher
 	store   *Store
+
+	// allowCandidateLoss downgrades the all-candidates-lost halt to a loud
+	// warning. Escape hatch for a single poisoned batch (e.g. one anomalous
+	// tx that legitimately fails pairing) that would otherwise wedge the
+	// cursor forever; never set it for routine runs.
+	allowCandidateLoss bool
 }
 
-// NewBackfiller constructs a Backfiller. Both dependencies are required.
-func NewBackfiller(fetcher Fetcher, store *Store) *Backfiller {
-	return &Backfiller{fetcher: fetcher, store: store}
+// BackfillerOption configures optional Backfiller behavior.
+type BackfillerOption func(*Backfiller)
+
+// AllowCandidateLoss lets a batch whose candidates all fail pairing commit and
+// advance the cursor (with a loud warning) instead of halting the run.
+func AllowCandidateLoss() BackfillerOption {
+	return func(b *Backfiller) { b.allowCandidateLoss = true }
+}
+
+// NewBackfiller constructs a Backfiller. Fetcher and store are required.
+func NewBackfiller(fetcher Fetcher, store *Store, opts ...BackfillerOption) *Backfiller {
+	b := &Backfiller{fetcher: fetcher, store: store}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 // Run streams batches from fromBlock to toBlock (inclusive) and writes them
@@ -77,11 +96,21 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 		// (receiveWithAuthorization) legitimately produce zero rows and are
 		// excluded by allCandidatesLost.
 		if allCandidatesLost(stats) {
-			return fmt.Errorf(
-				"assemble produced 0 rows from %d candidate AuthorizationUsed logs "+
-					"(denied=%d dropped=%d max_block=%d): companion pairing likely broke — "+
-					"refusing to advance cursor",
-				stats.AuthLogs, stats.Denied, stats.Dropped, maxBlock,
+			if !b.allowCandidateLoss {
+				return fmt.Errorf(
+					"assemble produced 0 rows from %d candidate AuthorizationUsed logs "+
+						"(denied=%d dropped=%d max_block=%d): companion pairing likely broke — "+
+						"refusing to advance cursor (re-run with --allow-candidate-loss to "+
+						"accept the loss for a single poisoned batch)",
+					stats.AuthLogs, stats.Denied, stats.Dropped, maxBlock,
+				)
+			}
+			slog.Warn(
+				"backfill: ALL candidates lost in batch — continuing because allow-candidate-loss is set",
+				"auth_logs", stats.AuthLogs,
+				"denied", stats.Denied,
+				"dropped", stats.Dropped,
+				"max_block", maxBlock,
 			)
 		}
 

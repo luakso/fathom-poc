@@ -116,6 +116,30 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+// AssertSchema verifies the schema contract InsertBatch depends on:
+// payments.amount_usdc must be a GENERATED column (migration 00008), because
+// this binary's INSERT deliberately omits it. The check makes a mismatched
+// deploy (new binary on a pre-00008 schema, or the reverse) fail fast at
+// startup with a clear message instead of a cryptic per-batch insert error.
+func (s *Store) AssertSchema(ctx context.Context) error {
+	var generated string
+	err := s.pool.QueryRow(
+		ctx, `
+		SELECT attgenerated::text FROM pg_attribute
+		WHERE attrelid = 'payments'::regclass AND attname = 'amount_usdc' AND NOT attisdropped`,
+	).Scan(&generated)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("schema check: payments.amount_usdc does not exist — apply migrations through 00008 before running this binary")
+	}
+	if err != nil {
+		return fmt.Errorf("schema check: %w", err)
+	}
+	if generated != "s" {
+		return errors.New("schema check: payments.amount_usdc is not a GENERATED column — this binary requires migration 00008 (64M-row rewrite; run it in a maintenance window) before it can insert")
+	}
+	return nil
+}
+
 // InsertBatch inserts every row in batch and advances the cursor to
 // maxBlock, all in one Postgres transaction. If any insert fails, the whole
 // transaction rolls back — neither the rows nor the cursor advance.

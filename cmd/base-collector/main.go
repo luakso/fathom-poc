@@ -101,6 +101,8 @@ func runBackfillCmd(ctx context.Context, args []string, cfg Config, store *base.
 	fs := flag.NewFlagSet("backfill", flag.ExitOnError)
 	fromBlock := fs.Uint64("from-block", 0, "first block to backfill (required, > 0)")
 	toBlock := fs.Uint64("to-block", 0, "last block to backfill (required, >= from-block)")
+	allowLoss := fs.Bool("allow-candidate-loss", false,
+		"advance past a batch whose candidates all fail pairing (loud warning instead of halt); use only to step past a single poisoned batch")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -117,6 +119,9 @@ func runBackfillCmd(ctx context.Context, args []string, cfg Config, store *base.
 	if cfg.Base.HyperSyncURL == "" {
 		return errors.New("backfill: base.hypersync_url not configured")
 	}
+	if err := store.AssertSchema(ctx); err != nil {
+		return fmt.Errorf("backfill: %w", err)
+	}
 	fetcher := base.NewHTTPFetcher(cfg.Base.HyperSyncURL, cfg.Base.HyperSyncBearerToken)
 
 	logger.Info(
@@ -124,13 +129,15 @@ func runBackfillCmd(ctx context.Context, args []string, cfg Config, store *base.
 		"from_block", *fromBlock,
 		"to_block", *toBlock,
 		"hypersync_url", cfg.Base.HyperSyncURL,
+		"allow_candidate_loss", *allowLoss,
 	)
 
 	return base.RunBackfill(ctx, base.BackfillDeps{
-		Fetcher:   fetcher,
-		Store:     store,
-		FromBlock: *fromBlock,
-		ToBlock:   *toBlock,
+		Fetcher:            fetcher,
+		Store:              store,
+		FromBlock:          *fromBlock,
+		ToBlock:            *toBlock,
+		AllowCandidateLoss: *allowLoss,
 	})
 }
 
@@ -186,6 +193,7 @@ func usageText() string {
 
 subcommands:
   backfill --from-block N --to-block N       one-shot HyperSync backfill
+           [--allow-candidate-loss]          step past a batch whose candidates all fail pairing
   probe    --from-block N --to-block N       dry-run HyperSync count, no writes
   status                                     print cursor + recent counts
 
