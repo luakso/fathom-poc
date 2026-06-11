@@ -73,6 +73,10 @@ request time. Regenerate after a backfill:
                                               #   price points, gas, velocity) in one tx
     go run ./cmd/publisher/ emit --out dist   # write dist/*.json
 
+Rollup is the heavy step — budget ~2h per 20M rows on Docker-for-Mac (the windowed
+percentile sorts dominate); emit reads only the small tables and takes ~1s, so
+re-emitting after a claims-file edit is free.
+
 Curated inputs (committed, git-reviewed):
 
 - `data/eth-usd-monthly.json` — monthly ETH/USD reference prices (gas → USD);
