@@ -86,7 +86,11 @@ you run `./deploy.sh` here when you choose to ship.
     docker compose --env-file .env.prod -f docker-compose.prod.yml \
       run --rm base-collector backfill --from-block <X> --to-block <Y>
     ```
-12. Solana backfill (same pattern, `solana-collector`).
+12. Solana backfill — **not yet implemented.** The `solana-collector` binary is
+    currently a stub: it connects to the DB, logs `solana-collector ready`, and
+    exits without indexing (it ignores `backfill` args). Running it appears to
+    succeed but writes nothing. Skip this step until the collector's ingest loop
+    lands; v1 data is Base-only.
 13. Recompute the rollup cube:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm publisher rollup
