@@ -1,0 +1,5 @@
+{$FATHOM_DOMAIN} {
+	root * /srv/dist
+	encode gzip
+	file_server
+}
