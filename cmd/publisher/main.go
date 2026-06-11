@@ -69,11 +69,17 @@ func run() error {
 
 	switch cmd {
 	case "rollup":
-		logger.Info("publisher: rebuilding rollup cube")
-		prices, err := metrics.LoadETHPrices("data/eth-usd-monthly.json")
+		fs := flag.NewFlagSet("rollup", flag.ExitOnError)
+		ethPrices := fs.String("eth-prices", "data/eth-usd-monthly.json",
+			"monthly ETH/USD reference price file (consumed by the gas rollup)")
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		prices, err := metrics.LoadETHPrices(*ethPrices)
 		if err != nil {
 			return err
 		}
+		logger.Info("publisher: rebuilding metrics tables", "eth_prices", *ethPrices)
 		if err := metrics.Rebuild(ctx, pool, prices); err != nil {
 			return err
 		}
@@ -82,14 +88,15 @@ func run() error {
 	case "emit":
 		fs := flag.NewFlagSet("emit", flag.ExitOnError)
 		outDir := fs.String("out", "dist", "directory to write JSON artifacts into")
+		claimsPath := fs.String("claims", "data/claims.json", "curated claim ledger file")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
-		logger.Info("publisher: emitting artifacts", "out", *outDir)
-		claims, err := metrics.LoadClaims("data/claims.json")
+		claims, err := metrics.LoadClaims(*claimsPath)
 		if err != nil {
 			return err
 		}
+		logger.Info("publisher: emitting artifacts", "out", *outDir, "claims", *claimsPath)
 		if err := metrics.Emit(ctx, pool, *outDir, claims); err != nil {
 			return err
 		}
@@ -104,8 +111,11 @@ func usageText() string {
 	return `usage: publisher <subcommand> [flags]
 
 subcommands:
-  rollup                 recompute metrics_daily_v1 from payment_classified_v1
-  emit   --out DIR       write dashboard JSON artifacts (default DIR=dist)
+  rollup --eth-prices FILE   recompute all metrics tables from payment_classified_v1
+                             (default FILE=data/eth-usd-monthly.json)
+  emit   --out DIR --claims FILE
+                             write dashboard JSON artifacts
+                             (defaults DIR=dist, FILE=data/claims.json)
 
 run rollup after a backfill, then emit. config: config/publisher/{env}.toml + env (DATABASE__URL)
 `
