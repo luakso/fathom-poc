@@ -85,3 +85,39 @@ func testPrices(t *testing.T) metrics.ETHPrices {
 	}
 	return metrics.ETHPrices{Source: "test", Unit: "USD per ETH", Prices: prices}
 }
+
+// seedGasRow seeds a payment with an explicit tx-level gas cost. Rows sharing
+// a txHash form a batch; production data carries the IDENTICAL tx-level
+// gas_cost_wei on every row of a batch, and these fixtures must mirror that.
+type seedGasRow struct {
+	txHash      string
+	logIndex    int
+	ts          string
+	facilitator string
+	payer       string
+	payee       string
+	amountUSDC  string
+	gasCostWei  string // tx-level wei, repeated on each row of the batch
+}
+
+func seedGasPayments(t *testing.T, ctx context.Context, db *sql.DB, rows []seedGasRow) {
+	t.Helper()
+	for _, r := range rows {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO payments (
+				chain, tx_hash, log_index, block_number, block_timestamp,
+				source, protocol, facilitator, payer, payee,
+				asset, token_address, amount_raw, asset_usd_at_time,
+				auth_nonce, method_selector, called_contract, tx_type, tx_nonce,
+				gas_used, effective_gas_price, gas_cost_wei
+			) VALUES (
+				'base', $1, $2, 1, $3::timestamptz,
+				'test', 'x402', $4, $5, $6,
+				'USDC', '0xusdc', ($7::numeric * 1000000)::numeric(78,0), 1,
+				'\x00', '\x12345678', '0xvenue', 2, 0,
+				21000, 1, $8::numeric
+			)`,
+			r.txHash, r.logIndex, r.ts, r.facilitator, r.payer, r.payee, r.amountUSDC, r.gasCostWei)
+		require.NoError(t, err)
+	}
+}

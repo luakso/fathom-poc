@@ -34,8 +34,9 @@ CREATE TABLE IF NOT EXISTS metrics_price_points_v1 (
 -- metrics_gas_daily_v1: settlement gas at (day, attribution, band) grain.
 -- gas_cost_wei is tx-level in payments (duplicated per row of a batch), so the
 -- rollup dedupes per (chain, tx_hash) and apportions tx_gas/n_payments equally
--- across the tx's payments; the apportioned sum conserves the per-tx sum
--- exactly. gas_cost_usd uses the curated monthly ETH/USD reference. breakeven
+-- across the tx's payments; the apportioned sum conserves the per-tx sum to
+-- ~16 significant figures (sub-wei drift). gas_cost_usd uses the curated
+-- monthly ETH/USD reference. breakeven
 -- counts payments whose apportioned gas in USD exceeds the amount moved.
 CREATE TABLE IF NOT EXISTS metrics_gas_daily_v1 (
     day                 DATE          NOT NULL,

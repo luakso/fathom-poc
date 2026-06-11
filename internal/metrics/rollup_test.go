@@ -268,6 +268,87 @@ func TestRebuild_PricePointsWindowed(t *testing.T) {
 	require.Equal(t, int64(2), txns)
 }
 
+func TestRebuild_GasDedupesAndConserves(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		// One batch tx: 3 payments, tx gas 300 wei carried on EVERY row.
+		// Naive row-sum would count 900; correct total is 300 (100 per payment).
+		{"0xbatch", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.005", "300"},
+		{"0xbatch", 1, "2026-06-05T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.50", "300"},
+		{"0xbatch", 2, "2026-06-05T10:00:00Z", "0xfac1", "0xp3", "0xs2", "50.00", "300"},
+		// One single-payment tx, gas 100 wei.
+		{"0xsingle", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp1", "0xs1", "2.00", "100"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// Conservation: apportioned wei across all rows == 300 + 100. Compare in
+	// SQL — numeric division (300/3) carries trailing decimal zeros, so a
+	// ::text comparison against "400" would fail on formatting, not math.
+	var conserved bool
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT sum(gas_cost_wei) = 400 FROM metrics_gas_daily_v1`).Scan(&conserved))
+	require.True(t, conserved, "apportioned wei must equal the per-tx sum (300 + 100)")
+
+	// Band split: the batch spreads 100 wei each into dust (0.005), micro
+	// (0.50), small (50.00); the single tx's 2.00 is also 'small', so
+	// small = 100 (batch share) + 100 (single tx) = 200.
+	var smallOK bool
+	var smallTxns int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT sum(gas_cost_wei) = 200, sum(txn_count) FROM metrics_gas_daily_v1
+		WHERE amount_band='small'`).Scan(&smallOK, &smallTxns))
+	require.True(t, smallOK)
+	require.Equal(t, int64(2), smallTxns)
+
+	// Payment counts conserve against the cube.
+	var gasTxns, cubeTxns int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT sum(txn_count) FROM metrics_gas_daily_v1`).Scan(&gasTxns))
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT sum(txn_count) FROM metrics_daily_v1`).Scan(&cubeTxns))
+	require.Equal(t, cubeTxns, gasTxns)
+}
+
+func TestRebuild_GasBreakeven(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 1e15 wei at the $2000 test price = $2 of gas.
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		// $2 gas > $0.005 moved → breakeven breach.
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.005", "1000000000000000"},
+		// $2 gas < $5 moved → fine.
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp1", "0xs1", "5.00", "1000000000000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var breakeven int64
+	var usd string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT sum(breakeven_txn_count), sum(gas_cost_usd)::text
+		FROM metrics_gas_daily_v1`).Scan(&breakeven, &usd))
+	require.Equal(t, int64(1), breakeven)
+	require.Equal(t, "4.00000000", usd) // 2 × ($2 per payment)
+}
+
+func TestRebuild_GasApportionNonTerminating(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 100 wei over 3 payments does not divide evenly: conservation holds to
+	// numeric precision (sub-wei drift), not exactly.
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		{"0xb3", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.005", "100"},
+		{"0xb3", 1, "2026-06-05T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.50", "100"},
+		{"0xb3", 2, "2026-06-05T10:00:00Z", "0xfac1", "0xp3", "0xs2", "50.00", "100"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var withinDrift bool
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT abs(sum(gas_cost_wei) - 100) < 1e-6 FROM metrics_gas_daily_v1`).Scan(&withinDrift))
+	require.True(t, withinDrift, "apportioned sum must conserve tx gas to sub-wei precision")
+}
+
 func TestAmountBand_Boundaries(t *testing.T) {
 	ctx, db, _ := setupMetrics(t)
 	cases := []struct {

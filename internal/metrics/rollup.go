@@ -109,6 +109,42 @@ FROM (
 ) ranked
 WHERE rk <= 50`
 
+// economyGasDailySQL: gas at (day, attribution, band) grain. gas_cost_wei in
+// payments is TX-level, duplicated onto every row of a batch — so it is
+// deduped per (chain, tx_hash) (max() over identical values) and apportioned
+// tx_gas/n equally across the tx's payments. The apportioned sum conserves
+// the per-tx sum to ~16 significant figures (numeric division; sub-wei drift,
+// far below the 6dp ETH any artifact reports). USD uses the staged monthly
+// reference price; breakeven counts payments whose apportioned gas in USD
+// exceeds the amount they moved. Attribution is tx-level by construction, so
+// apportioning never crosses attribution.
+const economyGasDailySQL = `
+TRUNCATE metrics_gas_daily_v1;
+WITH tx AS (
+    SELECT chain, tx_hash, count(*) AS n, max(gas_cost_wei) AS tx_gas
+    FROM payment_classified_v1
+    GROUP BY chain, tx_hash
+)
+INSERT INTO metrics_gas_daily_v1
+    (day, attribution, amount_band, methodology_version,
+     txn_count, gas_cost_wei, gas_cost_usd, breakeven_txn_count, volume_usdc)
+SELECT
+    (p.block_timestamp AT TIME ZONE 'UTC')::date AS day,
+    p.attribution,
+    amount_band(p.amount_usdc) AS amount_band,
+    min(p.methodology_version),
+    count(*),
+    sum(t.tx_gas / t.n),
+    sum(t.tx_gas / t.n * pr.usd / '1000000000000000000'::numeric),
+    count(*) FILTER (
+        WHERE t.tx_gas / t.n * pr.usd / '1000000000000000000'::numeric > p.amount_usdc),
+    sum(p.amount_usdc)
+FROM payment_classified_v1 p
+JOIN tx t USING (chain, tx_hash)
+JOIN eth_price_monthly pr
+  ON pr.month = to_char(p.block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
+GROUP BY 1, 2, 3`
+
 // rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
 // back and the previous tables stay live.
@@ -119,6 +155,7 @@ var rebuildStatements = []struct {
 	{"cube", rebuildCubeSQL},
 	{"window_stats", economyWindowStatsSQL},
 	{"price_points", economyPricePointsSQL},
+	{"gas_daily", economyGasDailySQL},
 }
 
 // Rebuild fully recomputes every metrics table from payment_classified_v1 in a
