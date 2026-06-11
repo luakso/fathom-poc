@@ -1,0 +1,106 @@
+name: fathom
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # No host port in prod: only the compose network reaches Postgres.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-64MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-512MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - temp_file_limit=${PG_TEMP_FILE_LIMIT:-20GB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  init-db:
+    image: ghcr.io/luakso/fathom-init-db:${FATHOM_TAG:-latest}
+    environment:
+      DB_URL: ${DB_URL}
+    volumes:
+      - ./database/migrations:/migrations:ro
+      - ./database/views:/views:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  base-collector:
+    image: ghcr.io/luakso/fathom-base-collector:${FATHOM_TAG:-latest}
+    restart: "no"  # on-demand: docker compose -f docker-compose.prod.yml run --rm base-collector backfill --from-block X --to-block Y
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      DATABASE__URL: ${DB_URL}
+      BASE__HYPERSYNC_URL: ${BASE_HYPERSYNC_URL:-https://base.hypersync.xyz}
+      BASE__HYPERSYNC_BEARER_TOKEN: ${BASE_HYPERSYNC_BEARER_TOKEN:-}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  solana-collector:
+    image: ghcr.io/luakso/fathom-solana-collector:${FATHOM_TAG:-latest}
+    restart: "no"
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      DATABASE__URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  probe-collector:
+    image: ghcr.io/luakso/fathom-probe-collector:${FATHOM_TAG:-latest}
+    restart: "no"
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      DATABASE__URL: ${DB_URL}
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  publisher:
+    image: ghcr.io/luakso/fathom-publisher:${FATHOM_TAG:-latest}
+    restart: "no"  # on-demand: ... run --rm publisher rollup ; ... run --rm publisher emit --out /dist
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      DATABASE__URL: ${DB_URL}
+    volumes:
+      - dist-data:/dist
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      FATHOM_DOMAIN: ${FATHOM_DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - dist-data:/srv/dist:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  dist-data:
+  caddy-data:
+  caddy-config:
