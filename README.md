@@ -76,6 +76,12 @@ request time. Regenerate after a backfill:
 amount_band`). Artifacts are stamped with `methodology_version` and the latest data day.
 See `docs/superpowers/specs/2026-06-08-exploration-dashboard-design.md`.
 
+## Production deployment
+
+Production runs on a single Ubuntu VPS via `docker-compose.prod.yml` (GHCR images,
+tuned Postgres, Caddy). Merges to `main` push images to GHCR; deploys are a manual
+`./deploy.sh` on the box. Full runbook: [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
 ## Conventions
 
 - **Commits:** `<type>: <description>` where type is one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`.
