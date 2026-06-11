@@ -30,6 +30,12 @@ SELECT
 FROM payment_classified_v1
 GROUP BY 1, 2, 3, 4, 5, 6`
 
+// tempFileLimit caps spill-to-disk for the percentile/CROSS JOIN statements in
+// this registry. This deliberately overrides the server default upward for the
+// offline rebuild (superuser-only GUC — the publisher connects as the bootstrap
+// superuser; under a least-privilege role this SET fails).
+const tempFileLimit = "30GB"
+
 // missingPriceMonthsSQL lists months present in payments but absent from the
 // session's eth_price_monthly temp table. NULL result = full coverage.
 const missingPriceMonthsSQL = `
@@ -39,11 +45,80 @@ SELECT string_agg(m, ', ' ORDER BY m) FROM (
     SELECT month FROM eth_price_monthly
 ) missing`
 
-// rebuildStatements are run in order inside one transaction. Each statement is
+// windowsValues enumerates the fixed emit windows for rollup-side anchoring.
+// days=0 means no lower bound ('all'). Anchored to max(day) of the data — the
+// same anchor emit uses, so rollup and emit always agree on what '7d' means.
+const windowsValues = `(VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_name, days)`
+
+// economyWindowStatsSQL: medians per (window, attribution) + the synthetic
+// 'all' attribution via GROUPING SETS. Medians are not mergeable from a cube,
+// so they are computed here, once, at scan time. min(methodology_version) is
+// safe only because the v1 view is frozen single-version; emit independently
+// asserts exactly one version across all metrics tables.
+const economyWindowStatsSQL = `
+TRUNCATE metrics_window_stats_v1;
+WITH anchor AS (
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_classified_v1
+)
+INSERT INTO metrics_window_stats_v1
+    (window_name, attribution, methodology_version, txn_count, median_amount_usdc)
+SELECT
+    w.window_name,
+    COALESCE(p.attribution, 'all'),
+    min(p.methodology_version),
+    count(*),
+    percentile_disc(0.5) WITHIN GROUP (ORDER BY p.amount_usdc)
+FROM payment_classified_v1 p
+CROSS JOIN ` + windowsValues + `
+CROSS JOIN anchor a
+WHERE w.days = 0
+   OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+GROUP BY w.window_name, GROUPING SETS ((p.attribution), ())`
+
+// economyPricePointsSQL: top 50 exact agentic amounts per window, ranked by
+// txn count (ties broken by amount for determinism). payee_count separates
+// menu from market. See economyWindowStatsSQL for the min(methodology_version)
+// note: safe only because the v1 view is frozen single-version.
+const economyPricePointsSQL = `
+TRUNCATE metrics_price_points_v1;
+WITH anchor AS (
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_classified_v1
+)
+INSERT INTO metrics_price_points_v1
+    (window_name, rank, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version)
+SELECT window_name, rk, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version
+FROM (
+    SELECT
+        w.window_name,
+        row_number() OVER (
+            PARTITION BY w.window_name
+            ORDER BY count(*) DESC, p.amount_usdc
+        ) AS rk,
+        p.amount_usdc,
+        count(*)                 AS txn_count,
+        sum(p.amount_usdc)       AS volume_usdc,
+        count(DISTINCT p.payee)  AS payee_count,
+        min(p.methodology_version) AS methodology_version
+    FROM payment_classified_v1 p
+    CROSS JOIN ` + windowsValues + `
+    CROSS JOIN anchor a
+    WHERE p.attribution = 'agentic'
+      AND (w.days = 0
+           OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1))
+    GROUP BY w.window_name, p.amount_usdc
+) ranked
+WHERE rk <= 50`
+
+// rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
 // back and the previous tables stay live.
-var rebuildStatements = []string{
-	rebuildCubeSQL,
+var rebuildStatements = []struct {
+	name string
+	sql  string
+}{
+	{"cube", rebuildCubeSQL},
+	{"window_stats", economyWindowStatsSQL},
+	{"price_points", economyPricePointsSQL},
 }
 
 // Rebuild fully recomputes every metrics table from payment_classified_v1 in a
@@ -51,15 +126,18 @@ var rebuildStatements = []string{
 // validated by LoadETHPrices); it is staged into a temp table so the gas SQL
 // can join it, and coverage is checked against payments BEFORE any TRUNCATE.
 func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
-	tx, err := pool.Begin(ctx)
+	// REPEATABLE READ: every statement (and its per-statement anchor CTE) sees
+	// one snapshot, so the window-grain tables and the cube can never anchor to
+	// different days — the same hardening Emit uses on the read side.
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return fmt.Errorf("begin rebuild tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Percentile sorts over the windowed CROSS JOIN spill to temp; cap the
-	// spill so a runaway plan cannot fill the host disk.
-	if _, err := tx.Exec(ctx, `SET LOCAL temp_file_limit = '30GB'`); err != nil {
+	// Guard against runaway spill from the percentile/CROSS JOIN statements in
+	// the rebuild registry.
+	if _, err := tx.Exec(ctx, fmt.Sprintf(`SET LOCAL temp_file_limit = '%s'`, tempFileLimit)); err != nil {
 		return fmt.Errorf("set temp_file_limit: %w", err)
 	}
 
@@ -75,9 +153,9 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 		return fmt.Errorf("eth price file is missing months present in payments: %s", *missing)
 	}
 
-	for i, stmt := range rebuildStatements {
-		if _, err := tx.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("rebuild statement %d: %w", i, err)
+	for _, stmt := range rebuildStatements {
+		if _, err := tx.Exec(ctx, stmt.sql); err != nil {
+			return fmt.Errorf("rebuild %s: %w", stmt.name, err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

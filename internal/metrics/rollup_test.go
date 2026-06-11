@@ -138,6 +138,136 @@ func TestRebuild_MissingPriceMonthFailsAndPreservesTables(t *testing.T) {
 	require.NotZero(t, n, "failed rebuild must leave the previous cube intact")
 }
 
+func TestRebuild_WindowStatsMedians(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Three agentic amounts on the anchor day: median = 2.00.
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"},
+		{"0xc", 0, "2026-06-05T12:00:00Z", "0xfac1", "0xp3", "0xs1", "9.00"},
+		// Contested whale 40 days earlier: inside 'all', outside '30d'/'7d'.
+		{"0xd", 0, "2026-04-26T09:00:00Z", "0xfac2", "0xp4", "0xs2", "5000.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var median string
+	var txns int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v1
+		WHERE window_name='7d' AND attribution='agentic'`).Scan(&median, &txns))
+	require.Equal(t, "2.000000", median)
+	require.Equal(t, int64(3), txns)
+
+	// 'all' attribution row aggregates across attributions; in the all-window
+	// it covers all four payments (even count: percentile_disc picks the lower
+	// middle = 2.00).
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v1
+		WHERE window_name='all' AND attribution='all'`).Scan(&median, &txns))
+	require.Equal(t, "2.000000", median)
+	require.Equal(t, int64(4), txns)
+
+	// The contested whale exists in 'all' but not '30d'.
+	var contested30d int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT count(*) FROM metrics_window_stats_v1
+		WHERE window_name='30d' AND attribution='contested'`).Scan(&contested30d))
+	require.Zero(t, contested30d)
+}
+
+func TestRebuild_PricePointsAgenticTopN(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// 0.10 three times across two distinct payees → rank 1.
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.10"},
+		{"0xb", 0, "2026-06-05T10:01:00Z", "0xfac1", "0xp2", "0xs2", "0.10"},
+		{"0xc", 0, "2026-06-05T10:02:00Z", "0xfac1", "0xp3", "0xs1", "0.10"},
+		// 5.00 once → rank 2.
+		{"0xd", 0, "2026-06-05T10:03:00Z", "0xfac1", "0xp1", "0xs1", "5.00"},
+		// Contested 0.10 must NOT count (agentic only).
+		{"0xe", 0, "2026-06-05T10:04:00Z", "0xfac2", "0xp4", "0xs3", "0.10"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var amount string
+	var txns, payees int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT amount_usdc::text, txn_count, payee_count FROM metrics_price_points_v1
+		WHERE window_name='all' AND rank=1`).Scan(&amount, &txns, &payees))
+	require.Equal(t, "0.100000", amount)
+	require.Equal(t, int64(3), txns)
+	require.Equal(t, int64(2), payees)
+
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT amount_usdc::text FROM metrics_price_points_v1
+		WHERE window_name='all' AND rank=2`).Scan(&amount))
+	require.Equal(t, "5.000000", amount)
+}
+
+func TestRebuild_PricePointsTieBreakByAmount(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Equal txn counts: the lower amount must take the lower rank.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "5.00"},
+		{"0xb", 0, "2026-06-05T10:01:00Z", "0xfac1", "0xp2", "0xs1", "0.10"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var amount string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT amount_usdc::text FROM metrics_price_points_v1
+		WHERE window_name='all' AND rank=1`).Scan(&amount))
+	require.Equal(t, "0.100000", amount)
+}
+
+func TestRebuild_WindowBoundaryInclusive(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Anchor day = 2026-06-05. 30d window = anchor-29 .. anchor, inclusive:
+	// 2026-05-07 is the edge (in); 2026-05-06 is one day out.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T12:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-05-07T00:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"}, // edge: in
+		{"0xc", 0, "2026-05-06T23:59:59Z", "0xfac1", "0xp3", "0xs1", "4.00"}, // out
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var txns int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count FROM metrics_window_stats_v1
+		WHERE window_name='30d' AND attribution='agentic'`).Scan(&txns))
+	require.Equal(t, int64(2), txns, "30d must include the anchor-29 edge day and exclude anchor-30")
+
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count FROM metrics_window_stats_v1
+		WHERE window_name='all' AND attribution='agentic'`).Scan(&txns))
+	require.Equal(t, int64(3), txns)
+}
+
+func TestRebuild_PricePointsWindowed(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.10"},
+		{"0xb", 0, "2026-04-01T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.10"}, // outside 30d
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var txns int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count FROM metrics_price_points_v1
+		WHERE window_name='30d' AND rank=1`).Scan(&txns))
+	require.Equal(t, int64(1), txns)
+
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count FROM metrics_price_points_v1
+		WHERE window_name='all' AND rank=1`).Scan(&txns))
+	require.Equal(t, int64(2), txns)
+}
+
 func TestAmountBand_Boundaries(t *testing.T) {
 	ctx, db, _ := setupMetrics(t)
 	cases := []struct {
