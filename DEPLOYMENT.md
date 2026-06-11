@@ -91,14 +91,26 @@ you run `./deploy.sh` here when you choose to ship.
     exits without indexing (it ignores `backfill` args). Running it appears to
     succeed but writes nothing. Skip this step until the collector's ingest loop
     lands; v1 data is Base-only.
-13. Recompute the rollup cube:
+13. Recompute the rollup cube and economy tables:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm publisher rollup
     ```
+    **This is slow — do not Ctrl-C.** The windowed percentile/gas statements scan
+    the full table several times; budget hours, not minutes, at full-history row
+    counts (~2h per 20M rows was measured on a dev box). It runs in one
+    transaction, so an interrupt simply leaves the previous tables in place.
+    Rollup also requires every month present in `payments` to have a price in
+    `data/eth-usd-monthly.json` (baked into the image) — backfilling further into
+    the past than the price file covers aborts the rollup until the file is
+    extended, committed, and the image rebuilt.
 14. Emit static JSON into the shared `dist` volume:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm publisher emit --out /dist
     ```
+    Emit takes ~1s. Note: `data/claims.json` and `data/eth-usd-monthly.json` are
+    baked into the publisher image, so on prod an edit to either means
+    commit → CI image build → `./deploy.sh`, then re-run rollup (prices) or just
+    emit (claims).
 
 ## Phase D — Serve
 
