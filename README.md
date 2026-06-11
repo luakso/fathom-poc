@@ -69,12 +69,22 @@ The split between `database/migrations/` (tables) and `database/views/` (methodo
 The dashboard is served from precomputed static JSON — the DB is never queried at
 request time. Regenerate after a backfill:
 
-    go run ./cmd/publisher/ rollup            # recompute metrics_daily_v1 from payment_classified_v1
+    go run ./cmd/publisher/ rollup            # rebuild all metrics tables (cube, medians,
+                                              #   price points, gas, velocity) in one tx
     go run ./cmd/publisher/ emit --out dist   # write dist/*.json
 
+Curated inputs (committed, git-reviewed):
+
+- `data/eth-usd-monthly.json` — monthly ETH/USD reference prices (gas → USD);
+  rollup fails if a month present in `payments` has no price.
+- `data/claims.json` — the claimed-vs-measured ledger on the economy page;
+  emit resolves each claim's `measured_metric` against the cube.
+
 `metrics_daily_v1` is the rollup cube (`day × chain × facilitator × attribution ×
-amount_band`). Artifacts are stamped with `methodology_version` and the latest data day.
-See `docs/superpowers/specs/2026-06-08-exploration-dashboard-design.md`.
+amount_band`); `metrics_window_stats_v1`, `metrics_price_points_v1`,
+`metrics_gas_daily_v1`, `metrics_velocity_daily_v1` carry the non-mergeable economy
+stats. Artifacts are stamped with `methodology_version` and the latest data day.
+See `docs/superpowers/specs/2026-06-11-economy-page-data-design.md`.
 
 ## Production deployment
 

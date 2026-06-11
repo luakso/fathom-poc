@@ -1,0 +1,14 @@
+{
+  "source": "CoinGecko /coins/ethereum/market_chart daily prices, averaged per calendar month; fetched 2026-06-11. 2026-06 is a month-to-date average (11 days).",
+  "unit": "USD per ETH",
+  "prices": {
+    "2025-11": "3232.61",
+    "2025-12": "3019.21",
+    "2026-01": "3085.20",
+    "2026-02": "2039.93",
+    "2026-03": "2075.48",
+    "2026-04": "2253.91",
+    "2026-05": "2201.54",
+    "2026-06": "1748.14"
+  }
+}

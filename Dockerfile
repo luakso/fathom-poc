@@ -22,6 +22,7 @@ FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 WORKDIR /
 COPY --from=builder /out/app /app
 COPY --from=builder /src/config /config
+COPY --from=builder /src/data /data
 USER nonroot:nonroot
 ENTRYPOINT ["/app"]
 
