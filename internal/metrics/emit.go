@@ -22,7 +22,9 @@ type artifact struct {
 	Data               any    `json:"data"`
 }
 
-// Emit builds every page and writes it as <page>.json under outDir.
+// Emit builds every page and writes it as <page>.json under outDir. claims is
+// the curated, already-validated ledger (LoadClaims); it is joined to measured
+// numbers here so re-emitting after a ledger edit costs no table scan.
 //
 // All reads run inside one REPEATABLE READ transaction so the stamps and every
 // page come from the same cube snapshot — a rollup committing mid-emit cannot
@@ -32,7 +34,7 @@ type artifact struct {
 // dataset is static between deliberate backfills, so "7d" means the last 7 days
 // of data, and re-emitting later never flatlines the windows. An empty cube is
 // an error (run `publisher rollup` first), never an all-zero artifact.
-func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string) error {
+func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil { //nolint:gosec // G301: dashboard JSON is public, served as static files
 		return fmt.Errorf("mkdir %s: %w", outDir, err)
 	}
@@ -56,6 +58,9 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string) error {
 	if err != nil {
 		return fmt.Errorf("build economy: %w", err)
 	}
+	if econ.Claims, err = ResolveClaims(econ, claims); err != nil {
+		return fmt.Errorf("resolve claims: %w", err)
+	}
 	if err := writeArtifact(outDir, "economy.json", version, through, econ); err != nil {
 		return err
 	}
@@ -77,15 +82,24 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	var versions int64
 	var minVersion *int16
 	if err := q.QueryRow(ctx, `
-		SELECT max(day)::text, count(DISTINCT methodology_version), min(methodology_version)
-		FROM metrics_daily_v1`).Scan(&day, &versions, &minVersion); err != nil {
+		SELECT
+		    (SELECT max(day)::text FROM metrics_daily_v1),
+		    count(DISTINCT methodology_version),
+		    min(methodology_version)
+		FROM (
+		    SELECT methodology_version FROM metrics_daily_v1
+		    UNION ALL SELECT methodology_version FROM metrics_window_stats_v1
+		    UNION ALL SELECT methodology_version FROM metrics_price_points_v1
+		    UNION ALL SELECT methodology_version FROM metrics_gas_daily_v1
+		    UNION ALL SELECT methodology_version FROM metrics_velocity_daily_v1
+		) versions`).Scan(&day, &versions, &minVersion); err != nil {
 		return "", 0, fmt.Errorf("cube stamp: %w", err)
 	}
 	if day == nil {
 		return "", 0, errors.New("metrics_daily_v1 is empty — run `publisher rollup` before emit; refusing to overwrite artifacts with zeros")
 	}
 	if versions != 1 {
-		return "", 0, fmt.Errorf("cube stamp: expected one methodology_version in metrics_daily_v1, found %d — rebuild the cube", versions)
+		return "", 0, fmt.Errorf("cube stamp: expected one methodology_version across metrics tables, found %d — rebuild the cube", versions)
 	}
 	return *day, int(*minVersion), nil
 }

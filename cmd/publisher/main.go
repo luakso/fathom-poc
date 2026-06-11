@@ -86,7 +86,11 @@ func run() error {
 			return err
 		}
 		logger.Info("publisher: emitting artifacts", "out", *outDir)
-		if err := metrics.Emit(ctx, pool, *outDir); err != nil {
+		claims, err := metrics.LoadClaims("data/claims.json")
+		if err != nil {
+			return err
+		}
+		if err := metrics.Emit(ctx, pool, *outDir, claims); err != nil {
 			return err
 		}
 		logger.Info("publisher: emit complete", "out", *outDir)

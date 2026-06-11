@@ -96,3 +96,27 @@ func TestLoadClaims_Rejects(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveClaims(t *testing.T) {
+	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{
+		"30d": {
+			Measure: metrics.Measure{TxnCount: 100, VolumeUSDC: "500.000000"},
+			ByAttribution: map[string]metrics.Measure{
+				"agentic": {TxnCount: 90, VolumeUSDC: "50.000000"},
+			},
+		},
+	}}
+	claims := []metrics.Claim{
+		{ID: "a", Source: "s", ClaimText: "t", ClaimedValue: "3700000", MeasuredMetric: "total_txns_30d"},
+		{ID: "b", Source: "s", ClaimText: "t", ClaimedValue: "1000000", MeasuredMetric: "agentic_volume_30d"},
+		{ID: "c", Source: "s", ClaimText: "t", ClaimedValue: "5", MeasuredMetric: "contested_volume_30d"},
+	}
+	got, err := metrics.ResolveClaims(page, claims)
+	require.NoError(t, err)
+	require.Equal(t, "100", got[0].MeasuredValue)
+	require.Equal(t, "transactions", got[0].MeasuredUnit)
+	require.Equal(t, "50.000000", got[1].MeasuredValue)
+	require.Equal(t, "USDC", got[1].MeasuredUnit)
+	// Absent attribution resolves to zeros, not empty strings.
+	require.Equal(t, "0.000000", got[2].MeasuredValue)
+}

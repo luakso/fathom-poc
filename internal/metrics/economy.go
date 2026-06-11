@@ -95,7 +95,8 @@ var gasMethodNotes = map[string]string{
 
 // monthlySeries collapses day-ordered cube slices into calendar months. A
 // month is complete iff its first day >= the earliest data day AND its last
-// day <= asOf's day.
+// day <= asOf's day. The series is sparse — a calendar month with zero payments
+// is simply absent, like the daily series.
 func monthlySeries(slices []cubeSlice, asOf time.Time) ([]MonthlyPoint, error) {
 	if len(slices) == 0 {
 		return []MonthlyPoint{}, nil
@@ -164,6 +165,9 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 		if err := rows.Scan(&w, &attr, &txns, &median); err != nil {
 			return nil, fmt.Errorf("scan window stats: %w", err)
 		}
+		if _, ok := out[w]; !ok {
+			return nil, fmt.Errorf("window stats read: unknown window_name %q", w)
+		}
 		var m Measure
 		if attr == "all" {
 			m = windows[w].Measure
@@ -176,7 +180,10 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 			TxnCount:   txns,
 		}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("window stats read: %w", err)
+	}
+	return out, nil
 }
 
 // avgUSDC divides a Measure's volume by its count, "0.000000" for empty.
@@ -222,7 +229,10 @@ func buildPricePoints(ctx context.Context, q Querier, windows map[string]WindowE
 		p.TxnSharePct = share.StringFixed(2)
 		out[w] = append(out[w], p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("price points read: %w", err)
+	}
+	return out, nil
 }
 
 // gasSlice mirrors one metrics_gas_daily_v1 row with exact decimals.
@@ -390,6 +400,8 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 				r.MeasuredValue = decimal.Zero.StringFixed(x402.USDCDecimals)
 			}
 			r.MeasuredUnit = "USDC"
+		default:
+			return nil, fmt.Errorf("claim %s: unhandled kind %q", c.ID, kind)
 		}
 		out = append(out, r)
 	}
