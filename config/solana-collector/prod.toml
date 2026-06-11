@@ -1,0 +1,5 @@
+env = "prod"
+
+[log]
+is_pretty = false
+level = "info"
