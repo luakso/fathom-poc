@@ -219,6 +219,9 @@ func buildPricePoints(ctx context.Context, q Querier, windows map[string]WindowE
 		if err := rows.Scan(&w, &p.AmountUSDC, &p.TxnCount, &p.VolumeUSDC, &p.PayeeCount); err != nil {
 			return nil, fmt.Errorf("scan price point: %w", err)
 		}
+		if _, ok := out[w]; !ok {
+			return nil, fmt.Errorf("price points read: unknown window_name %q", w)
+		}
 		agenticTxns := windows[w].ByAttribution["agentic"].TxnCount
 		share := decimal.Zero
 		if agenticTxns > 0 {

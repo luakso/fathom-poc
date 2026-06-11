@@ -85,25 +85,37 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	var doc struct {
 		Data struct {
 			MonthlySeries []struct {
-				Month string `json:"month"`
+				Month    string `json:"month"`
+				Complete bool   `json:"complete"`
 			} `json:"monthly_series"`
 			TypicalPayment map[string]map[string]struct {
 				MedianUSDC string `json:"median_usdc"`
 			} `json:"typical_payment"`
 			PricePoints map[string][]struct {
-				AmountUSDC string `json:"amount_usdc"`
+				AmountUSDC  string `json:"amount_usdc"`
+				TxnSharePct string `json:"txn_share_pct"`
 			} `json:"price_points"`
 			Gas struct {
-				Method map[string]string `json:"method"`
+				Method  map[string]string `json:"method"`
+				Windows map[string]struct {
+					ByAttribution map[string]struct {
+						GasUSD            string  `json:"gas_usd"`
+						GasCentsPerDollar *string `json:"gas_cents_per_dollar"`
+					} `json:"by_attribution"`
+				} `json:"windows"`
 			} `json:"gas"`
 			Velocity struct {
 				Windows map[string]map[string]struct {
 					MaxPerMin int64 `json:"max_per_min"`
 				} `json:"windows"`
+				DailySeries []struct {
+					Day string `json:"day"`
+				} `json:"daily_series"`
 			} `json:"velocity"`
 			Claims []struct {
 				ID            string `json:"id"`
 				MeasuredValue string `json:"measured_value"`
+				MeasuredUnit  string `json:"measured_unit"`
 			} `json:"claims"`
 		} `json:"data"`
 	}
@@ -115,4 +127,14 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.Equal(t, int64(1), doc.Data.Velocity.Windows["all"]["agentic"].MaxPerMin)
 	require.Len(t, doc.Data.Claims, 1)
 	require.Equal(t, "1", doc.Data.Claims[0].MeasuredValue)
+
+	gw := doc.Data.Gas.Windows["all"].ByAttribution["agentic"]
+	require.Equal(t, "0.00", gw.GasUSD)
+	require.NotNil(t, gw.GasCentsPerDollar)
+	require.Equal(t, "0.0000", *gw.GasCentsPerDollar)
+	require.Len(t, doc.Data.Velocity.DailySeries, 1)
+	require.Equal(t, "2026-06-08", doc.Data.Velocity.DailySeries[0].Day)
+	require.False(t, doc.Data.MonthlySeries[0].Complete, "single mid-month data day cannot be a complete month")
+	require.Equal(t, "100.00", doc.Data.PricePoints["all"][0].TxnSharePct)
+	require.Equal(t, "transactions", doc.Data.Claims[0].MeasuredUnit)
 }
