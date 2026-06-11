@@ -46,10 +46,17 @@ type DailyPoint struct {
 	Measure
 }
 
-// EconomyPage is the full payload for the Payment Economy page.
+// EconomyPage is the full payload for the Payment Economy page. Claims is
+// attached by Emit (ResolveClaims) — BuildEconomy leaves it empty.
 type EconomyPage struct {
-	Windows     map[string]WindowEconomy `json:"windows"`
-	DailySeries []DailyPoint             `json:"daily_series"`
+	Windows        map[string]WindowEconomy             `json:"windows"`
+	DailySeries    []DailyPoint                         `json:"daily_series"`
+	MonthlySeries  []MonthlyPoint                       `json:"monthly_series"`
+	TypicalPayment map[string]map[string]TypicalPayment `json:"typical_payment"`
+	PricePoints    map[string][]PricePoint              `json:"price_points"`
+	Gas            GasSection                           `json:"gas"`
+	Velocity       VelocitySection                      `json:"velocity"`
+	Claims         []ClaimResult                        `json:"claims"`
 }
 
 // lowerBound returns the inclusive lower day (YYYY-MM-DD) for a window, or ""
@@ -105,9 +112,29 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 		return EconomyPage{}, err
 	}
 
-	page := EconomyPage{Windows: map[string]WindowEconomy{}, DailySeries: dailySeries(slices)}
+	page := EconomyPage{
+		Windows:     map[string]WindowEconomy{},
+		DailySeries: dailySeries(slices),
+		Claims:      []ClaimResult{},
+	}
 	for window := range windowDays {
 		page.Windows[window] = windowEconomy(slices, lowerBound(asOf, window))
+	}
+
+	if page.MonthlySeries, err = monthlySeries(slices, asOf); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.TypicalPayment, err = buildTypicalPayment(ctx, q, page.Windows); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.PricePoints, err = buildPricePoints(ctx, q, page.Windows); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.Gas, err = buildGas(ctx, q, asOf); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.Velocity, err = buildVelocity(ctx, q, asOf); err != nil {
+		return EconomyPage{}, err
 	}
 	return page, nil
 }
