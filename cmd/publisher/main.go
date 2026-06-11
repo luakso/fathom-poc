@@ -70,7 +70,11 @@ func run() error {
 	switch cmd {
 	case "rollup":
 		logger.Info("publisher: rebuilding rollup cube")
-		if err := metrics.RebuildDaily(ctx, pool); err != nil {
+		prices, err := metrics.LoadETHPrices("data/eth-usd-monthly.json")
+		if err != nil {
+			return err
+		}
+		if err := metrics.Rebuild(ctx, pool, prices); err != nil {
 			return err
 		}
 		logger.Info("publisher: rollup complete")

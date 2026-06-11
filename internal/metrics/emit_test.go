@@ -19,7 +19,7 @@ func TestEmit_WritesStampedFiles(t *testing.T) {
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp1", "0xs1", "2.00"},
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
 	require.NoError(t, metrics.Emit(ctx, pool, dir))

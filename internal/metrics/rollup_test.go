@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
@@ -66,7 +67,7 @@ func setupMetrics(t *testing.T) (context.Context, *sql.DB, *pgxpool.Pool) {
 	return ctx, sqlDB, pool
 }
 
-func TestRebuildDaily_Conservation(t *testing.T) {
+func TestRebuild_Conservation(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")
 	seedPayments(t, ctx, db, []seedRow{
@@ -75,7 +76,7 @@ func TestRebuildDaily_Conservation(t *testing.T) {
 		{"0xc", 0, "2026-06-02T09:00:00Z", "0xfac2", "0xp3", "0xs2", "5.00"},  // contested, small
 	})
 
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	// Cube totals must equal the same aggregate taken directly from the view.
 	var cubeTxns, viewTxns int64
@@ -103,16 +104,38 @@ func TestRebuildDaily_Conservation(t *testing.T) {
 	require.Equal(t, int16(1), version)
 }
 
-func TestRebuildDaily_Idempotent(t *testing.T) {
+func TestRebuild_Idempotent(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac2", "0xp1", "0xs1", "5.00"},
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
-	require.NoError(t, metrics.RebuildDaily(ctx, pool)) // second run must not double-count
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t))) // second run must not double-count
 	var total int64
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT sum(txn_count) FROM metrics_daily_v1`).Scan(&total))
 	require.Equal(t, int64(1), total)
+}
+
+func TestRebuild_MissingPriceMonthFailsAndPreservesTables(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac2", "0xp1", "0xs1", "5.00"},
+	})
+	// First rebuild succeeds and populates the cube.
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// Second rebuild with a price file that lacks 2026-06 must fail BEFORE
+	// truncating anything: the previous generation stays queryable.
+	bad := metrics.ETHPrices{
+		Source: "test", Unit: "USD per ETH",
+		Prices: map[string]decimal.Decimal{"2026-01": decimal.NewFromInt(2000)},
+	}
+	err := metrics.Rebuild(ctx, pool, bad)
+	require.ErrorContains(t, err, "2026-06")
+
+	var n int64
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM metrics_daily_v1`).Scan(&n))
+	require.NotZero(t, n, "failed rebuild must leave the previous cube intact")
 }
 
 func TestAmountBand_Boundaries(t *testing.T) {

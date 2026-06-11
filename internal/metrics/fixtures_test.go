@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lukostrobl/fathom/internal/metrics"
 )
 
 // seedPayments inserts rows straight into the payments table for tests. Only the
@@ -65,4 +68,20 @@ func mustTime(t *testing.T, iso string) time.Time {
 	ts, err := time.Parse(time.RFC3339, iso)
 	require.NoError(t, err)
 	return ts
+}
+
+// testPrices covers every month a fixture could reasonably seed (2025-11
+// through 2026-12) at a flat $2000/ETH, so gas math in tests is easy to
+// compute by hand: 1e15 wei ≈ $2.
+func testPrices(t *testing.T) metrics.ETHPrices {
+	t.Helper()
+	prices := map[string]decimal.Decimal{}
+	for _, m := range []string{
+		"2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04",
+		"2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10",
+		"2026-11", "2026-12",
+	} {
+		prices[m] = decimal.NewFromInt(2000)
+	}
+	return metrics.ETHPrices{Source: "test", Unit: "USD per ETH", Prices: prices}
 }

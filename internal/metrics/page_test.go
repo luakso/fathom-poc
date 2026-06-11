@@ -18,7 +18,7 @@ func TestBuildEconomy_WindowAndAttribution(t *testing.T) {
 		{"0xb", 0, "2026-06-08T11:00:00Z", "0xfac1", "0xp2", "0xs1", "3.00"}, // agentic small, in 7d
 		{"0xc", 0, "2026-05-01T09:00:00Z", "0xfac2", "0xp3", "0xs2", "5.00"}, // contested, only in 'all'
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	// asOf pins "now" so the 7d/30d windows are deterministic in tests.
 	asOf := mustTime(t, "2026-06-09T00:00:00Z")
@@ -38,7 +38,7 @@ func TestBuildEconomy_WindowIsSevenDaysInclusive(t *testing.T) {
 		{"in", 0, "2026-06-03T12:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},  // exactly 7th day back from 06-09 → included
 		{"out", 0, "2026-06-02T12:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // 8th day back → excluded
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 	asOf := mustTime(t, "2026-06-09T00:00:00Z")
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestBuildFacilitators_TopN(t *testing.T) {
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp1", "0xs1", "10.00"},
 		{"0xb", 0, "2026-06-08T11:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"},
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	page, err := metrics.BuildFacilitators(ctx, pool)
 	require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestBuildEconomy_AsOfBoundsAbove(t *testing.T) {
 		{"in", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},
 		{"future", 0, "2026-06-15T10:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // after asOf → excluded everywhere
 	})
-	require.NoError(t, metrics.RebuildDaily(ctx, pool))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	asOf := mustTime(t, "2026-06-09T00:00:00Z")
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
