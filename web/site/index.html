@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FATHOM::ECONOMY — workbench</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="%23070b09"/><path d="M16 5v16M16 21l-5-6M16 21l5-6" stroke="%233dd68c" stroke-width="2.6" fill="none"/><path d="M7 26h18" stroke="%238fa098" stroke-width="2.4"/></svg>'>
+<link rel="stylesheet" href="assets/workbench.css">
+</head>
+<body>
+<div class="screen" id="gate">
+  <div class="box">
+    <h1>▼ <b>FATHOM</b>::economy</h1>
+    <p>this workbench wants a bigger terminal — it's a dense, desktop-first instrument.</p>
+    <div class="nums" id="gate-nums"></div>
+    <p>rotate, widen, or:</p>
+    <button id="gate-continue">continue anyway</button>
+  </div>
+</div>
+<div class="screen" id="fatal">
+  <div class="box">
+    <h1>▼ <b>FATHOM</b>::economy</h1>
+    <p>could not load <span style="color:var(--ink)">economy.json</span> — the page renders nothing it cannot verify.</p>
+    <div class="err" id="fatal-msg"></div>
+    <button id="fatal-retry">retry</button>
+  </div>
+</div>
+<div class="banner" id="banner" aria-live="polite"></div>
+<div class="app">
+
+  <!-- ————— top bar ————— -->
+  <div class="topbar">
+    <div class="brand">
+      <svg width="16" height="20" viewBox="0 0 16 20"><path d="M8 1v12M8 13l-4.5-5M8 13l4.5-5" stroke="var(--agentic)" stroke-width="2" fill="none"/><path d="M1 17.5h14" stroke="var(--dim)" stroke-width="2"/></svg>
+      FATHOM<span class="path">::<b>economy</b> ▸ workbench</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="winsel" id="winsel">
+      <button data-win="7d">7D</button>
+      <button data-win="30d">30D</button>
+      <button data-win="all" class="on">ALL</button>
+    </div>
+    <span class="stamp">DATA→<b id="st-through">—</b> · METH <b>v1</b></span>
+    <button class="pinbtn" id="traytoggle" title="report tray [r]">⊞ REPORT <span class="cnt" id="pincount">0</span></button>
+    <button class="helpbtn" id="helptoggle" title="help [?]">?</button>
+  </div>
+
+  <!-- ————— main grid ————— -->
+  <div class="main" id="main">
+    <div class="grid">
+
+      <!-- 1 OVERVIEW -->
+      <section class="panel span4" id="p1" style="animation-delay:.02s">
+        <div class="ptitle"><span class="no">1</span> OVERVIEW <span class="chip" id="ov-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="overview">⊞ pin</button></div>
+        <div class="row2" id="ov-stats"><!-- js --></div>
+        <div class="sep"></div>
+        <div class="sh-label"><span>USD SHARE</span><span id="ov-usd-r"></span></div>
+        <div class="shbar" id="ov-usd"></div>
+        <div class="sh-label"><span>TX SHARE</span><span id="ov-tx-r"></span></div>
+        <div class="shbar" id="ov-tx"></div>
+        <div class="note" id="ov-inv"></div>
+        <div class="denom" id="ov-denom"></div>
+      </section>
+
+      <!-- 2 DAILY TAPE -->
+      <section class="panel span8" id="p2" style="animation-delay:.05s">
+        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all observed · Jan 01 → Jun 05</span></div>
+        <div class="ptools">
+          <button data-t="d-metric" data-v="tx" class="on">TX</button>
+          <button data-t="d-metric" data-v="usd">USD</button>
+          <button data-t="d-scale" data-v="lin" class="on">LIN</button>
+          <button data-t="d-scale" data-v="log">LOG</button>
+          <button data-t="d-ma" data-v="raw" class="on">RAW</button>
+          <button data-t="d-ma" data-v="ma7">MA7</button>
+          <button class="pin-it" data-pin="daily">⊞ pin</button>
+        </div>
+        <div class="readout" id="d-readout">hover the tape ▸ crosshair</div>
+        <div class="chart-host" id="dailychart"></div>
+        <div class="denom">all observed traffic, before classification · active window shaded cyan · Jun 05 = data edge (partial day)</div>
+      </section>
+
+      <!-- 3 MONTHLY -->
+      <section class="panel span7" id="p3" style="animation-delay:.08s">
+        <div class="ptitle"><span class="no">3</span> MONTHLY · AGENTIC <span class="chip">complete months drive MoM</span></div>
+        <div class="ptools">
+          <button data-t="m-metric" data-v="usd" class="on">USD</button>
+          <button data-t="m-metric" data-v="tx">TX</button>
+          <button class="pin-it" data-pin="monthly">⊞ pin</button>
+        </div>
+        <div id="monthly"><!-- js --></div>
+        <div class="denom">agentic set only · ◌ = partial month (excluded from MoM) · May: tx +31% while $ −65% — activity without value</div>
+      </section>
+
+      <!-- 4 SPLIT -->
+      <section class="panel span5" id="p4" style="animation-delay:.11s">
+        <div class="ptitle"><span class="no">4</span> ATTRIBUTION <span class="chip" id="sp-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="split">⊞ pin</button></div>
+        <table class="t" id="splittable"></table>
+        <div class="note" style="margin-top:8px" id="sp-note"></div>
+        <div class="denom">allowlist methodology v1 — 112 facilitator addresses, 29 named operators · splits sum to totals exactly</div>
+      </section>
+
+      <!-- 5 SHAPE -->
+      <section class="panel span5" id="p5" style="animation-delay:.14s">
+        <div class="ptitle"><span class="no">5</span> PAYMENT SHAPE <span class="chip" id="shp-win"></span></div>
+        <div class="ptools">
+          <button data-t="b-metric" data-v="tx" class="on">TX</button>
+          <button data-t="b-metric" data-v="usd">USD</button>
+          <button class="pin-it" data-pin="shape">⊞ pin</button>
+        </div>
+        <div class="row2" id="shp-big"></div>
+        <div class="sep"></div>
+        <table class="t" id="typtable"></table>
+        <div class="sep"></div>
+        <div id="bands"></div>
+        <div class="denom">bands across all observed payments — the whale band ≈ the contamination · medians per window from their own scan</div>
+      </section>
+
+      <!-- 6 PRICE POINTS -->
+      <section class="panel span7" id="p6" style="animation-delay:.17s">
+        <div class="ptitle"><span class="no">6</span> PRICE POINTS <span class="chip" id="pp-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="price">⊞ pin</button></div>
+        <table class="t" id="pptable"></table>
+        <div class="denom">agentic set only · share of window's agentic tx · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
+      </section>
+
+      <!-- 7 GAS -->
+      <section class="panel span5" id="p7" style="animation-delay:.20s">
+        <div class="ptitle"><span class="no">7</span> GAS / BREAKEVEN <span class="chip" id="gas-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="gas">⊞ pin</button></div>
+        <div class="bignum c-cm glow" id="gas-pct">—</div>
+        <div class="note" style="margin:2px 0 8px">of agentic payments burned more gas than they moved</div>
+        <div class="blockmeter" id="gas-meter"></div>
+        <div class="sep"></div>
+        <div id="gas-kv"></div>
+        <div class="sep"></div>
+        <table class="t" id="gasbands"></table>
+        <div class="denom">gas counted once per tx, apportioned equally within batches · monthly ETH/USD reference · breakeven = apportioned gas USD &gt; amount</div>
+      </section>
+
+      <!-- 8 VELOCITY -->
+      <section class="panel span7" id="p8" style="animation-delay:.23s">
+        <div class="ptitle"><span class="no">8</span> VELOCITY <span class="chip">agentic · per-minute ceiling, daily</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="velocity">⊞ pin</button></div>
+        <div class="readout" id="v-readout">│ = day's max minute · ▪ = p99 of active minutes</div>
+        <div class="chart-host" id="velochart"></div>
+        <div class="row2" id="velostats" style="margin-top:8px"></div>
+        <div class="denom">agentic set · p99 over active minutes only — idle minutes can't flatter the percentile · body ~220/min, peaks 25×</div>
+      </section>
+
+      <!-- 9 CLAIMS -->
+      <section class="panel span7" id="p9" style="animation-delay:.26s">
+        <div class="ptitle"><span class="no">9</span> CLAIM LEDGER <span class="chip">public claims vs measured</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="claims">⊞ pin</button></div>
+        <div id="claims"></div>
+        <div class="denom">curated data/claims.json · join recomputed on every publish · each row names its measured metric</div>
+      </section>
+
+      <!-- LOG -->
+      <section class="panel span5" id="p10" style="animation-delay:.29s">
+        <div class="ptitle"><span class="no">~</span> VERIFY LOG <span class="chip">runs in your browser</span></div>
+        <div class="shell" id="shell"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ————— status bar ————— -->
+  <div class="statusbar">
+    <span><span class="key">w</span> window</span>
+    <span><span class="key">m</span> metric</span>
+    <span><span class="key">1-9</span> panel</span>
+    <span><span class="key">p</span> pin</span>
+    <span><span class="key">r</span> report</span>
+    <span><span class="key">?</span> help</span>
+    <span class="spacer"></span>
+    <span class="cons" id="st-cons">conservation —</span>
+    <span id="st-gen">—</span>
+    <span class="cursor"></span>
+  </div>
+</div>
+
+<!-- ————— report tray ————— -->
+<aside class="tray" id="tray" aria-label="Report tray">
+  <div class="tray-head">
+    <h2>⊞ REPORT TRAY</h2>
+    <button id="trayclose">esc</button>
+  </div>
+  <div class="tray-body">
+    <h3>Pinned findings</h3>
+    <div id="pinlist"></div>
+    <h3>Thread composer <span style="color:var(--faint);font-weight:400">— built from pins, edit freely</span></h3>
+    <textarea id="thread" spellcheck="false"></textarea>
+    <div class="traybtns">
+      <button id="copythread">COPY</button>
+      <button id="regen">REGEN FROM PINS</button>
+      <span class="count" id="charcount">0 chars</span>
+    </div>
+    <h3>X card <span style="color:var(--faint);font-weight:400">— 1200×675, for the selected pin</span></h3>
+    <div class="cardwrap"><canvas id="xcard" width="1200" height="675"></canvas></div>
+    <div class="traybtns">
+      <button id="cardprev">◀</button>
+      <button id="cardnext">▶</button>
+      <button id="carddl">DOWNLOAD PNG</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ————— help ————— -->
+<div class="overlay" id="help">
+  <div class="helpbox">
+    <h2>FATHOM WORKBENCH — KEYS</h2>
+    <div class="hk">
+      <b>w</b><span>cycle window 7D → 30D → ALL</span>
+      <b>m</b><span>flip every TX/USD toggle</span>
+      <b>1–9</b><span>jump to panel</span>
+      <b>p</b><span>pin focused panel to the report tray</span>
+      <b>r</b><span>open / close report tray</span>
+      <b>l</b><span>daily tape: linear ↔ log</span>
+      <b>a</b><span>daily tape: raw ↔ 7-day moving average</span>
+      <b>esc</b><span>close tray / help</span>
+      <b>?</b><span>this help</span>
+    </div>
+    <div class="foot">workflow: explore → pin findings → compose thread → download X card. every number from dist/economy.json · denominators stated.</div>
+  </div>
+</div>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
