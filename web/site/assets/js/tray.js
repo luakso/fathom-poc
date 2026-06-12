@@ -48,7 +48,7 @@ const PINNERS = {
   gas(){ const g = data.gas.windows[state.win].by_attribution.agentic;
     const p = 100*g.breakeven_txn_count/g.txn_count;
     return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% gas>value",
-      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} agentic payments · ${num(g.gas_cents_per_dollar).toFixed(2)}¢ gas per $1 settled`,
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} agentic payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} gas per $1 settled`,
       denom:"tx-deduped gas, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all.agentic;
     const days = data.velocity.agentic_daily;

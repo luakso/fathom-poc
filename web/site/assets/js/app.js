@@ -112,6 +112,9 @@ function wire(){
 function applyMeta(view, issues){
   $("#st-through").textContent = view.meta.data_through_day;
   $("#st-gen").textContent = "emit " + view.meta.generated_at;
+  const mon = d => new Date(d + "T00:00:00Z").toLocaleString("en-US", { month:"short", day:"2-digit", timeZone:"UTC" });
+  $("#d-range").textContent = `${mon(view.daily[0][0])} → ${mon(view.meta.data_through_day)}`;
+  $("#d-edge").textContent = mon(view.meta.data_through_day);
   const errs = issues.filter(i => i.level === "error");
   const cons = $("#st-cons");
   cons.textContent = errs.length ? "conservation ✗" : "conservation ✓";

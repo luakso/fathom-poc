@@ -3,7 +3,7 @@
 // hover listeners die with their nodes (no leak).
 import { $ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount } from "./format.js";
-import { state, data, winLabel } from "./state.js";
+import { state, data } from "./state.js";
 
 const medianOf = a => [...a].sort((x,y) => x-y)[Math.floor(a.length/2)] ?? 0;
 
