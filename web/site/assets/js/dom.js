@@ -1,0 +1,3 @@
+// Tiny DOM helpers shared by every renderer.
+export const $ = s => document.querySelector(s);
+export const $$ = s => [...document.querySelectorAll(s)];
