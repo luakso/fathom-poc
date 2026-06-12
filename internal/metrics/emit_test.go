@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -137,4 +138,43 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.False(t, doc.Data.MonthlySeries[0].Complete, "single mid-month data day cannot be a complete month")
 	require.Equal(t, "100.00", doc.Data.PricePoints["all"][0].TxnSharePct)
 	require.Equal(t, "transactions", doc.Data.Claims[0].MeasuredUnit)
+}
+
+func TestEmit_WritesSiteFiles(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "2.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	// The page ships with the data.
+	idx, err := os.ReadFile(filepath.Join(dir, "index.html"))
+	require.NoError(t, err)
+	require.Contains(t, string(idx), `src="assets/js/app.js"`)
+
+	// Every assets/ path referenced by index.html resolves to an emitted file.
+	refs := regexp.MustCompile(`(?:src|href)="(assets/[^"]+)"`).FindAllStringSubmatch(string(idx), -1)
+	require.NotEmpty(t, refs)
+	for _, m := range refs {
+		st, err := os.Stat(filepath.Join(dir, m[1]))
+		require.NoError(t, err, "referenced asset %s must be emitted", m[1])
+		require.NotZero(t, st.Size(), "asset %s must be non-empty", m[1])
+	}
+
+	// The JS modules and fonts came along.
+	for _, f := range []string{
+		"assets/js/adapter.js", "assets/js/panels.js", "assets/js/charts.js",
+		"assets/js/tray.js", "assets/workbench.css",
+		"assets/fonts/jetbrains-mono-latin-400-normal.woff2",
+	} {
+		st, err := os.Stat(filepath.Join(dir, f))
+		require.NoError(t, err, f)
+		require.NotZero(t, st.Size(), f)
+	}
+
+	// Second emit overwrites cleanly (idempotent).
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
 }

@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/lukostrobl/fathom/web"
 )
 
 // artifact is the envelope every emitted file shares: data plus provenance
@@ -72,6 +76,9 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 	if err := writeArtifact(outDir, "facilitators.json", version, through, fac); err != nil {
 		return err
 	}
+	if err := writeSite(outDir); err != nil {
+		return fmt.Errorf("write site: %w", err)
+	}
 	return nil
 }
 
@@ -104,8 +111,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	return *day, int(*minVersion), nil
 }
 
-// writeArtifact writes via temp file + rename so a reader of the live,
-// statically-served directory never sees a truncated document.
+// writeArtifact writes a stamped JSON document via writeFileAtomic.
 func writeArtifact(outDir, name string, version int, through string, data any) error {
 	doc := artifact{
 		MethodologyVersion: version,
@@ -117,13 +123,43 @@ func writeArtifact(outDir, name string, version int, through string, data any) e
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", name, err)
 	}
-	tmp := filepath.Join(outDir, name+".tmp")
-	if err := os.WriteFile(tmp, b, 0o644); err != nil { //nolint:gosec // G306: dashboard JSON is public, served as static files
+	return writeFileAtomic(outDir, name, b)
+}
+
+// writeFileAtomic writes via temp file + rename so a reader of the live,
+// statically-served directory never sees a truncated file. name may contain
+// subdirectories (created as needed).
+func writeFileAtomic(outDir, name string, b []byte) error {
+	dst := filepath.Join(outDir, name)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // G301: public static site
+		return fmt.Errorf("mkdir for %s: %w", name, err)
+	}
+	tmp := dst + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil { //nolint:gosec // G306: public static site
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
-	if err := os.Rename(tmp, filepath.Join(outDir, name)); err != nil {
+	if err := os.Rename(tmp, dst); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename %s into place: %w", name, err)
 	}
 	return nil
+}
+
+// writeSite copies the embedded dashboard into outDir. It runs AFTER the JSON
+// artifacts so a mid-failure never leaves a page pointing at missing data.
+func writeSite(outDir string) error {
+	return fs.WalkDir(web.Site, "site", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("walk embedded site: %w", err)
+		}
+		if d.IsDir() {
+			return nil
+		}
+		b, err := web.Site.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", path, err)
+		}
+		rel := strings.TrimPrefix(path, "site/")
+		return writeFileAtomic(outDir, rel, b)
+	})
 }
