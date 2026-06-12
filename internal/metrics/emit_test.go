@@ -4,6 +4,7 @@ package metrics_test
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -164,16 +165,21 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 		require.NotZero(t, st.Size(), "asset %s must be non-empty", m[1])
 	}
 
-	// The JS modules and fonts came along.
-	for _, f := range []string{
-		"assets/js/adapter.js", "assets/js/panels.js", "assets/js/charts.js",
-		"assets/js/tray.js", "assets/workbench.css",
-		"assets/fonts/jetbrains-mono-latin-400-normal.woff2",
-	} {
-		st, err := os.Stat(filepath.Join(dir, f))
-		require.NoError(t, err, f)
-		require.NotZero(t, st.Size(), f)
-	}
+	// EVERY file in the embedded site ships, byte-for-byte present and non-empty
+	// (catches a deleted font or JS module that index.html doesn't reference
+	// directly — ES-module imports and @font-face urls are invisible to the
+	// index.html regex above).
+	err = fs.WalkDir(os.DirFS("../../web/site"), ".", func(path string, d fs.DirEntry, werr error) error {
+		require.NoError(t, werr)
+		if d.IsDir() {
+			return nil
+		}
+		st, serr := os.Stat(filepath.Join(dir, path))
+		require.NoError(t, serr, "site file %s must be emitted", path)
+		require.NotZero(t, st.Size(), "site file %s must be non-empty", path)
+		return nil
+	})
+	require.NoError(t, err)
 
 	// Second emit overwrites cleanly (idempotent).
 	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
