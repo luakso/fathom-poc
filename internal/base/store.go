@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +37,9 @@ var copyColumns = []string{
 	"method_selector", "called_contract", "tx_type", "tx_nonce",
 	"gas_used", "effective_gas_price", "gas_cost_wei", "base_fee_per_gas",
 	"max_fee_per_gas", "max_priority_fee_per_gas",
+	"settlement_kind", "self_settled", "valid_after", "valid_before",
+	"input_calldata", "block_hash", "transaction_index",
+	"token_decimals", "token_symbol",
 }
 
 // createStageTable types the NUMERIC columns (amount_raw, asset_usd_at_time,
@@ -73,7 +77,16 @@ CREATE TEMP TABLE ` + stageTable + ` (
     gas_cost_wei        text,
     base_fee_per_gas    text,
     max_fee_per_gas          text,
-    max_priority_fee_per_gas text
+    max_priority_fee_per_gas text,
+    settlement_kind     text,
+    self_settled        boolean,
+    valid_after         timestamptz,
+    valid_before        timestamptz,
+    input_calldata      bytea,
+    block_hash          text,
+    transaction_index   integer,
+    token_decimals      smallint,
+    token_symbol        text
 ) ON COMMIT DROP`
 
 // insertFromStage moves staged rows into payments with the same dedupe
@@ -90,7 +103,9 @@ INSERT INTO payments (
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
     gas_used, effective_gas_price, gas_cost_wei, base_fee_per_gas,
-    max_fee_per_gas, max_priority_fee_per_gas
+    max_fee_per_gas, max_priority_fee_per_gas,
+    settlement_kind, self_settled, valid_after, valid_before,
+    input_calldata, block_hash, transaction_index, token_decimals, token_symbol
 )
 SELECT
     chain, tx_hash, log_index,
@@ -102,7 +117,9 @@ SELECT
     auth_nonce,
     method_selector, called_contract, tx_type, tx_nonce,
     gas_used, effective_gas_price::numeric, gas_cost_wei::numeric, base_fee_per_gas::numeric,
-    max_fee_per_gas::numeric, max_priority_fee_per_gas::numeric
+    max_fee_per_gas::numeric, max_priority_fee_per_gas::numeric,
+    settlement_kind, self_settled, valid_after, valid_before,
+    input_calldata, block_hash, transaction_index, token_decimals, token_symbol
 FROM ` + stageTable + `
 ON CONFLICT (chain, tx_hash, log_index) DO NOTHING`
 
@@ -246,6 +263,13 @@ func copyRow(p *x402.Payment) []any {
 		return v.String()
 	}
 
+	nullableTime := func(t *time.Time) any {
+		if t == nil {
+			return nil
+		}
+		return *t
+	}
+
 	return []any{
 		p.Chain, p.TxHash, int32(p.LogIndex), //nolint:gosec // log_index fits in int32; receipts cap well below 2^31
 		int64(p.BlockNumber), p.BlockTimestamp, //nolint:gosec // Base block numbers will never approach 2^63
@@ -256,6 +280,9 @@ func copyRow(p *x402.Payment) []any {
 		p.MethodSelector, p.CalledContract, int16(p.TxType), int64(p.TxNonce), //nolint:gosec // tx_nonce fits in int64 for centuries
 		int64(p.GasUsed), p.EffectiveGasPrice.String(), p.GasCostWei.String(), nullableWei(p.BaseFeePerGas), //nolint:gosec // gas_used realistic blocks << 2^63
 		nullableWei(p.MaxFeePerGas), nullableWei(p.MaxPriorityFeePerGas),
+		p.SettlementKind, p.SelfSettled, nullableTime(p.ValidAfter), nullableTime(p.ValidBefore),
+		p.InputCalldata, p.BlockHash, int32(p.TransactionIndex), //nolint:gosec // tx index fits int32
+		int16(p.TokenDecimals), p.TokenSymbol,
 	}
 }
 
