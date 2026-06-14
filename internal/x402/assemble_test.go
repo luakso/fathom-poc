@@ -90,33 +90,25 @@ func TestAssemble_SinglePayment_DirectUSDCCall(t *testing.T) {
 	require.Equal(t, big.NewInt(500_000_000), p.BaseFeePerGas, "base fee sourced from the block")
 }
 
-func TestAssemble_DropsReceiveWithAuthorization(t *testing.T) {
+func TestAssemble_KeepsReceiveWithAuthorizationFlagged(t *testing.T) {
+	// Self-settled: receiveWithAuthorization requires msg.sender == payee, so
+	// tx.from (facilitator) == payee.
+	payee := "0xbbbb000000000000000000000000000000000001"
+	payerTopic := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
+	payeeTopic := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+
 	tx := txFixture(
 		"0xfeed",
-		"0xfaC1000000000000000000000000000000000001",
+		payee, // facilitator == payee (self-settled)
 		USDCProxyBase.Hex(),
-		[]byte{0xef, 0x55, 0xbe, 0xc6}, // receiveWithAuthorization classic — DENY
+		[]byte{0xef, 0x55, 0xbe, 0xc6}, // receiveWithAuthorization classic
 	)
 	tx.Hash = common.HexToHash("0xfeed")
 
 	logs := []Log{
-		{
-			Address: USDCProxyBase,
-			Topics: []common.Hash{
-				TransferTopic,
-				common.HexToHash("0x000000000000000000000000aaaa000000000000000000000000000000000001"),
-				common.HexToHash("0x000000000000000000000000bbbb000000000000000000000000000000000001"),
-			},
-			Data: make32WithUint64(1_000_000), TxHash: tx.Hash, LogIndex: 0, BlockNumber: 42,
-		},
-		{
-			Address: USDCProxyBase,
-			Topics: []common.Hash{
-				AuthorizationUsedTopic,
-				common.HexToHash("0x000000000000000000000000aaaa000000000000000000000000000000000001"),
-			},
-			Data: bytes32(0xab), TxHash: tx.Hash, LogIndex: 1, BlockNumber: 42,
-		},
+		// Real EIP-3009 order: AuthorizationUsed (log_index 0) then Transfer (1).
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payerTopic), common.BytesToHash(bytes32(0xab))}, TxHash: tx.Hash, LogIndex: 0, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payerTopic), common.HexToHash(payeeTopic)}, Data: make32WithUint64(1_000_000), TxHash: tx.Hash, LogIndex: 1, BlockNumber: 42},
 	}
 	out, stats := Assemble(
 		logs,
@@ -124,9 +116,11 @@ func TestAssemble_DropsReceiveWithAuthorization(t *testing.T) {
 		map[common.Hash][]Log{tx.Hash: logs},
 		map[uint64]Block{42: {Number: 42, Timestamp: 1_700_000_000}},
 	)
-	require.Empty(t, out, "receiveWithAuthorization tx must be dropped at the filter")
-	// A denied selector is an EXPECTED drop, not an anomaly — Denied, never Dropped.
-	require.Equal(t, AssembleStats{AuthLogs: 1, Denied: 1, Kept: 0, Dropped: 0}, stats)
+	require.Equal(t, AssembleStats{AuthLogs: 1, Denied: 0, Kept: 1, Dropped: 0}, stats)
+	require.Len(t, out, 1)
+	require.Equal(t, "receive", out[0].SettlementKind)
+	require.True(t, out[0].SelfSettled, "facilitator == payee")
+	require.Equal(t, "0xbbbb000000000000000000000000000000000001", out[0].Payee)
 }
 
 func TestAssemble_MulticallProducesMultipleRows(t *testing.T) {

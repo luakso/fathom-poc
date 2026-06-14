@@ -72,9 +72,10 @@ var AllowSighashes = []uint32{
 	SighashUnattributedX,
 }
 
-// DenySighashes are outer-tx selectors we explicitly reject. receiveWithAuthorization
-// is payee-pull (no facilitator) and emits the same AuthorizationUsed event as
-// transferWithAuthorization — without this exclude, we'd misclassify those rows.
+// DenySighashes are the direct receiveWithAuthorization selectors. They are NO
+// LONGER rejected by the filter (v2 captures them flagged settlement_kind=
+// 'receive'); the list is retained as the disjointness anchor for
+// TestAllowDenyDisjoint and as the documented receive-classification set.
 var DenySighashes = []uint32{
 	SighashReceiveWithAuthV,
 	SighashReceiveWithAuthB,

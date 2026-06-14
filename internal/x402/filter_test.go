@@ -47,14 +47,16 @@ func TestKeepAuthorizationUsed_UnattributedKept(t *testing.T) {
 	require.True(t, KeepAuthorizationUsed(authLog, parentInput))
 }
 
-func TestKeepAuthorizationUsed_DroppedByReceiveSelector(t *testing.T) {
+// receiveWithAuthorization is self-settled x402, no longer denied — it is kept
+// and flagged settlement_kind='receive' downstream (see SettlementKind).
+func TestKeepAuthorizationUsed_KeepsReceiveWithAuthorization(t *testing.T) {
 	t.Parallel()
 	authLog := Log{
 		Address: USDCProxyBase,
 		Topics:  []common.Hash{AuthorizationUsedTopic, common.HexToHash("0x01")},
 	}
-	require.False(t, KeepAuthorizationUsed(authLog, []byte{0xef, 0x55, 0xbe, 0xc6}))
-	require.False(t, KeepAuthorizationUsed(authLog, []byte{0x88, 0xb7, 0xab, 0x63}))
+	require.True(t, KeepAuthorizationUsed(authLog, []byte{0xef, 0x55, 0xbe, 0xc6}))
+	require.True(t, KeepAuthorizationUsed(authLog, []byte{0x88, 0xb7, 0xab, 0x63}))
 }
 
 // Topic-only policy (c-simple): a selector we've never catalogued still emits a
