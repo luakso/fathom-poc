@@ -102,3 +102,46 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 // decimalOne is a tiny local helper for the value 1 (avoids importing shopspring
 // at every call site).
 func decimalOne() decimal.Decimal { return decimal.NewFromInt(1) }
+
+// TestStore_X402View_FacilitatorKnown proves the v2 read view labels a payment
+// known vs unknown by the facilitator allowlist. Seeds one allowlist address
+// directly to avoid coupling to the migration seed contents.
+func TestStore_X402View_FacilitatorKnown(t *testing.T) {
+	ctx, store := setup(t)
+
+	known := "0xfacknown00000000000000000000000000000001"
+	_, err := store.Pool().Exec(ctx, `
+		INSERT INTO facilitator_allowlist (chain, address, source, since_version)
+		VALUES ('base', $1, 'manual', 1)`, known)
+	require.NoError(t, err)
+
+	mk := func(txHash, facilitator string, logIndex uint32) x402.Payment {
+		return x402.Payment{
+			Chain: x402.ChainBase, TxHash: txHash, LogIndex: logIndex,
+			BlockNumber: 100, BlockTimestamp: time.Unix(1_700_000_000, 0).UTC(),
+			Source: "base-collector", Protocol: "x402",
+			Facilitator: facilitator, Payer: "0xpay", Payee: "0xrec",
+			Asset: "USDC", TokenAddress: strings.ToLower(x402.USDCProxyBase.Hex()),
+			AmountRaw: big.NewInt(1_000_000), AssetUSDAtTime: decimalOne(),
+			AuthNonce: []byte{0x01}, MethodSelector: []byte{0xe3, 0xee, 0x16, 0x0e},
+			CalledContract: strings.ToLower(x402.USDCProxyBase.Hex()),
+			TxType: 2, TxNonce: 7, GasUsed: 50_000,
+			EffectiveGasPrice: big.NewInt(1_000_000_000), GasCostWei: big.NewInt(50_000_000_000_000),
+			SettlementKind: "transfer", TokenDecimals: 6, TokenSymbol: "USDC",
+		}
+	}
+
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{
+		mk("0xknown", known, 1),
+		mk("0xunknown", "0xsomerandomfacilitator0000000000000000001", 1),
+	}, 100))
+
+	knownLabel := func(txHash string) bool {
+		var fk bool
+		require.NoError(t, store.Pool().QueryRow(ctx,
+			`SELECT facilitator_known FROM payment_x402_v1 WHERE tx_hash = $1`, txHash).Scan(&fk))
+		return fk
+	}
+	require.True(t, knownLabel("0xknown"), "allowlisted facilitator → known")
+	require.False(t, knownLabel("0xunknown"), "unlisted facilitator → unknown (discovery frontier)")
+}
