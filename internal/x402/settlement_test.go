@@ -27,3 +27,59 @@ func TestSettlementKind(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeAuthorizationWindow(t *testing.T) {
+	t.Parallel()
+
+	// Build calldata: selector(4) + from + to + value + validAfter + validBefore + nonce.
+	build := func(selector []byte, validAfter, validBefore uint64) []byte {
+		out := append([]byte{}, selector...)
+		out = append(out, make([]byte, 32)...)       // from
+		out = append(out, make([]byte, 32)...)       // to
+		out = append(out, make([]byte, 32)...)       // value
+		out = append(out, leftPad32(validAfter)...)  // validAfter
+		out = append(out, leftPad32(validBefore)...) // validBefore
+		out = append(out, make([]byte, 32)...)       // nonce
+		return out
+	}
+
+	t.Run("transferWithAuth decodes the window", func(t *testing.T) {
+		t.Parallel()
+		input := build([]byte{0xe3, 0xee, 0x16, 0x0e}, 1_700_000_000, 1_700_003_600)
+		va, vb, ok := DecodeAuthorizationWindow(input)
+		require.True(t, ok)
+		require.Equal(t, uint64(1_700_000_000), va.Uint64())
+		require.Equal(t, uint64(1_700_003_600), vb.Uint64())
+	})
+
+	t.Run("receiveWithAuth decodes the window", func(t *testing.T) {
+		t.Parallel()
+		input := build([]byte{0xef, 0x55, 0xbe, 0xc6}, 0, 1_700_003_600)
+		va, vb, ok := DecodeAuthorizationWindow(input)
+		require.True(t, ok)
+		require.Equal(t, uint64(0), va.Uint64())
+		require.Equal(t, uint64(1_700_003_600), vb.Uint64())
+	})
+
+	t.Run("wrapper selector is not decodable", func(t *testing.T) {
+		t.Parallel()
+		input := build([]byte{0x82, 0xad, 0x56, 0xcb}, 1, 2) // aggregate3
+		_, _, ok := DecodeAuthorizationWindow(input)
+		require.False(t, ok)
+	})
+
+	t.Run("truncated calldata is not decodable", func(t *testing.T) {
+		t.Parallel()
+		_, _, ok := DecodeAuthorizationWindow([]byte{0xe3, 0xee, 0x16, 0x0e})
+		require.False(t, ok)
+	})
+}
+
+// leftPad32 right-aligns a uint64 into a 32-byte EVM word.
+func leftPad32(v uint64) []byte {
+	out := make([]byte, 32)
+	for i := 0; i < 8; i++ {
+		out[31-i] = byte(v >> (8 * i))
+	}
+	return out
+}
