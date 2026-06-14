@@ -263,6 +263,7 @@ func copyRow(p *x402.Payment) []any {
 		return v.String()
 	}
 
+	// Nullable *time.Time columns: same nil → SQL NULL pattern as nullableWei.
 	nullableTime := func(t *time.Time) any {
 		if t == nil {
 			return nil
@@ -281,7 +282,7 @@ func copyRow(p *x402.Payment) []any {
 		int64(p.GasUsed), p.EffectiveGasPrice.String(), p.GasCostWei.String(), nullableWei(p.BaseFeePerGas), //nolint:gosec // gas_used realistic blocks << 2^63
 		nullableWei(p.MaxFeePerGas), nullableWei(p.MaxPriorityFeePerGas),
 		p.SettlementKind, p.SelfSettled, nullableTime(p.ValidAfter), nullableTime(p.ValidBefore),
-		p.InputCalldata, p.BlockHash, int32(p.TransactionIndex), //nolint:gosec // tx index fits int32
+		p.InputCalldata, p.BlockHash, int32(p.TransactionIndex), //nolint:gosec // tx index is bounded by block tx count; far below 2^31
 		int16(p.TokenDecimals), p.TokenSymbol,
 	}
 }

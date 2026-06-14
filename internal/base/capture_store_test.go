@@ -76,14 +76,16 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 		inputCalldata                          []byte
 		txIndex                                int32
 		tokenDecimals                          int16
+		payerAccountType                       *string
 	)
 	require.NoError(t, store.Pool().QueryRow(ctx, `
 		SELECT settlement_kind, self_settled, valid_after, valid_before,
-		       input_calldata, block_hash, transaction_index, token_decimals, token_symbol
+		       input_calldata, block_hash, transaction_index, token_decimals, token_symbol,
+		       payer_account_type
 		FROM payments WHERE chain = $1 AND tx_hash = $2 AND log_index = $3`,
 		string(x402.ChainBase), "0xcap", int32(1)).Scan(
 		&settlementKind, &selfSettled, &validAfter, &validBefore,
-		&inputCalldata, &blockHash, &txIndex, &tokenDecimals, &tokenSymbol))
+		&inputCalldata, &blockHash, &txIndex, &tokenDecimals, &tokenSymbol, &payerAccountType))
 
 	require.Equal(t, "receive", settlementKind)
 	require.True(t, selfSettled)
@@ -94,6 +96,7 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 	require.Equal(t, int32(5), txIndex)
 	require.Equal(t, int16(6), tokenDecimals)
 	require.Equal(t, "USDC", tokenSymbol)
+	require.Nil(t, payerAccountType, "payer_account_type stays NULL until a later plan populates it")
 }
 
 // decimalOne is a tiny local helper for the value 1 (avoids importing shopspring
