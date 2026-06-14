@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fathom — The Payment Economy · Sounding № 001</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="%23f5efe2"/><path d="M16 4v17M16 21l-5-6M16 21l5-6" stroke="%231a6b52" stroke-width="2.6" fill="none"/><path d="M6 26h20" stroke="%231b170f" stroke-width="2.6"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Archivo:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ————————————————————————————— FATHOM · SOUNDING № 001 — the actuarial broadsheet ————————————————————————————— */
+:root{
+  --paper:#f5efe2;
+  --paper-deep:#ebe2cd;
+  --paper-card:#f9f4e9;
+  --ink:#1c170e;
+  --ink-70:rgba(28,23,14,.70);
+  --ink-55:rgba(28,23,14,.55);
+  --ink-40:rgba(28,23,14,.40);
+  --ink-25:rgba(28,23,14,.25);
+  --ink-12:rgba(28,23,14,.12);
+  --agentic:#1a6b52;
+  --agentic-soft:rgba(26,107,82,.14);
+  --contested:#b07c10;
+  --contested-soft:rgba(176,124,16,.16);
+  --contam:#a99f8a;
+  --contam-soft:rgba(169,159,138,.30);
+  --flag:#bb3217;
+  --flag-soft:rgba(187,50,23,.10);
+  --serif:"Newsreader", Georgia, serif;
+  --sans:"Archivo", sans-serif;
+  --mono:"Spline Sans Mono", ui-monospace, monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+::selection{background:var(--agentic);color:var(--paper)}
+html{scroll-behavior:smooth}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-optical-sizing:auto;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+/* paper grain */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:2000;opacity:.40;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.06 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+a{color:inherit}
+.wrap{max-width:1280px;margin:0 auto;padding:0 56px}
+@media(max-width:760px){.wrap{padding:0 22px}}
+
+/* ————— masthead ————— */
+header.masthead{border-bottom:1px solid var(--ink);position:relative}
+.masthead-top{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:18px 0 10px;border-bottom:1px solid var(--ink-25);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-55);
+}
+.masthead-mid{display:flex;justify-content:space-between;align-items:flex-end;padding:26px 0 20px}
+.wordmark{display:flex;align-items:flex-end;gap:14px;text-decoration:none}
+.wordmark svg{display:block}
+.wordmark .wm-text{font-family:var(--sans);font-weight:800;font-size:40px;letter-spacing:.04em;line-height:.85}
+.wordmark .wm-sub{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink-55);margin-top:6px}
+nav.pages{display:flex;gap:22px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+nav.pages a{text-decoration:none;color:var(--ink-55);padding-bottom:3px;border-bottom:2px solid transparent}
+nav.pages a:hover{color:var(--ink)}
+nav.pages a.current{color:var(--agentic);border-bottom-color:var(--agentic);font-weight:600}
+@media(max-width:980px){nav.pages{display:none}}
+
+/* ————— chapter rail ————— */
+.rail{
+  position:sticky;top:0;z-index:100;background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--ink-25);
+}
+.rail-inner{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.rail-inner::-webkit-scrollbar{display:none}
+.rail a{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  text-decoration:none;color:var(--ink-55);padding:11px 14px;white-space:nowrap;border-bottom:2px solid transparent;
+}
+.rail a b{font-weight:600;color:var(--ink-40);margin-right:6px}
+.rail a.active{color:var(--agentic);border-bottom-color:var(--agentic)}
+.rail a:hover{color:var(--ink)}
+.rail .rail-stamp{margin-left:auto;padding:11px 0;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink-40);white-space:nowrap}
+@media(max-width:900px){.rail .rail-stamp{display:none}}
+
+/* ————— hero ————— */
+.hero{padding:72px 0 30px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-55);display:flex;align-items:center;gap:14px}
+.eyebrow::after{content:"";flex:1;border-top:1px solid var(--ink-25)}
+h1.headline{
+  font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.4vw,76px);line-height:1.04;
+  letter-spacing:-.015em;margin:30px 0 26px;max-width:21ch;font-optical-sizing:auto;
+}
+h1 .claimed{color:var(--ink-40);text-decoration:underline;text-decoration-style:wavy;text-decoration-color:var(--flag);text-decoration-thickness:2px;text-underline-offset:7px}
+h1 .measured{font-style:italic;color:var(--agentic)}
+.deck{font-size:20px;line-height:1.55;color:var(--ink-70);max-width:62ch}
+.deck em{font-style:italic}
+.deck .k-agentic{color:var(--agentic);font-style:italic}
+.deck .k-contested{color:var(--contested);font-style:italic}
+.deck .k-contam{color:var(--ink-55);font-style:italic}
+.hero-kicker{margin-top:26px;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-40)}
+
+/* ————— window toggle + stats panel ————— */
+.panel{border:1px solid var(--ink);background:var(--paper-card);margin:34px 0 0;position:relative}
+.panel-head{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid var(--ink-25);flex-wrap:wrap;gap:10px}
+.panel-title{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-55)}
+.wintoggle{display:flex;border:1px solid var(--ink);overflow:hidden}
+.wintoggle button{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;padding:7px 16px;border:none;background:transparent;
+  color:var(--ink-55);cursor:pointer;text-transform:uppercase;border-right:1px solid var(--ink-25);
+}
+.wintoggle button:last-child{border-right:none}
+.wintoggle button.on{background:var(--ink);color:var(--paper)}
+.wintoggle button:not(.on):hover{background:var(--paper-deep);color:var(--ink)}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);}
+.stat{padding:22px;border-right:1px solid var(--ink-25)}
+.stat:last-child{border-right:none}
+.stat .lab{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);display:flex;align-items:baseline}
+.stat .lab::after{content:"";flex:1;border-bottom:1px dotted var(--ink-25);margin:0 0 3px 8px}
+.stat .val{font-family:var(--mono);font-weight:600;font-size:clamp(22px,2.4vw,32px);margin-top:12px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.stat .sub{font-family:var(--mono);font-size:11px;color:var(--ink-55);margin-top:6px}
+.stat.is-agentic .val{color:var(--agentic)}
+@media(max-width:900px){.statgrid{grid-template-columns:1fr 1fr}.stat{border-bottom:1px solid var(--ink-25)}}
+
+/* ————— inversion bars ————— */
+.inversion{padding:26px 22px 24px;border-top:1px solid var(--ink-25)}
+.pbar-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);margin-bottom:8px;display:flex;justify-content:space-between}
+.pbar-label .right{color:var(--ink-40)}
+.pbar{display:flex;height:58px;border:1px solid var(--ink);background:var(--paper)}
+.pbar .seg{position:relative;min-width:3px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.seg.contam{background:var(--contam)}
+.seg.contested{background:var(--contested)}
+.seg.agentic{background:var(--agentic)}
+.seg .inlab{
+  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--paper);white-space:nowrap;overflow:hidden;
+}
+.seg.contam .inlab{color:rgba(28,23,14,.62)}
+.connector{display:block;width:100%;height:46px}
+.sliver-flag{position:relative;height:40px;margin-bottom:2px}
+.sliver-flag .flag-line{position:absolute;bottom:0;width:1px;background:var(--flag);height:18px}
+.sliver-flag .flag-text{
+  position:absolute;bottom:20px;transform:translateX(-100%);padding-right:2px;
+  font-family:var(--mono);font-size:11px;color:var(--flag);white-space:nowrap;letter-spacing:.04em;
+}
+.sliver-flag .flag-text b{font-weight:700}
+.legend{display:flex;gap:28px;margin-top:18px;flex-wrap:wrap}
+.legend .li{display:flex;gap:9px;font-size:13.5px;color:var(--ink-70);max-width:30ch;line-height:1.45}
+.legend .sw{width:11px;height:11px;margin-top:5px;flex:none;border:1px solid var(--ink-25)}
+.legend .li b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);display:block}
+.bar-caption{margin-top:18px;font-style:italic;font-size:15.5px;color:var(--ink-55);max-width:72ch}
+
+/* ————— denominator ritual ————— */
+.denom{
+  margin-top:14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink-55);
+  display:flex;align-items:center;gap:8px;
+}
+.denom::before{content:"";width:18px;border-top:1px solid var(--flag)}
+.denom b{color:var(--flag);font-weight:600;letter-spacing:.14em}
+
+/* ————— sections ————— */
+section.chapter{padding:84px 0 10px}
+.chap-head{border-top:3px double var(--ink);padding-top:18px;display:grid;grid-template-columns:auto 1fr auto;gap:26px;align-items:start}
+.chap-no{
+  font-family:var(--serif);font-size:88px;line-height:.8;font-weight:300;color:transparent;
+  -webkit-text-stroke:1px var(--ink-40);letter-spacing:-.04em;
+}
+.chap-title h2{font-family:var(--serif);font-weight:500;font-size:clamp(28px,3.4vw,44px);letter-spacing:-.01em;line-height:1.05}
+.chap-title .dek{font-style:italic;font-size:17.5px;color:var(--ink-55);margin-top:8px;max-width:58ch}
+.instruments{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:220px}
+.chip{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;border:1px solid var(--ink-25);padding:4px 8px;color:var(--ink-55);text-transform:uppercase;white-space:nowrap}
+.chip.live{border-color:var(--agentic);color:var(--agentic)}
+@media(max-width:760px){.chap-head{grid-template-columns:1fr}.chap-no{font-size:54px}.instruments{justify-content:flex-start}}
+.chap-body{margin-top:40px}
+
+/* two-col with marginalia */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:54px}
+@media(max-width:1000px){.cols{grid-template-columns:1fr}}
+.marginalia{font-style:italic;font-size:17px;line-height:1.6;color:var(--ink-55)}
+.marginalia .note{padding-top:14px;border-top:1px solid var(--ink-25);margin-bottom:30px}
+.marginalia .note::before{content:"✳";color:var(--flag);font-style:normal;margin-right:8px}
+.marginalia .note b{color:var(--ink);font-style:normal;font-family:var(--mono);font-size:13px;letter-spacing:.02em}
+
+/* lede with drop cap */
+.lede{font-size:18.5px;line-height:1.65;color:var(--ink-70);max-width:68ch;margin-bottom:42px}
+.lede::first-letter{
+  font-family:var(--serif);font-size:64px;line-height:.78;float:left;padding:8px 12px 0 0;color:var(--agentic);font-weight:500;
+}
+
+/* ————— claim cards ————— */
+.claims{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+@media(max-width:900px){.claims{grid-template-columns:1fr}}
+.claim{border:1px solid var(--ink);background:var(--paper-card);padding:28px 28px 24px;position:relative;overflow:hidden}
+.claim .src{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);margin-bottom:18px;display:flex;justify-content:space-between;gap:10px}
+.claim blockquote{font-family:var(--serif);font-size:clamp(22px,2.2vw,30px);line-height:1.2;font-weight:500;letter-spacing:-.01em;max-width:18ch}
+.claim blockquote::before{content:"“";color:var(--ink-40)}
+.claim blockquote::after{content:"”";color:var(--ink-40)}
+.claim .ledgerline{display:flex;align-items:baseline;font-family:var(--mono);font-size:13px;margin-top:9px;font-variant-numeric:tabular-nums}
+.claim .ledgerline .k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-55)}
+.claim .ledgerline .dots{flex:1;border-bottom:1px dotted var(--ink-25);margin:0 10px 3px}
+.claim .ledgerline .v{font-weight:600}
+.claim .ledgerline .v small{font-weight:400;color:var(--ink-55)}
+.claim .ledgerline.measured .v{color:var(--agentic)}
+.claim .ledger{margin-top:24px;padding-top:14px;border-top:1px solid var(--ink-25)}
+.claim .note{font-size:13px;font-style:italic;color:var(--ink-55);margin-top:16px;line-height:1.5;max-width:52ch}
+.stamp{
+  position:absolute;right:18px;top:18px;transform:rotate(7deg) scale(1);
+  font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--flag);border:3px double var(--flag);border-radius:5px;padding:8px 13px;text-align:center;line-height:1.25;
+  mix-blend-mode:multiply;opacity:.92;
+}
+.stamp small{display:block;font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.1em}
+.stamp.ok{color:var(--agentic);border-color:var(--agentic)}
+.in .stamp{animation:thunk .45s cubic-bezier(.2,1.6,.3,1) both .45s}
+@keyframes thunk{from{transform:rotate(14deg) scale(1.9);opacity:0}to{transform:rotate(7deg) scale(1);opacity:.92}}
+
+/* ————— charts (shared) ————— */
+.figure{border:1px solid var(--ink);background:var(--paper-card);padding:24px 26px 20px;margin-top:26px}
+.figure-head{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.figure-title{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
+.figure-title small{display:block;letter-spacing:.1em;color:var(--ink-55);margin-top:4px;text-transform:none;font-size:10.5px}
+.minitoggle{display:flex;border:1px solid var(--ink-40)}
+.minitoggle button{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;background:transparent;border:none;color:var(--ink-55);cursor:pointer}
+.minitoggle button.on{background:var(--ink);color:var(--paper)}
+.axisnote{font-family:var(--mono);font-size:10px;color:var(--ink-40);letter-spacing:.06em}
+
+/* column charts (div-based) */
+.colchart{display:flex;align-items:flex-end;gap:10px;height:230px;border-bottom:1px solid var(--ink);padding-bottom:0;position:relative}
+.colchart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.colchart .bar{
+  background:var(--agentic);border:1px solid var(--ink);border-bottom:none;position:relative;
+  transition:height .7s cubic-bezier(.2,.8,.2,1);min-height:2px;
+}
+.colchart .bar.partial{
+  background:repeating-linear-gradient(135deg,var(--agentic-soft) 0 5px,transparent 5px 10px);
+}
+.colchart .bar.neutral{background:var(--ink-25)}
+.colchart .vlab{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.colchart .mom{
+  position:absolute;top:-42px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:9.5px;color:var(--ink-55);white-space:nowrap;letter-spacing:.04em;
+}
+.colchart .mom.dn{color:var(--flag);font-weight:600}
+.colchart .mom.up{color:var(--agentic)}
+.xlabels{display:flex;gap:10px;margin-top:8px}
+.xlabels span{flex:1;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-55);text-transform:uppercase}
+.xlabels span small{display:block;font-size:9px;color:var(--ink-40);letter-spacing:.04em;text-transform:none}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+@media(max-width:900px){.pair{grid-template-columns:1fr}}
+
+/* svg charts */
+.svgwrap{position:relative}
+svg.chart{display:block;width:100%}
+svg.chart text{font-family:var(--mono);font-size:10px;fill:var(--ink-55);letter-spacing:.06em}
+svg.chart .gline{stroke:var(--ink-12);stroke-dasharray:2 4}
+svg.chart .axline{stroke:var(--ink)}
+svg.chart .anno{fill:var(--flag);font-size:10.5px;font-weight:600}
+svg.chart .anno-line{stroke:var(--flag);stroke-width:1}
+
+/* tooltip */
+#tip{
+  position:fixed;z-index:3000;pointer-events:none;background:var(--ink);color:var(--paper);
+  font-family:var(--mono);font-size:11px;line-height:1.6;padding:8px 11px;display:none;max-width:260px;
+  font-variant-numeric:tabular-nums;
+}
+#tip b{color:#e8dfc8}
+
+/* ————— price points ————— */
+.pp-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.pp-table th{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);
+  text-align:right;padding:0 12px 10px;border-bottom:1px solid var(--ink);font-weight:500;
+}
+.pp-table th:first-child{text-align:left;padding-left:0}
+.pp-table th.bar-h{text-align:left}
+.pp-table td{padding:8px 12px;border-bottom:1px solid var(--ink-12);font-family:var(--mono);font-size:13px;text-align:right;white-space:nowrap}
+.pp-table td:first-child{text-align:left;font-weight:600;padding-left:0;font-size:14px}
+.pp-table tr:hover td{background:var(--paper-deep)}
+.pp-table .ppbar-cell{width:34%;text-align:left}
+.ppbar{height:14px;background:var(--agentic);border:1px solid var(--ink);min-width:2px;transition:width .6s ease}
+.pp-table .share{color:var(--ink-70)}
+.tag{font-family:var(--mono);font-size:9px;letter-spacing:.12em;padding:3px 7px;border:1px solid}
+.tag.menu{color:var(--flag);border-color:var(--flag);background:var(--flag-soft)}
+.tag.market{color:var(--agentic);border-color:var(--agentic);background:var(--agentic-soft)}
+.tag.mixed{color:var(--ink-40);border-color:var(--ink-25)}
+.pp-table .payee-low{color:var(--flag);font-weight:700}
+
+/* ————— typical payment matrix ————— */
+.matrix{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.matrix th{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);font-weight:500;text-align:right;padding:0 14px 10px;border-bottom:1px solid var(--ink)}
+.matrix th:first-child{text-align:left;padding-left:0}
+.matrix td{font-family:var(--mono);font-size:14px;text-align:right;padding:11px 14px;border-bottom:1px solid var(--ink-12)}
+.matrix td:first-child{text-align:left;padding-left:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+.matrix tr.r-agentic td:first-child{color:var(--agentic)}
+.matrix tr.r-contested td:first-child{color:var(--contested)}
+.matrix tr.r-contam td:first-child{color:var(--ink-55)}
+.matrix tr.r-all td{border-top:1px solid var(--ink-40);color:var(--ink-70)}
+.matrix td.hot{background:var(--agentic-soft);color:var(--agentic);font-weight:700}
+.matrix td.cold{color:var(--ink-55)}
+.bigpair{display:flex;gap:0;border:1px solid var(--ink);margin-bottom:26px;background:var(--paper-card)}
+.bigpair .half{flex:1;padding:26px;border-right:1px solid var(--ink-25)}
+.bigpair .half:last-child{border-right:none}
+.bigpair .lab{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55)}
+.bigpair .val{font-family:var(--mono);font-size:clamp(30px,3.6vw,52px);font-weight:600;margin-top:10px;letter-spacing:-.02em}
+.bigpair .half.median .val{color:var(--agentic)}
+.bigpair .sub{font-family:var(--mono);font-size:11px;color:var(--ink-55);margin-top:8px}
+@media(max-width:760px){.bigpair{flex-direction:column}.bigpair .half{border-right:none;border-bottom:1px solid var(--ink-25)}}
+
+/* ————— gas ————— */
+.gas-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:26px;align-items:stretch}
+@media(max-width:980px){.gas-grid{grid-template-columns:1fr}}
+.waffle{display:grid;grid-template-columns:repeat(20,1fr);gap:4px;margin-top:18px}
+.waffle i{
+  display:block;aspect-ratio:1;border:1px solid var(--ink-25);background:transparent;
+  transition:background .3s ease, border-color .3s ease;
+}
+.waffle i.f{background:var(--flag);border-color:var(--flag)}
+.gas-stat-list{margin-top:22px}
+.gas-line{display:flex;align-items:baseline;font-family:var(--mono);font-size:13px;padding:9px 0;border-bottom:1px solid var(--ink-12);font-variant-numeric:tabular-nums}
+.gas-line .k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-55)}
+.gas-line .dots{flex:1;border-bottom:1px dotted var(--ink-25);margin:0 10px 3px}
+.gas-line .v{font-weight:600}
+.gas-band-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin-top:4px}
+.gas-band-table th{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-55);font-weight:500;text-align:right;padding:0 10px 10px;border-bottom:1px solid var(--ink)}
+.gas-band-table th:first-child{text-align:left;padding-left:0}
+.gas-band-table td{font-family:var(--mono);font-size:13px;text-align:right;padding:10px;border-bottom:1px solid var(--ink-12)}
+.gas-band-table td:first-child{text-align:left;padding-left:0;text-transform:uppercase;font-size:11px;letter-spacing:.1em;font-weight:600}
+.gas-band-table td small{color:var(--ink-40);font-size:10px;display:block;letter-spacing:.02em;font-weight:400;text-transform:none}
+.gas-band-table tr.alarm td{background:var(--flag-soft)}
+.gas-band-table tr.alarm td:nth-child(2){color:var(--flag);font-weight:700}
+.methodnote{
+  margin-top:24px;padding:18px 20px;border:1px dashed var(--ink-40);background:var(--paper);
+  font-family:var(--mono);font-size:11px;line-height:1.8;color:var(--ink-55);
+}
+.methodnote b{color:var(--ink);letter-spacing:.1em;text-transform:uppercase;font-size:10px}
+.bigstat-flag{font-family:var(--mono);font-size:clamp(34px,4vw,56px);font-weight:700;color:var(--flag);letter-spacing:-.02em;line-height:1}
+.bigstat-flag small{display:block;font-size:11px;font-weight:500;color:var(--ink-55);letter-spacing:.14em;text-transform:uppercase;margin-top:10px}
+
+/* ————— provenance ————— */
+.prov{border:1px solid var(--ink);background:var(--paper-card);padding:34px;margin-top:30px;position:relative}
+.prov::before,.prov::after{
+  content:"";position:absolute;width:18px;height:18px;border:1px solid var(--ink-40);
+}
+.prov::before{top:-7px;left:-7px;border-right:none;border-bottom:none}
+.prov::after{bottom:-7px;right:-7px;border-left:none;border-top:none}
+.prov-grid{display:grid;grid-template-columns:1fr 1fr;gap:34px}
+@media(max-width:900px){.prov-grid{grid-template-columns:1fr}}
+.prov h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-55);margin-bottom:14px;font-weight:600}
+.prov .check{font-family:var(--mono);font-size:12.5px;line-height:2;font-variant-numeric:tabular-nums}
+.prov .check .ok{color:var(--agentic);font-weight:700}
+.prov .deferred{font-size:14.5px;font-style:italic;color:var(--ink-55);line-height:1.65}
+.prov .deferred b{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--ink);letter-spacing:.06em}
+.prov ul{list-style:none}
+.prov ul li{padding:7px 0;border-bottom:1px solid var(--ink-12);font-family:var(--mono);font-size:12px;color:var(--ink-70);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.prov ul li span:last-child{color:var(--ink-40)}
+footer.colophon{
+  margin-top:70px;border-top:3px double var(--ink);padding:26px 0 60px;
+  display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);
+}
+footer.colophon .f-mark{color:var(--agentic);font-weight:700}
+
+/* ————— reveal motion ————— */
+.rv{opacity:0;transform:translateY(16px);transition:opacity .7s ease,transform .7s ease}
+.rv.in{opacity:1;transform:none}
+.rv-d1{transition-delay:.08s}.rv-d2{transition-delay:.16s}.rv-d3{transition-delay:.24s}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .rv{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<div id="tip"></div>
+
+<!-- ———————————————————— MASTHEAD ———————————————————— -->
+<header class="masthead">
+  <div class="wrap">
+    <div class="masthead-top">
+      <span>Soundings of the agent economy</span>
+      <span>Sounding № 001 · Week of Jun 05, 2026</span>
+    </div>
+    <div class="masthead-mid">
+      <a class="wordmark" href="#">
+        <svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true">
+          <path d="M17 2v28M17 30l-8-10M17 30l8-10" stroke="var(--agentic)" stroke-width="3" fill="none"/>
+          <path d="M2 38h30" stroke="var(--ink)" stroke-width="3"/>
+          <path d="M6 43h22" stroke="var(--ink-40)" stroke-width="2"/>
+        </svg>
+        <span>
+          <span class="wm-text">FATHOM</span>
+          <span class="wm-sub" style="display:block">The agent-economy index — measured, not claimed.</span>
+        </span>
+      </a>
+      <nav class="pages" aria-label="Site pages">
+        <a href="#" class="current">Economy</a>
+        <a href="#">Facilitators</a>
+        <a href="#">Payees</a>
+        <a href="#">Payers</a>
+        <a href="#">Authenticity</a>
+        <a href="#">Methodology</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- ———————————————————— CHAPTER RAIL ———————————————————— -->
+<div class="rail" id="rail">
+  <div class="wrap rail-inner">
+    <a href="#claims"><b>01</b>Claim Ledger</a>
+    <a href="#trajectory"><b>02</b>Trajectory</a>
+    <a href="#anatomy"><b>03</b>Anatomy</a>
+    <a href="#cost"><b>04</b>Cost of Settling</a>
+    <a href="#pulse"><b>05</b>Pulse</a>
+    <a href="#provenance"><b>06</b>Provenance</a>
+    <span class="rail-stamp" id="rail-stamp">DATA THROUGH —</span>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <!-- ———————————————————— HERO ———————————————————— -->
+  <section class="hero">
+    <div class="eyebrow rv">Base · USDC · x402 settlement surface · Jan 01 – Jun 05 2026</div>
+    <h1 class="headline rv rv-d1">The headlines say agents moved <span class="claimed">$448 million</span>. The agents moved <span class="measured">$7.4 million</span>.</h1>
+    <p class="deck rv rv-d2">Fathom classifies every payment it observes — <span class="k-agentic">agentic</span> (settled by a known x402 facilitator), <span class="k-contested">contested</span> (same rail, unknown gas payer), or <span class="k-contam">contamination</span> (confirmed non-x402 treasury &amp; batch traffic) — <em>before</em> counting a single dollar. Most dashboards skip that step. It is the entire difference.</p>
+    <div class="hero-kicker rv rv-d3">Six instruments · One denominator · Every number reproducible</div>
+
+    <!-- E1 + E2: the data panel -->
+    <div class="panel rv rv-d3" id="heropanel">
+      <div class="panel-head">
+        <span class="panel-title">Instrument E1–E2 — Observed payments, classified</span>
+        <div class="wintoggle" role="tablist" aria-label="Time window">
+          <button data-win="7d" role="tab">7 days</button>
+          <button data-win="30d" role="tab">30 days</button>
+          <button data-win="all" class="on" role="tab">All data</button>
+        </div>
+      </div>
+      <div class="statgrid" id="statgrid"><!-- js --></div>
+      <div class="inversion">
+        <div class="sliver-flag" id="sliver-flag"><!-- js --></div>
+        <div class="pbar-label"><span>Where the dollars are</span><span class="right" id="dollab"></span></div>
+        <div class="pbar" id="bar-dollars" aria-label="Volume share by attribution"><!-- js --></div>
+        <svg class="connector" id="connector" aria-hidden="true"></svg>
+        <div class="pbar" id="bar-txns" aria-label="Payment count share by attribution"><!-- js --></div>
+        <div class="pbar-label" style="margin-top:8px"><span>Where the payments are</span><span class="right" id="txnlab"></span></div>
+        <div class="legend" id="legend"><!-- js --></div>
+        <p class="bar-caption">Same three classes, opposite stories: by <em>count</em>, agents are practically the whole market; by <em>dollars</em>, they are a rounding error riding a treasury rail. Every chart below states which denominator it uses.</p>
+        <div class="denom"><b>Denominator</b><span id="hero-denom"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 01 CLAIM LEDGER ———————————————————— -->
+  <section class="chapter" id="claims">
+    <div class="chap-head rv">
+      <div class="chap-no">01</div>
+      <div class="chap-title">
+        <h2>The Claim Ledger</h2>
+        <p class="dek">Public figures about the agent economy, re-measured against the classified ledger. Sources cited; the join recomputed on every publish.</p>
+      </div>
+      <div class="instruments"><span class="chip live">E6 · live</span><span class="chip">data/claims.json × cube</span></div>
+    </div>
+    <div class="chap-body">
+      <p class="lede rv">Numbers about agent payments travel faster than their denominators. The ledger below holds each public claim next to the closest measured quantity Fathom can produce — and says exactly which quantity that is. When a claim survives, the ledger says so; the instrument is a measure, not a hit piece.</p>
+      <div class="claims" id="claimcards"><!-- js --></div>
+      <div class="denom rv"><b>Denominator</b><span>per-claim — each card names its measured metric; windows anchored to data-through day (2026-06-05), not wall clock</span></div>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 02 TRAJECTORY ———————————————————— -->
+  <section class="chapter" id="trajectory">
+    <div class="chap-head rv">
+      <div class="chap-no">02</div>
+      <div class="chap-title">
+        <h2>Trajectory</h2>
+        <p class="dek">Is agent commerce growing? Payments say maybe. Dollars say no — and May says it loudly.</p>
+      </div>
+      <div class="instruments"><span class="chip live">E5 · live</span><span class="chip live">E4 · live</span></div>
+    </div>
+    <div class="chap-body">
+      <div class="cols">
+        <div>
+          <div class="pair rv">
+            <div class="figure" style="margin-top:0">
+              <div class="figure-head">
+                <span class="figure-title">Agentic dollars / month<small>USDC moved by classified agentic payments</small></span>
+              </div>
+              <div style="padding-top:46px"><div class="colchart" id="m-dollars"></div><div class="xlabels" id="m-dollars-x"></div></div>
+            </div>
+            <div class="figure" style="margin-top:0">
+              <div class="figure-head">
+                <span class="figure-title">Agentic payments / month<small>transaction count, same classification</small></span>
+              </div>
+              <div style="padding-top:46px"><div class="colchart" id="m-txns"></div><div class="xlabels" id="m-txns-x"></div></div>
+            </div>
+          </div>
+          <div class="denom rv"><b>Denominator</b><span>agentic set only · MoM% between complete months · June hatched: partial, 5 days of data — the artifact's <span style="font-family:var(--mono)">complete</span> flag, so a cut month can never fake a crash</span></div>
+
+          <div class="figure rv" style="margin-top:46px">
+            <div class="figure-head">
+              <span class="figure-title">Daily traffic — all observed<small>every payment on the surface, before classification</small></span>
+              <div class="minitoggle" data-for="daily">
+                <button data-metric="txns" class="on">Payments</button>
+                <button data-metric="vol">Dollars</button>
+              </div>
+            </div>
+            <div class="svgwrap" id="dailychart"></div>
+            <div class="denom"><b>Denominator</b><span>all observed traffic (agentic + contested + contamination) · Jun 05 is the data edge — a partially ingested day, not a collapse</span></div>
+          </div>
+        </div>
+        <aside class="marginalia">
+          <div class="note rv"><b>MAY 2026</b><br>Payments <span style="color:var(--agentic);font-style:normal;font-family:var(--mono);font-size:13px">+31%</span>, dollars <span style="color:var(--flag);font-style:normal;font-family:var(--mono);font-size:13px">−65%</span>. Activity without value — the signature of scripted traffic, not commerce.</div>
+          <div class="note rv"><b>JANUARY</b><br>10.1 million agentic payments moved $0.77M — a dust storm. The month with the most payments moved the least money per payment of any on record.</div>
+          <div class="note rv"><b>THE INVERSION, MONTHLY</b><br>If you chart raw volume instead, contamination ($96–110M/mo) buries this entire story under the treasury rail.</div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 03 ANATOMY ———————————————————— -->
+  <section class="chapter" id="anatomy">
+    <div class="chap-head rv">
+      <div class="chap-no">03</div>
+      <div class="chap-title">
+        <h2>Anatomy of a Payment</h2>
+        <p class="dek">What a typical agent payment looks like — and whether agent pricing is an organic market or a hard-coded menu.</p>
+      </div>
+      <div class="instruments"><span class="chip live">E7 · live</span><span class="chip live">E3 · live</span><span class="chip live">E8 · live</span></div>
+    </div>
+    <div class="chap-body">
+      <div class="cols">
+        <div>
+          <div class="bigpair rv" id="bigpair"><!-- js --></div>
+
+          <div class="figure rv" style="margin-top:0">
+            <div class="figure-head">
+              <span class="figure-title">Typical payment, by attribution <span class="axisnote" id="typ-win"></span><small>mean from the cube (exact decimal) · median from its own scan — they don't merge</small></span>
+            </div>
+            <table class="matrix" id="typmatrix"><!-- js --></table>
+            <div class="denom"><b>Denominator</b><span>per row · “all” is a synthetic combined row — medians are recomputed per window at rollup, never averaged</span></div>
+          </div>
+
+          <div class="figure rv">
+            <div class="figure-head">
+              <span class="figure-title">Payment-size bands <span class="axisnote" id="band-win"></span><small>dust &lt;$0.01 · micro &lt;$1 · small &lt;$100 · mid &lt;$1k · whale ≥$1k</small></span>
+              <div class="minitoggle" data-for="bands">
+                <button data-metric="txns" class="on">Payments</button>
+                <button data-metric="vol">Dollars</button>
+              </div>
+            </div>
+            <div style="padding-top:30px"><div class="colchart" id="bandchart" style="height:200px"></div><div class="xlabels" id="bandchart-x"></div></div>
+            <div class="denom"><b>Denominator</b><span>all observed payments — the whale tower <em>is</em> the contamination; see the sliver above</span></div>
+          </div>
+
+          <div class="figure rv">
+            <div class="figure-head">
+              <span class="figure-title">The price-point spectrum <span class="axisnote" id="pp-win"></span><small>top exact amounts in the agentic set, ranked by payment count</small></span>
+            </div>
+            <table class="pp-table" id="pptable"><!-- js --></table>
+            <div class="denom"><b>Denominator</b><span id="pp-denom">agentic set only — the question is whether <em>agent</em> pricing is organic · 340k distinct amounts observed; top 50 published, top 12 shown</span></div>
+          </div>
+        </div>
+        <aside class="marginalia">
+          <div class="note rv"><b>MEAN ≠ MONEY</b><br>The mean is what the whales make it. The median is what the agents do.</div>
+          <div class="note rv"><b>25,000×</b><br>The median contamination transfer ($25.00) is twenty-five thousand times the median agent payment ($0.001).</div>
+          <div class="note rv"><b>MENU v. MARKET</b><br>$0.0001 across just 154 payees is a hard-coded menu. $0.01 across 24,958 payees starts to look like a market. The payee column is the tell.</div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 04 COST ———————————————————— -->
+  <section class="chapter" id="cost">
+    <div class="chap-head rv">
+      <div class="chap-no">04</div>
+      <div class="chap-title">
+        <h2>The Cost of Settling</h2>
+        <p class="dek">What it physically costs to move agent money — and how often the freight outweighs the cargo.</p>
+      </div>
+      <div class="instruments"><span class="chip live">E11 · live</span><span class="chip">gas, tx-deduped</span></div>
+    </div>
+    <div class="chap-body">
+      <div class="gas-grid">
+        <div class="figure rv" style="margin-top:0">
+          <div class="figure-head">
+            <span class="figure-title">Breakeven census <span class="axisnote" id="gas-win"></span><small>agentic payments whose apportioned gas exceeds the value they moved</small></span>
+          </div>
+          <div class="bigstat-flag" id="breakeven-pct">—</div>
+          <div class="waffle" id="waffle" aria-hidden="true"></div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--ink-55);margin-top:10px" id="waffle-cap"></div>
+          <div class="gas-stat-list" id="gasstats"><!-- js --></div>
+        </div>
+        <div class="figure rv" style="margin-top:0">
+          <div class="figure-head">
+            <span class="figure-title">Gas per dollar settled, by band <span class="axisnote" id="gasband-win"></span><small>cents of gas to move $1, equal-apportioned within batches</small></span>
+          </div>
+          <table class="gas-band-table" id="gasbands"><!-- js --></table>
+          <div class="methodnote" id="gasmethod"><!-- js --></div>
+        </div>
+      </div>
+      <div class="denom rv"><b>Denominator</b><span>gas is tx-level and counted once per transaction, then apportioned equally across a batch's payments — naive row-sums overcount 410k+ multi-payment txs · ETH/USD from a cited monthly reference file · <span style="font-family:var(--mono)">gas_cents_per_dollar</span> is the contract's only nullable field (null when a split moved $0)</span></div>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 05 PULSE ———————————————————— -->
+  <section class="chapter" id="pulse">
+    <div class="chap-head rv">
+      <div class="chap-no">05</div>
+      <div class="chap-title">
+        <h2>Pulse</h2>
+        <p class="dek">Steady drip or synchronized flood? The per-minute ceiling, charted daily.</p>
+      </div>
+      <div class="instruments"><span class="chip live">E12 · live</span></div>
+    </div>
+    <div class="chap-body">
+      <div class="figure rv" style="margin-top:0">
+        <div class="figure-head">
+          <span class="figure-title">Agentic payments per minute — daily peak &amp; p99<small>vertical line = day's max minute · dot = p99 of the day's <em>active</em> minutes</small></span>
+          <span class="axisnote">idle minutes excluded from p99 — quiet days can't flatter the percentile</span>
+        </div>
+        <div class="svgwrap" id="velochart"></div>
+        <div class="gas-stat-list" id="velostats" style="margin-top:14px"></div>
+        <div class="denom"><b>Denominator</b><span>agentic set only · per-day reduction of a per-minute scan (max + p99 of active minutes)</span></div>
+      </div>
+      <p class="bar-caption rv" style="margin-top:22px">The body of the chart idles around two hundred payments a minute while peaks reach twenty-five times that. A market breathes; this rail <em>fires</em> — bursts on a schedule are the cadence of scripts, and the gap between the dot and the line is the burst.</p>
+    </div>
+  </section>
+
+  <!-- ———————————————————— 06 PROVENANCE ———————————————————— -->
+  <section class="chapter" id="provenance">
+    <div class="chap-head rv">
+      <div class="chap-no">06</div>
+      <div class="chap-title">
+        <h2>Provenance</h2>
+        <p class="dek">Every number above is reproducible from one committed artifact — and the page checks its own arithmetic.</p>
+      </div>
+      <div class="instruments"><span class="chip live">C2–C3</span><span class="chip">economy.json</span></div>
+    </div>
+    <div class="chap-body">
+      <div class="prov rv">
+        <div class="prov-grid">
+          <div>
+            <h3>Conservation proof — run in your browser, just now</h3>
+            <div class="check" id="conservation"><!-- js --></div>
+          </div>
+          <div>
+            <h3>Artifact</h3>
+            <ul id="artifact-list"><!-- js --></ul>
+            <h3 style="margin-top:26px">Vocabulary, for UI consumers</h3>
+            <p class="deferred">Combined totals are the embedded top-level measure — <b>by_attribution maps never carry an “all” key</b>; only the typical-payment table has a synthetic “all” row, because medians need their own scan.</p>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--ink-25);margin-top:30px;padding-top:24px">
+          <h3>Deliberately not shown yet</h3>
+          <p class="deferred"><b>E9 — concentration.</b> Waits for the entity ranking that ships with the payees &amp; payers pages; one stat isn't worth dragging that scope in. &nbsp;·&nbsp; <b>E10 — the December anomaly.</b> 43 million payments in a single month gets its own instrument when December is re-backfilled. Absence is stated, never papered over.</p>
+        </div>
+      </div>
+      <footer class="colophon">
+        <span><span class="f-mark">FATHOM</span> · Sounding № 001</span>
+        <span>Printed from economy.json · methodology v1</span>
+        <span>No row is dropped — only labeled.</span>
+      </footer>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ———————————————————————— DATA — verbatim from dist/economy.json (publisher emit) ———————————————————————— */
+const RAW = {"meta":{"methodology_version":1,"generated_at":"2026-06-11T20:44:46Z","data_through_day":"2026-06-05"},"windows":{"30d":{"txn_count":3163608,"volume_usdc":"72778771.348945","by_attribution":{"agentic":{"txn_count":2828532,"volume_usdc":"637325.462012"},"contamination":{"txn_count":90401,"volume_usdc":"62693902.990834"},"contested":{"txn_count":244675,"volume_usdc":"9447542.896099"}},"by_band":{"dust":{"txn_count":1871593,"volume_usdc":"3625.565316"},"micro":{"txn_count":1084480,"volume_usdc":"126284.894126"},"mid":{"txn_count":19360,"volume_usdc":"5699563.627813"},"small":{"txn_count":181389,"volume_usdc":"2055310.447019"},"whale":{"txn_count":6786,"volume_usdc":"64893986.814671"}}},"7d":{"txn_count":756838,"volume_usdc":"13454094.320544","by_attribution":{"agentic":{"txn_count":715422,"volume_usdc":"155279.183481"},"contamination":{"txn_count":19010,"volume_usdc":"12186540.623968"},"contested":{"txn_count":22406,"volume_usdc":"1112274.513095"}},"by_band":{"dust":{"txn_count":339918,"volume_usdc":"815.795415"},"micro":{"txn_count":371962,"volume_usdc":"30294.229293"},"mid":{"txn_count":4028,"volume_usdc":"1203141.339866"},"small":{"txn_count":39563,"volume_usdc":"416370.959225"},"whale":{"txn_count":1367,"volume_usdc":"11803471.996745"}}},"all":{"txn_count":20602822,"volume_usdc":"447997846.118040","by_attribution":{"agentic":{"txn_count":19083374,"volume_usdc":"7361839.397373"},"contamination":{"txn_count":304572,"volume_usdc":"410602246.241417"},"contested":{"txn_count":1214876,"volume_usdc":"30033760.479250"}},"by_band":{"dust":{"txn_count":12292604,"volume_usdc":"10709.984966"},"micro":{"txn_count":7166872,"volume_usdc":"745961.012395"},"mid":{"txn_count":88950,"volume_usdc":"26860591.485348"},"small":{"txn_count":1018354,"volume_usdc":"8849218.770844"},"whale":{"txn_count":36042,"volume_usdc":"411531364.864487"}}}},"daily":[["2026-01-01",766374,1741872.86],["2026-01-02",557423,2466928.02],["2026-01-03",372370,2249439.56],["2026-01-04",735520,938198.07],["2026-01-05",803573,3363256.31],["2026-01-06",650067,3716692.79],["2026-01-07",637356,4899330.77],["2026-01-08",636077,4177661.95],["2026-01-09",636531,4364497.09],["2026-01-10",640831,3664401.23],["2026-01-11",512991,1348360.04],["2026-01-12",481671,4917377.4],["2026-01-13",466697,4179546.14],["2026-01-14",475279,3558178.49],["2026-01-15",51819,280149.67],["2026-01-19",405179,1650811.28],["2026-01-20",321748,4660714.66],["2026-01-21",352898,3779119.28],["2026-01-22",330783,3567718.81],["2026-01-23",76633,3192152.28],["2026-01-24",71449,1856170.81],["2026-01-25",91051,2206795.01],["2026-01-26",66594,4035558.57],["2026-01-27",71670,5212680.67],["2026-01-28",57150,7427762.14],["2026-01-29",60030,6816356.65],["2026-01-30",32632,6485800.95],["2026-01-31",42266,6226004.8],["2026-02-01",24569,3988510.22],["2026-02-02",26151,6420035.22],["2026-02-03",27314,10245104.87],["2026-02-04",20231,8230250.64],["2026-02-05",19444,5705454.45],["2026-02-06",31968,4540269.26],["2026-02-07",24753,1182790.96],["2026-02-08",55808,227761.97],["2026-02-09",37137,206729.61],["2026-02-10",53303,299672.8],["2026-02-11",59505,925502.69],["2026-02-12",102334,6395630.37],["2026-02-13",47050,6874507.6],["2026-02-14",47129,2370144.29],["2026-02-15",68456,4431541.96],["2026-02-16",84976,2990557.86],["2026-02-17",98651,5676567.85],["2026-02-18",52244,4655485.46],["2026-02-19",85471,10533196.06],["2026-02-20",78834,6337868.24],["2026-02-21",113298,1511688.33],["2026-02-22",119490,3025772.12],["2026-02-23",117853,4274702.26],["2026-02-24",70935,3358792.51],["2026-02-25",61058,5121070.1],["2026-02-26",61236,2094268.11],["2026-02-27",66747,1393750.41],["2026-02-28",91596,1486779.32],["2026-03-01",68455,2310692.2],["2026-03-02",49943,10292075.91],["2026-03-03",53590,5820506.38],["2026-03-04",82387,3168059.39],["2026-03-05",84440,3774909.46],["2026-03-06",99288,2409391.19],["2026-03-07",102081,1013121.08],["2026-03-08",85351,920399.48],["2026-03-09",84141,3575701.55],["2026-03-10",98421,1958403.37],["2026-03-11",111818,2523462.34],["2026-03-12",105352,2591701.61],["2026-03-13",68481,4096400.45],["2026-03-14",67716,1121349.62],["2026-03-15",73427,837327.29],["2026-03-16",70869,3581193.7],["2026-03-17",56204,1997739.13],["2026-03-18",149103,1761550.73],["2026-03-19",71980,2059720.98],["2026-03-20",65973,3193831.7],["2026-03-21",57796,1766449.72],["2026-03-22",51225,1392042.72],["2026-03-23",49960,1785364.8],["2026-03-24",41147,2002343.09],["2026-03-25",45685,870164.95],["2026-03-26",57096,2581833.65],["2026-03-27",39511,2083995.6],["2026-03-28",33421,1137167.57],["2026-03-29",37142,1211725.77],["2026-03-30",37692,1897491.54],["2026-03-31",35841,3149851.55],["2026-04-01",55171,2783591.45],["2026-04-02",46933,2570535.18],["2026-04-03",56268,1314383.57],["2026-04-04",50612,956437.69],["2026-04-05",42150,1191835.15],["2026-04-06",79377,1429766.34],["2026-04-07",59017,2772608.25],["2026-04-08",80613,2458821.78],["2026-04-09",83304,2303255.14],["2026-04-10",89694,2531703.48],["2026-04-11",79837,2297135.1],["2026-04-12",89179,1019223.12],["2026-04-13",83864,3514110.34],["2026-04-14",78186,2673862.1],["2026-04-15",68240,1852401.72],["2026-04-16",76495,2518740.96],["2026-04-17",70222,3463168.11],["2026-04-18",89344,1503846.85],["2026-04-19",81527,1675102.88],["2026-04-20",89107,2626228.55],["2026-04-21",79167,3695487.18],["2026-04-22",136192,2196251.32],["2026-04-23",88453,1549757.96],["2026-04-24",160859,1476540.95],["2026-04-25",78620,1640029.12],["2026-04-26",100321,861629.1],["2026-04-27",99159,1878179.16],["2026-04-28",93120,2150257.54],["2026-04-29",90072,3752729.14],["2026-04-30",91343,1711874.51],["2026-05-01",118257,4656318.65],["2026-05-02",100882,1021666.32],["2026-05-03",114484,1104744.69],["2026-05-04",126391,2355419.82],["2026-05-05",97497,2204235.5],["2026-05-06",127518,3133285.69],["2026-05-07",107395,1734370.08],["2026-05-08",90075,4241491.71],["2026-05-09",80922,866311.16],["2026-05-10",74119,1243972.16],["2026-05-11",91476,1844420.75],["2026-05-12",103258,1678009.59],["2026-05-13",136788,2670054.16],["2026-05-14",137541,2921892.18],["2026-05-15",103105,3024108.3],["2026-05-16",122298,1108097.13],["2026-05-17",99463,1272483.54],["2026-05-18",146409,3097894.77],["2026-05-19",103731,3430780.13],["2026-05-20",127517,1726664.85],["2026-05-21",96590,1685284.33],["2026-05-22",108647,2716608.62],["2026-05-23",81855,1186109.01],["2026-05-24",87155,10881139.14],["2026-05-25",107028,1473784.94],["2026-05-26",101123,4001139.12],["2026-05-27",101826,1986098.16],["2026-05-28",101493,2786339.16],["2026-05-29",96956,1747624.03],["2026-05-30",111599,826949.17],["2026-05-31",100428,1038499.72],["2026-06-01",145158,2720874.69],["2026-06-02",140909,3074644.1],["2026-06-03",114456,2367644.23],["2026-06-04",141952,3421140.87],["2026-06-05",2336,4341.54]],"monthly":[{"month":"2026-01","complete":true,"txn_count":10404662,"volume_usdc":"102983536.299642","by_attribution":{"agentic":{"txn_count":10142139,"volume_usdc":"766977.545123"},"contamination":{"txn_count":47639,"volume_usdc":"96339031.195241"},"contested":{"txn_count":214884,"volume_usdc":"5877527.559278"}}},{"month":"2026-02","complete":true,"txn_count":1747541,"volume_usdc":"114504405.540174","by_attribution":{"agentic":{"txn_count":1408343,"volume_usdc":"1922487.494818"},"contamination":{"txn_count":34211,"volume_usdc":"109606405.377957"},"contested":{"txn_count":304987,"volume_usdc":"2975512.667399"}}},{"month":"2026-03","complete":true,"txn_count":2135536,"volume_usdc":"78885968.514993","by_attribution":{"agentic":{"txn_count":1796356,"volume_usdc":"2118210.127833"},"contamination":{"txn_count":37483,"volume_usdc":"72831970.414084"},"contested":{"txn_count":301697,"volume_usdc":"3935787.973076"}}},{"month":"2026-04","complete":true,"txn_count":2466446,"volume_usdc":"64369493.743707","by_attribution":{"agentic":{"txn_count":2259727,"volume_usdc":"1808770.503189"},"contamination":{"txn_count":78506,"volume_usdc":"56011250.822423"},"contested":{"txn_count":128213,"volume_usdc":"6549472.418095"}}},{"month":"2026-05","complete":true,"txn_count":3303826,"volume_usdc":"75665796.586725","by_attribution":{"agentic":{"txn_count":2957902,"volume_usdc":"641166.933696"},"contamination":{"txn_count":93412,"volume_usdc":"65303729.917915"},"contested":{"txn_count":252512,"volume_usdc":"9720899.735114"}}},{"month":"2026-06","complete":false,"txn_count":544811,"volume_usdc":"11588645.432799","by_attribution":{"agentic":{"txn_count":518907,"volume_usdc":"104226.792714"},"contamination":{"txn_count":13321,"volume_usdc":"10509858.513797"},"contested":{"txn_count":12583,"volume_usdc":"974560.126288"}}}],"typical":{"30d":{"agentic":{"avg_usdc":"0.225320","median_usdc":"0.002000","txn_count":2828532},"all":{"avg_usdc":"23.004990","median_usdc":"0.003000","txn_count":3163608},"contamination":{"avg_usdc":"693.508954","median_usdc":"15.750000","txn_count":90401},"contested":{"avg_usdc":"38.612620","median_usdc":"0.050000","txn_count":244675}},"7d":{"agentic":{"avg_usdc":"0.217046","median_usdc":"0.010000","txn_count":715422},"all":{"avg_usdc":"17.776716","median_usdc":"0.010000","txn_count":756838},"contamination":{"avg_usdc":"641.059475","median_usdc":"16.447966","txn_count":19010},"contested":{"avg_usdc":"49.641815","median_usdc":"0.010000","txn_count":22406}},"all":{"agentic":{"avg_usdc":"0.385772","median_usdc":"0.001000","txn_count":19083374},"all":{"avg_usdc":"21.744489","median_usdc":"0.001000","txn_count":20602822},"contamination":{"avg_usdc":"1348.128673","median_usdc":"25.000000","txn_count":304572},"contested":{"avg_usdc":"24.721667","median_usdc":"0.002500","txn_count":1214876}}},"price_points":{"30d":[{"amount_usdc":"0.001000","txn_count":971220,"volume_usdc":"971.220000","payee_count":314,"txn_share_pct":"34.34"},{"amount_usdc":"0.002000","txn_count":450670,"volume_usdc":"901.340000","payee_count":523,"txn_share_pct":"15.93"},{"amount_usdc":"0.010000","txn_count":318180,"volume_usdc":"3181.800000","payee_count":19329,"txn_share_pct":"11.25"},{"amount_usdc":"0.005000","txn_count":179838,"volume_usdc":"899.190000","payee_count":154,"txn_share_pct":"6.36"},{"amount_usdc":"0.003000","txn_count":120301,"volume_usdc":"360.903000","payee_count":57,"txn_share_pct":"4.25"},{"amount_usdc":"0.100000","txn_count":82102,"volume_usdc":"8210.200000","payee_count":6563,"txn_share_pct":"2.90"},{"amount_usdc":"0.020000","txn_count":56321,"volume_usdc":"1126.420000","payee_count":4779,"txn_share_pct":"1.99"},{"amount_usdc":"0.050000","txn_count":49613,"volume_usdc":"2480.650000","payee_count":5715,"txn_share_pct":"1.75"},{"amount_usdc":"0.040000","txn_count":37545,"volume_usdc":"1501.800000","payee_count":11668,"txn_share_pct":"1.33"},{"amount_usdc":"0.060000","txn_count":37009,"volume_usdc":"2220.540000","payee_count":6903,"txn_share_pct":"1.31"},{"amount_usdc":"0.030000","txn_count":36299,"volume_usdc":"1088.970000","payee_count":8048,"txn_share_pct":"1.28"},{"amount_usdc":"0.201000","txn_count":23296,"volume_usdc":"4682.496000","payee_count":6,"txn_share_pct":"0.82"}],"7d":[{"amount_usdc":"0.010000","txn_count":125542,"volume_usdc":"1255.420000","payee_count":9814,"txn_share_pct":"17.55"},{"amount_usdc":"0.001000","txn_count":119913,"volume_usdc":"119.913000","payee_count":138,"txn_share_pct":"16.76"},{"amount_usdc":"0.002000","txn_count":114012,"volume_usdc":"228.024000","payee_count":50,"txn_share_pct":"15.94"},{"amount_usdc":"0.100000","txn_count":59850,"volume_usdc":"5985.000000","payee_count":822,"txn_share_pct":"8.37"},{"amount_usdc":"0.005000","txn_count":58119,"volume_usdc":"290.595000","payee_count":85,"txn_share_pct":"8.12"},{"amount_usdc":"0.003000","txn_count":24034,"volume_usdc":"72.102000","payee_count":32,"txn_share_pct":"3.36"},{"amount_usdc":"0.050000","txn_count":15379,"volume_usdc":"768.950000","payee_count":3054,"txn_share_pct":"2.15"},{"amount_usdc":"0.020000","txn_count":14433,"volume_usdc":"288.660000","payee_count":960,"txn_share_pct":"2.02"},{"amount_usdc":"0.040000","txn_count":11311,"volume_usdc":"452.440000","payee_count":4779,"txn_share_pct":"1.58"},{"amount_usdc":"0.500000","txn_count":6514,"volume_usdc":"3257.000000","payee_count":464,"txn_share_pct":"0.91"},{"amount_usdc":"0.030000","txn_count":5650,"volume_usdc":"169.500000","payee_count":2371,"txn_share_pct":"0.79"},{"amount_usdc":"0.060000","txn_count":4576,"volume_usdc":"274.560000","payee_count":1134,"txn_share_pct":"0.64"}],"all":[{"amount_usdc":"0.000100","txn_count":6464123,"volume_usdc":"646.412300","payee_count":154,"txn_share_pct":"33.87"},{"amount_usdc":"0.001000","txn_count":3435110,"volume_usdc":"3435.110000","payee_count":991,"txn_share_pct":"18.00"},{"amount_usdc":"0.010000","txn_count":2374606,"volume_usdc":"23746.060000","payee_count":24958,"txn_share_pct":"12.44"},{"amount_usdc":"0.100000","txn_count":1932826,"volume_usdc":"193282.600000","payee_count":9040,"txn_share_pct":"10.13"},{"amount_usdc":"0.500000","txn_count":537105,"volume_usdc":"268552.500000","payee_count":3387,"txn_share_pct":"2.81"},{"amount_usdc":"0.002000","txn_count":498173,"volume_usdc":"996.346000","payee_count":1597,"txn_share_pct":"2.61"},{"amount_usdc":"0.005000","txn_count":385195,"volume_usdc":"1925.975000","payee_count":319,"txn_share_pct":"2.02"},{"amount_usdc":"0.020000","txn_count":330826,"volume_usdc":"6616.520000","payee_count":8787,"txn_share_pct":"1.73"},{"amount_usdc":"1.000000","txn_count":287729,"volume_usdc":"287729.000000","payee_count":1253,"txn_share_pct":"1.51"},{"amount_usdc":"0.000150","txn_count":178857,"volume_usdc":"26.828550","payee_count":3,"txn_share_pct":"0.94"},{"amount_usdc":"0.003000","txn_count":156303,"volume_usdc":"468.909000","payee_count":128,"txn_share_pct":"0.82"},{"amount_usdc":"0.050000","txn_count":147134,"volume_usdc":"7356.700000","payee_count":8225,"txn_share_pct":"0.77"}]},"gas":{"method":{"breakeven":"payments whose apportioned gas in USD exceeds the amount moved","dedupe":"gas_cost_wei is tx-level; each transaction's gas is counted once and apportioned equally across its payments","granularity":"rolled up from (day, attribution, amount_band)","price":"monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)"},"windows":{"30d":{"by_attribution":{"agentic":{"txn_count":2828532,"gas_eth":"2.592884","gas_usd":"5409.88","gas_cents_per_dollar":"0.8488","breakeven_txn_count":1025341},"contamination":{"txn_count":90401,"gas_eth":"0.187276","gas_usd":"390.37","gas_cents_per_dollar":"0.0006","breakeven_txn_count":108},"contested":{"txn_count":244675,"gas_eth":"0.207460","gas_usd":"439.54","gas_cents_per_dollar":"0.0047","breakeven_txn_count":31721}},"by_band":{"dust":{"txn_count":1871593,"gas_eth":"1.681081","gas_usd":"3580.55","gas_cents_per_dollar":"98.7584","breakeven_txn_count":1054216},"micro":{"txn_count":1084480,"gas_eth":"1.006313","gas_usd":"2033.75","gas_cents_per_dollar":"1.6104","breakeven_txn_count":2952},"mid":{"txn_count":19360,"gas_eth":"0.039312","gas_usd":"81.54","gas_cents_per_dollar":"0.0014","breakeven_txn_count":0},"small":{"txn_count":181389,"gas_eth":"0.249723","gas_usd":"520.93","gas_cents_per_dollar":"0.0253","breakeven_txn_count":2},"whale":{"txn_count":6786,"gas_eth":"0.011190","gas_usd":"23.03","gas_cents_per_dollar":"0.0000","breakeven_txn_count":0}}},"7d":{"by_attribution":{"agentic":{"txn_count":715422,"gas_eth":"0.810912","gas_usd":"1486.80","gas_cents_per_dollar":"0.9575","breakeven_txn_count":136963},"contamination":{"txn_count":19010,"gas_eth":"0.058413","gas_usd":"106.68","gas_cents_per_dollar":"0.0009","breakeven_txn_count":9},"contested":{"txn_count":22406,"gas_eth":"0.047016","gas_usd":"86.32","gas_cents_per_dollar":"0.0078","breakeven_txn_count":2628}},"by_band":{"dust":{"txn_count":339918,"gas_eth":"0.359686","gas_usd":"671.45","gas_cents_per_dollar":"82.3058","breakeven_txn_count":137147},"micro":{"txn_count":371962,"gas_eth":"0.463445","gas_usd":"838.60","gas_cents_per_dollar":"2.7682","breakeven_txn_count":2453},"mid":{"txn_count":4028,"gas_eth":"0.013244","gas_usd":"24.15","gas_cents_per_dollar":"0.0020","breakeven_txn_count":0},"small":{"txn_count":39563,"gas_eth":"0.076047","gas_usd":"138.57","gas_cents_per_dollar":"0.0333","breakeven_txn_count":0},"whale":{"txn_count":1367,"gas_eth":"0.003919","gas_usd":"7.02","gas_cents_per_dollar":"0.0001","breakeven_txn_count":0}}},"all":{"by_attribution":{"agentic":{"txn_count":19083374,"gas_eth":"13.088181","gas_usd":"32202.53","gas_cents_per_dollar":"0.4374","breakeven_txn_count":10206315},"contamination":{"txn_count":304572,"gas_eth":"0.656425","gas_usd":"1545.52","gas_cents_per_dollar":"0.0004","breakeven_txn_count":1265},"contested":{"txn_count":1214876,"gas_eth":"1.472136","gas_usd":"3208.66","gas_cents_per_dollar":"0.0107","breakeven_txn_count":486440}},"by_band":{"dust":{"txn_count":12292604,"gas_eth":"7.512805","gas_usd":"18679.55","gas_cents_per_dollar":"174.4124","breakeven_txn_count":10664640},"micro":{"txn_count":7166872,"gas_eth":"6.212371","gas_usd":"14979.39","gas_cents_per_dollar":"2.0081","breakeven_txn_count":29376},"mid":{"txn_count":88950,"gas_eth":"0.162227","gas_usd":"367.94","gas_cents_per_dollar":"0.0014","breakeven_txn_count":0},"small":{"txn_count":1018354,"gas_eth":"1.269059","gas_usd":"2790.10","gas_cents_per_dollar":"0.0315","breakeven_txn_count":4},"whale":{"txn_count":36042,"gas_eth":"0.060281","gas_usd":"139.73","gas_cents_per_dollar":"0.0000","breakeven_txn_count":0}}}}},"velocity":{"windows":{"30d":{"agentic":{"max_per_min":3096},"contamination":{"max_per_min":33},"contested":{"max_per_min":965}},"7d":{"agentic":{"max_per_min":634},"contamination":{"max_per_min":20},"contested":{"max_per_min":102}},"all":{"agentic":{"max_per_min":3402},"contamination":{"max_per_min":68},"contested":{"max_per_min":2053}}},"agentic_daily":[["2026-01-01",727,661],["2026-01-02",546,521],["2026-01-03",680,655],["2026-01-04",770,715],["2026-01-05",1015,767],["2026-01-06",640,582],["2026-01-07",570,533],["2026-01-08",3402,552],["2026-01-09",620,555],["2026-01-10",2200,532],["2026-01-11",532,509],["2026-01-12",513,494],["2026-01-13",408,376],["2026-01-14",405,382],["2026-01-15",374,366],["2026-01-19",582,354],["2026-01-20",1481,349],["2026-01-21",423,346],["2026-01-22",394,349],["2026-01-23",124,102],["2026-01-24",118,101],["2026-01-25",145,113],["2026-01-26",142,108],["2026-01-27",129,92],["2026-01-28",117,71],["2026-01-29",161,111],["2026-01-30",203,57],["2026-01-31",377,335],["2026-02-01",93,55],["2026-02-02",145,57],["2026-02-03",105,60],["2026-02-04",84,47],["2026-02-05",119,69],["2026-02-06",295,182],["2026-02-07",56,30],["2026-02-08",109,73],["2026-02-09",112,76],["2026-02-10",262,157],["2026-02-11",504,207],["2026-02-12",864,687],["2026-02-13",119,94],["2026-02-14",104,60],["2026-02-15",605,76],["2026-02-16",453,255],["2026-02-17",636,454],["2026-02-18",150,89],["2026-02-19",1411,126],["2026-02-20",271,115],["2026-02-21",507,459],["2026-02-22",346,311],["2026-02-23",399,254],["2026-02-24",262,193],["2026-02-25",197,93],["2026-02-26",140,80],["2026-02-27",206,92],["2026-02-28",265,93],["2026-03-01",109,83],["2026-03-02",281,76],["2026-03-03",204,137],["2026-03-04",290,161],["2026-03-05",188,124],["2026-03-06",221,146],["2026-03-07",287,145],["2026-03-08",225,144],["2026-03-09",179,101],["2026-03-10",289,122],["2026-03-11",171,136],["2026-03-12",189,155],["2026-03-13",132,99],["2026-03-14",159,96],["2026-03-15",177,102],["2026-03-16",162,102],["2026-03-17",159,65],["2026-03-18",562,398],["2026-03-19",219,80],["2026-03-20",117,80],["2026-03-21",115,73],["2026-03-22",95,53],["2026-03-23",200,71],["2026-03-24",107,61],["2026-03-25",168,58],["2026-03-26",105,71],["2026-03-27",90,56],["2026-03-28",72,53],["2026-03-29",67,49],["2026-03-30",78,58],["2026-03-31",114,51],["2026-04-01",88,75],["2026-04-02",98,76],["2026-04-03",114,86],["2026-04-04",104,77],["2026-04-05",69,52],["2026-04-06",206,182],["2026-04-07",94,80],["2026-04-08",162,109],["2026-04-09",140,113],["2026-04-10",144,122],["2026-04-11",141,116],["2026-04-12",134,113],["2026-04-13",144,124],["2026-04-14",151,101],["2026-04-15",414,169],["2026-04-16",209,158],["2026-04-17",842,105],["2026-04-18",618,115],["2026-04-19",145,118],["2026-04-20",156,119],["2026-04-21",330,124],["2026-04-22",672,589],["2026-04-23",212,123],["2026-04-24",495,410],["2026-04-25",140,99],["2026-04-26",451,393],["2026-04-27",281,171],["2026-04-28",186,138],["2026-04-29",169,120],["2026-04-30",1009,147],["2026-05-01",268,210],["2026-05-02",208,134],["2026-05-03",259,159],["2026-05-04",419,354],["2026-05-05",954,706],["2026-05-06",532,381],["2026-05-07",571,210],["2026-05-08",324,143],["2026-05-09",238,149],["2026-05-10",204,128],["2026-05-11",216,154],["2026-05-12",215,156],["2026-05-13",1002,295],["2026-05-14",300,152],["2026-05-15",524,124],["2026-05-16",2890,185],["2026-05-17",229,116],["2026-05-18",3096,472],["2026-05-19",225,160],["2026-05-20",294,260],["2026-05-21",198,118],["2026-05-22",388,322],["2026-05-23",258,214],["2026-05-24",217,106],["2026-05-25",158,123],["2026-05-26",359,287],["2026-05-27",346,152],["2026-05-28",184,147],["2026-05-29",400,327],["2026-05-30",437,330],["2026-05-31",432,155],["2026-06-01",458,390],["2026-06-02",634,378],["2026-06-03",395,145],["2026-06-04",495,234],["2026-06-05",133,133]]},"claims":[{"id":"cambrian-q2-2026-base-agentic-payments","source":"Cambrian \u2014 Agentic Finance Landscape Report Q2 2026","source_url":"","claim_date":"2026 (Q2 report)","claim_text":"169M+ agentic payments on Base","claimed_value":"169000000","claimed_unit":"transactions","measured_metric":"agentic_txns_all","note":"Counts every observed transfer as agentic. Measured side = Fathom's classified agentic transaction count (allowlist methodology v1). Operator: add canonical report URL before publishing.","measured_value":"19083374","measured_unit":"transactions"},{"id":"cambrian-q2-2026-x402-txns-30d","source":"Cambrian \u2014 Agentic Finance Landscape Report Q2 2026","source_url":"","claim_date":"2026 (Q2 report)","claim_text":"3.7M x402 transactions per 30 days","claimed_value":"3700000","claimed_unit":"transactions","measured_metric":"total_txns_30d","note":"Measured side = ALL observed txns (incl. contamination) in Fathom's trailing 30-day window, the most generous comparable. Operator: add canonical report URL before publishing.","measured_value":"3163608","measured_unit":"transactions"}]};
+
+/* ———————————————————————— helpers ———————————————————————— */
+const $ = s => document.querySelector(s);
+const num = x => typeof x === "string" ? parseFloat(x) : x;
+const fmtInt = n => Math.round(n).toLocaleString("en-US");
+const fmtMoney = n => {
+  n = num(n);
+  if (n >= 1e9) return "$" + (n/1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n/1e3).toFixed(1) + "k";
+  return "$" + n.toFixed(2);
+};
+const fmtCount = n => {
+  n = num(n);
+  if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n/1e3).toFixed(1) + "k";
+  return fmtInt(n);
+};
+const fmtMoneyFull = n => "$" + num(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtAmt = s => {
+  let t = String(s);
+  if (t.includes(".")) t = t.replace(/0+$/,"").replace(/\.$/,"");
+  const f = parseFloat(t);
+  if (f >= 0.01 && Number.isFinite(f)) return "$" + f.toFixed(2).replace(/\.00$/,".00");
+  return "$" + t;
+};
+const pct = (a,b,dp=2) => (100*num(a)/num(b)).toFixed(dp) + "%";
+const WINLABEL = {"7d":"trailing 7 days","30d":"trailing 30 days","all":"all data, Jan 01 – Jun 05 2026"};
+const WINSHORT = {"7d":"7D","30d":"30D","all":"ALL"};
+const ATTR = [
+  {k:"contamination", name:"Contamination", cls:"contam"},
+  {k:"contested",     name:"Contested",     cls:"contested"},
+  {k:"agentic",       name:"Agentic",       cls:"agentic"},
+];
+
+const state = { win:"all", daily:"txns", bands:"txns" };
+
+/* ———————————————————————— hero: stats + inversion bars ———————————————————————— */
+function renderHero(){
+  const w = RAW.windows[state.win];
+  const ag = w.by_attribution.agentic, ct = w.by_attribution.contested, cm = w.by_attribution.contamination;
+  const total$ = num(w.volume_usdc), totalN = w.txn_count;
+
+  $("#statgrid").innerHTML = `
+    <div class="stat"><div class="lab">Payments observed</div><div class="val">${fmtInt(totalN)}</div><div class="sub">${WINLABEL[state.win]}</div></div>
+    <div class="stat"><div class="lab">Volume observed</div><div class="val">${fmtMoney(total$)}</div><div class="sub">USDC, before classification</div></div>
+    <div class="stat is-agentic"><div class="lab">Agentic volume</div><div class="val">${fmtMoney(ag.volume_usdc)}</div><div class="sub">${fmtInt(ag.txn_count)} payments</div></div>
+    <div class="stat is-agentic"><div class="lab">Agentic share</div><div class="val">${pct(ag.volume_usdc, total$)}</div><div class="sub">of dollars — but ${pct(ag.txn_count, totalN, 1)} of payments</div></div>`;
+
+  const mk = (el, get, totl) => {
+    el.innerHTML = ATTR.map(a => {
+      const v = num(get(w.by_attribution[a.k]));
+      const p = 100*v/totl;
+      const showLab = p > 9;
+      return `<div class="seg ${a.cls}" style="width:${p}%" data-tip="<b>${a.name}</b><br>${fmtInt(w.by_attribution[a.k].txn_count)} payments<br>${fmtMoneyFull(w.by_attribution[a.k].volume_usdc)}<br>${p.toFixed(2)}% of this bar">${showLab ? `<span class="inlab">${a.name} · ${p.toFixed(1)}%</span>` : ""}</div>`;
+    }).join("");
+  };
+  mk($("#bar-dollars"), x => x.volume_usdc, total$);
+  mk($("#bar-txns"),    x => x.txn_count,   totalN);
+  $("#dollab").textContent = fmtMoney(total$) + " · " + WINSHORT[state.win];
+  $("#txnlab").textContent = fmtCount(totalN) + " payments · " + WINSHORT[state.win];
+
+  // sliver flag — pinned to the agentic segment's centre on the $ bar
+  const agP = 100*num(ag.volume_usdc)/total$;
+  const x = 100 - agP/2;
+  $("#sliver-flag").innerHTML = `
+    <div class="flag-line" style="left:${x}%"></div>
+    <div class="flag-text" style="left:${x}%">the agent economy → <b>${fmtMoney(ag.volume_usdc)}</b> (${agP.toFixed(2)}% of the bar)</div>`;
+
+  $("#legend").innerHTML = `
+    <div class="li"><span class="sw" style="background:var(--agentic)"></span><span><b>Agentic</b>settled by one of 112 allowlisted facilitator addresses (29 named operators)</span></div>
+    <div class="li"><span class="sw" style="background:var(--contested)"></span><span><b>Contested</b>same settlement shape, unknown gas payer — evidence pending, not assumed</span></div>
+    <div class="li"><span class="sw" style="background:var(--contam)"></span><span><b>Contamination</b>confirmed non-x402: treasury &amp; exchange batch traffic on the same USDC primitive</span></div>`;
+  $("#hero-denom").textContent = "all observed EIP-3009 USDC settlements on Base, " + WINLABEL[state.win] + " · windows anchored to data-through day";
+
+  drawConnector();
+}
+
+function drawConnector(){
+  const w = RAW.windows[state.win];
+  const total$ = num(w.volume_usdc), totalN = w.txn_count;
+  const cm$ = 100*num(w.by_attribution.contamination.volume_usdc)/total$;
+  const ct$ = cm$ + 100*num(w.by_attribution.contested.volume_usdc)/total$;
+  const cmN = 100*w.by_attribution.contamination.txn_count/totalN;
+  const ctN = cmN + 100*w.by_attribution.contested.txn_count/totalN;
+  const el = $("#connector");
+  const W = el.clientWidth || 800, H = 46;
+  el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const px = p => p*W/100;
+  el.innerHTML = `
+    <line x1="${px(cm$)}" y1="0" x2="${px(cmN)}" y2="${H}" stroke="var(--ink-40)" stroke-dasharray="3 4"/>
+    <line x1="${px(ct$)}" y1="0" x2="${px(ctN)}" y2="${H}" stroke="var(--ink-40)" stroke-dasharray="3 4"/>
+    <text x="${(px(ct$)+px(ctN))/2 + 10}" y="${H/2+3}" style="font-family:var(--mono);font-size:9.5px;fill:var(--ink-40);letter-spacing:.1em">THE INVERSION</text>`;
+}
+
+/* ———————————————————————— 01 claims ———————————————————————— */
+function renderClaims(){
+  $("#claimcards").innerHTML = RAW.claims.map((c,i) => {
+    const ratio = num(c.claimed_value)/num(c.measured_value);
+    const over = ratio >= 1.5;
+    const stamp = over
+      ? `<div class="stamp">Overstated<small>×${ratio.toFixed(1)} the measured count</small></div>`
+      : `<div class="stamp ok">Within range<small>×${ratio.toFixed(1)} vs most generous comparable</small></div>`;
+    const metricLabel = {
+      agentic_txns_all: "Fathom agentic payments, all data",
+      total_txns_30d: "ALL observed payments, trailing 30d — incl. contamination",
+    }[c.measured_metric] || c.measured_metric;
+    return `<article class="claim rv ${i?"rv-d1":""}">
+      ${stamp}
+      <div class="src"><span>${c.source}</span><span>${c.claim_date}</span></div>
+      <blockquote>${c.claim_text}</blockquote>
+      <div class="ledger">
+        <div class="ledgerline"><span class="k">Claimed</span><span class="dots"></span><span class="v">${fmtInt(c.claimed_value)} <small>${c.claimed_unit}</small></span></div>
+        <div class="ledgerline measured"><span class="k">Measured</span><span class="dots"></span><span class="v">${fmtInt(c.measured_value)} <small>${c.measured_unit}</small></span></div>
+        <div class="ledgerline"><span class="k">Measured as</span><span class="dots"></span><span class="v" style="font-size:11px;font-weight:400;color:var(--ink-55)">${metricLabel}</span></div>
+      </div>
+      <p class="note">${c.note.replace(/ Operator:.*$/,"")}</p>
+    </article>`;
+  }).join("");
+}
+
+/* ———————————————————————— 02 monthly small multiples ———————————————————————— */
+function renderMonthly(){
+  const months = RAW.monthly;
+  const build = (elId, xId, get, fmt) => {
+    const max = Math.max(...months.map(m => num(get(m))));
+    $("#"+elId).innerHTML = months.map((m,i) => {
+      const v = num(get(m));
+      const h = Math.max(2, 100*v/max);
+      let mom = "";
+      if (i>0 && m.complete && months[i-1].complete){
+        const prev = num(get(months[i-1]));
+        const d = 100*(v-prev)/prev;
+        mom = `<span class="mom ${d<0?"dn":"up"}">${d>0?"+":""}${d.toFixed(0)}%</span>`;
+      }
+      if (!m.complete) mom = `<span class="mom">partial</span>`;
+      return `<div class="col" data-tip="<b>${m.month}</b>${m.complete?"":" (partial)"}<br>${fmtInt(get(m, true))} payments<br>${fmtMoneyFull(m.by_attribution.agentic.volume_usdc)}">
+        ${mom}<div class="bar ${m.complete?"":"partial"}" style="height:${h}%"><span class="vlab">${fmt(v)}</span></div></div>`;
+    }).join("");
+    $("#"+xId).innerHTML = months.map(m => {
+      const lab = new Date(m.month+"-15").toLocaleString("en-US",{month:"short"});
+      return `<span>${lab}${m.complete?"":"<small>5 days</small>"}</span>`;
+    }).join("");
+  };
+  build("m-dollars","m-dollars-x", (m,n)=> n? m.by_attribution.agentic.txn_count : m.by_attribution.agentic.volume_usdc, fmtMoney);
+  build("m-txns","m-txns-x", (m,n)=> m.by_attribution.agentic.txn_count, fmtCount);
+}
+
+/* ———————————————————————— 02 daily seismograph ———————————————————————— */
+function renderDaily(){
+  const days = RAW.daily;
+  const host = $("#dailychart");
+  const W = host.clientWidth || 800, H = 220, padL = 56, padB = 26, padT = 18;
+  const get = d => state.daily === "txns" ? d[1] : d[2];
+  const max = Math.max(...days.map(get));
+  const x = i => padL + (W - padL - 8) * i/(days.length-1);
+  const y = v => padT + (H - padT - padB) * (1 - v/max);
+  let path = "", area = "";
+  days.forEach((d,i) => { const c = `${x(i)},${y(get(d))}`; path += (i?" L":"M")+c; });
+  area = path + ` L${x(days.length-1)},${H-padB} L${x(0)},${H-padB} Z`;
+
+  // month ticks
+  let ticks = "";
+  days.forEach((d,i) => {
+    if (d[0].endsWith("-01")){
+      const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"});
+      ticks += `<line x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${H-padB}" class="gline"/><text x="${x(i)+4}" y="${H-8}">${lab.toUpperCase()}</text>`;
+    }
+  });
+  // y gridlines
+  let grid = "";
+  for (let g=1; g<=3; g++){
+    const v = max*g/4 + 0, yy = y(max*g/4);
+    grid += `<line x1="${padL}" y1="${yy}" x2="${W-8}" y2="${yy}" class="gline"/><text x="${padL-8}" y="${yy+3}" text-anchor="end">${state.daily==="txns"?fmtCount(v):fmtMoney(v)}</text>`;
+  }
+  // peak annotation
+  let pi = 0; days.forEach((d,i)=>{ if (get(d) > get(days[pi])) pi = i; });
+  const anno = `<line x1="${x(pi)}" y1="${y(get(days[pi]))-4}" x2="${x(pi)}" y2="${padT+6}" class="anno-line"/>
+    <text x="${Math.min(x(pi)+6, W-190)}" y="${padT+14}" class="anno">${days[pi][0]} — ${state.daily==="txns"? fmtInt(days[pi][1])+" payments" : fmtMoneyFull(days[pi][2])}</text>`;
+
+  host.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" height="${H}" id="dailysvg">
+    ${grid}${ticks}
+    <path d="${area}" fill="var(--agentic-soft)"/>
+    <path d="${path}" fill="none" stroke="var(--agentic)" stroke-width="1.4"/>
+    ${anno}
+    <line x1="${padL}" y1="${H-padB}" x2="${W-8}" y2="${H-padB}" class="axline"/>
+    <rect id="daily-hover" x="${padL}" y="${padT}" width="${W-padL-8}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>`;
+
+  const svg = $("#dailysvg"), hover = $("#daily-hover");
+  hover.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(days.length-1, Math.round((sx - padL)/((W-padL-8)/(days.length-1)))));
+    const d = days[i];
+    showTip(e, `<b>${d[0]}</b><br>${fmtInt(d[1])} payments<br>${fmtMoneyFull(d[2])}`);
+  });
+  hover.addEventListener("mouseleave", hideTip);
+}
+
+/* ———————————————————————— 03 typical payment ———————————————————————— */
+function renderTypical(){
+  const t = RAW.typical[state.win];
+  $("#typ-win").textContent = "· " + WINSHORT[state.win];
+  $("#bigpair").innerHTML = `
+    <div class="half median"><div class="lab">Median agentic payment</div><div class="val">${fmtAmt(t.agentic.median_usdc)}</div><div class="sub">half of ${fmtInt(t.agentic.txn_count)} payments are at or below this</div></div>
+    <div class="half"><div class="lab">Mean agentic payment</div><div class="val">${fmtAmt(t.agentic.avg_usdc)}</div><div class="sub">${Math.round(num(t.agentic.avg_usdc)/num(t.agentic.median_usdc)).toLocaleString()}× the median — the whales' opinion</div></div>`;
+  const rows = [
+    ["agentic","Agentic","r-agentic"],
+    ["contested","Contested","r-contested"],
+    ["contamination","Contamination","r-contam"],
+    ["all","All (combined)","r-all"],
+  ];
+  $("#typmatrix").innerHTML = `
+    <thead><tr><th>Attribution</th><th>Median</th><th>Mean</th><th>Payments</th></tr></thead>
+    <tbody>${rows.map(([k,name,cls]) => {
+      const r = t[k];
+      const hot = k==="agentic" ? "hot" : (k==="contamination" ? "cold" : "");
+      return `<tr class="${cls}"><td>${name}</td><td class="${hot}">${fmtAmt(r.median_usdc)}</td><td>${fmtAmt(r.avg_usdc)}</td><td>${fmtInt(r.txn_count)}</td></tr>`;
+    }).join("")}</tbody>`;
+}
+
+/* ———————————————————————— 03 bands ———————————————————————— */
+const BANDS = [
+  ["dust","Dust","<$0.01"],["micro","Micro","<$1"],["small","Small","<$100"],["mid","Mid","<$1k"],["whale","Whale","≥$1k"]
+];
+function renderBands(){
+  const b = RAW.windows[state.win].by_band;
+  $("#band-win").textContent = "· " + WINSHORT[state.win];
+  const get = r => state.bands === "txns" ? r.txn_count : num(r.volume_usdc);
+  const max = Math.max(...BANDS.map(([k]) => get(b[k])));
+  $("#bandchart").innerHTML = BANDS.map(([k,name]) => {
+    const r = b[k], v = get(r), h = Math.max(1.5, 100*v/max);
+    const neutral = (state.bands==="vol" && (k==="whale"||k==="mid")) || (state.bands==="txns" && false);
+    return `<div class="col" data-tip="<b>${name}</b><br>${fmtInt(r.txn_count)} payments<br>${fmtMoneyFull(r.volume_usdc)}">
+      <div class="bar ${neutral?"neutral":""}" style="height:${h}%"><span class="vlab">${state.bands==="txns"?fmtCount(v):fmtMoney(v)}</span></div></div>`;
+  }).join("");
+  $("#bandchart-x").innerHTML = BANDS.map(([k,name,def]) => `<span>${name}<small>${def}</small></span>`).join("");
+}
+
+/* ———————————————————————— 03 price points ———————————————————————— */
+function renderPricePoints(){
+  const pts = RAW.price_points[state.win];
+  $("#pp-win").textContent = "· " + WINSHORT[state.win];
+  const maxShare = Math.max(...pts.map(p => num(p.txn_share_pct)));
+  $("#pptable").innerHTML = `
+    <thead><tr><th>Amount</th><th class="bar-h" colspan="1">Share of agentic payments</th><th>Payments</th><th>Payees</th><th>Reading</th></tr></thead>
+    <tbody>${pts.map(p => {
+      const share = num(p.txn_share_pct);
+      const pw = Math.max(1, 100*share/maxShare);
+      const payees = p.payee_count;
+      const tag = payees < 1000 ? `<span class="tag menu">Menu</span>` : payees >= 5000 ? `<span class="tag market">Market</span>` : `<span class="tag mixed">—</span>`;
+      const payeeCls = payees < 10 ? "payee-low" : "";
+      return `<tr>
+        <td>${fmtAmt(p.amount_usdc)}</td>
+        <td class="ppbar-cell"><div style="display:flex;align-items:center;gap:10px"><div class="ppbar" style="width:${pw}%"></div><span class="share">${share.toFixed(1)}%</span></div></td>
+        <td>${fmtInt(p.txn_count)}</td>
+        <td class="${payeeCls}">${fmtInt(payees)}</td>
+        <td>${tag}</td>
+      </tr>`;
+    }).join("")}</tbody>`;
+}
+
+/* ———————————————————————— 04 gas ———————————————————————— */
+function renderGas(){
+  const g = RAW.gas.windows[state.win];
+  const ag = g.by_attribution.agentic;
+  const bk = ag.breakeven_txn_count, n = ag.txn_count, p = 100*bk/n;
+  $("#gas-win").textContent = "· " + WINSHORT[state.win];
+  $("#gasband-win").textContent = "· " + WINSHORT[state.win];
+  $("#breakeven-pct").innerHTML = `${p.toFixed(1)}%<small>of agentic payments burned more gas than they moved</small>`;
+  const cells = Math.round(p);
+  $("#waffle").innerHTML = Array.from({length:100},(_,i) =>
+    `<i class="${i<cells?"f":""}" style="transition-delay:${i*6}ms"></i>`).join("");
+  $("#waffle-cap").textContent = `${fmtInt(bk)} of ${fmtInt(n)} agentic payments · one square = 1%`;
+
+  const w$ = RAW.windows[state.win].by_attribution.agentic.volume_usdc;
+  $("#gasstats").innerHTML = `
+    <div class="gas-line"><span class="k">Gas burned, agentic</span><span class="dots"></span><span class="v">${num(ag.gas_eth).toFixed(3)} ETH ≈ ${fmtMoneyFull(ag.gas_usd)}</span></div>
+    <div class="gas-line"><span class="k">Value moved, agentic</span><span class="dots"></span><span class="v">${fmtMoneyFull(w$)}</span></div>
+    <div class="gas-line"><span class="k">Gas per $1 settled</span><span class="dots"></span><span class="v">${num(ag.gas_cents_per_dollar).toFixed(2)}¢</span></div>`;
+
+  $("#gasbands").innerHTML = `
+    <thead><tr><th>Band</th><th>Gas ¢ / $1</th><th>Breakeven payments</th><th>Of payments</th></tr></thead>
+    <tbody>${BANDS.map(([k,name,def]) => {
+      const r = g.by_band[k];
+      if (!r) return "";
+      const c = r.gas_cents_per_dollar === null ? "—" : num(r.gas_cents_per_dollar).toFixed(2)+"¢";
+      const alarm = r.gas_cents_per_dollar !== null && num(r.gas_cents_per_dollar) > 100;
+      return `<tr class="${alarm?"alarm":""}"><td>${name}<small>${def}</small></td><td>${c}${alarm?`<small>gas is ${(num(r.gas_cents_per_dollar)/100).toFixed(1)}× the cargo</small>`:""}</td><td>${fmtInt(r.breakeven_txn_count)}</td><td>${pct(r.breakeven_txn_count, r.txn_count, 1)}</td></tr>`;
+    }).join("")}</tbody>`;
+
+  const m = RAW.gas.method;
+  $("#gasmethod").innerHTML = `<b>Method, verbatim from the artifact</b><br>· ${m.dedupe}<br>· ${m.price}<br>· breakeven — ${m.breakeven}`;
+}
+
+/* ———————————————————————— 05 velocity ———————————————————————— */
+function renderVelocity(){
+  const days = RAW.velocity.agentic_daily;
+  const host = $("#velochart");
+  const W = host.clientWidth || 800, H = 240, padL = 52, padB = 26, padT = 20;
+  const max = Math.max(...days.map(d => d[1]));
+  const x = i => padL + (W - padL - 10) * i/(days.length-1);
+  const y = v => padT + (H - padT - padB) * (1 - v/max);
+
+  let grid = "";
+  [1000,2000,3000].forEach(v => {
+    if (v < max*1.05) grid += `<line x1="${padL}" y1="${y(v)}" x2="${W-10}" y2="${y(v)}" class="gline"/><text x="${padL-8}" y="${y(v)+3}" text-anchor="end">${fmtCount(v)}</text>`;
+  });
+  let ticks = "";
+  days.forEach((d,i) => {
+    if (d[0].endsWith("-01")){
+      const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"});
+      ticks += `<text x="${x(i)+3}" y="${H-8}">${lab.toUpperCase()}</text>`;
+    }
+  });
+  const lines = days.map((d,i) =>
+    `<line x1="${x(i)}" y1="${H-padB}" x2="${x(i)}" y2="${y(d[1])}" stroke="var(--ink-25)" stroke-width="2"
+       data-i="${i}"/>`).join("");
+  const dots = days.map((d,i) => `<circle cx="${x(i)}" cy="${y(d[2])}" r="1.8" fill="var(--agentic)"/>`).join("");
+
+  let pi = 0; days.forEach((d,i)=>{ if (d[1] > days[pi][1]) pi = i; });
+  const pk = days[pi];
+  const anno = `<circle cx="${x(pi)}" cy="${y(pk[1])}" r="5" fill="none" stroke="var(--flag)" stroke-width="1.4"/>
+    <text x="${x(pi)+12}" y="${y(pk[1])+4}" class="anno">${pk[0]} — ${fmtInt(pk[1])}/min</text>`;
+
+  host.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" height="${H}" id="velosvg">
+    ${grid}
+    ${lines}
+    ${dots}
+    ${anno}
+    ${ticks}
+    <line x1="${padL}" y1="${H-padB}" x2="${W-10}" y2="${H-padB}" class="axline"/>
+    <rect id="velo-hover" x="${padL}" y="${padT}" width="${W-padL-10}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>`;
+
+  const svg = $("#velosvg");
+  $("#velo-hover").addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(days.length-1, Math.round((sx - padL)/((W-padL-10)/(days.length-1)))));
+    const d = days[i];
+    showTip(e, `<b>${d[0]}</b><br>peak minute — ${fmtInt(d[1])} payments<br>p99 active minute — ${fmtInt(d[2])}`);
+  });
+  $("#velo-hover").addEventListener("mouseleave", hideTip);
+
+  const vw = RAW.velocity.windows;
+  $("#velostats").innerHTML = ["7d","30d","all"].map(k =>
+    `<div class="gas-line"><span class="k">Peak minute · ${WINSHORT[k]}</span><span class="dots"></span><span class="v">${fmtInt(vw[k].agentic.max_per_min)} payments/min</span></div>`
+  ).join("");
+}
+
+/* ———————————————————————— 06 provenance ———————————————————————— */
+function renderProvenance(){
+  const w = RAW.windows.all;
+  const a = w.by_attribution;
+  const sumN = a.agentic.txn_count + a.contested.txn_count + a.contamination.txn_count;
+  const sum$ = num(a.agentic.volume_usdc) + num(a.contested.volume_usdc) + num(a.contamination.volume_usdc);
+  const okN = sumN === w.txn_count;
+  const ok$ = Math.abs(sum$ - num(w.volume_usdc)) < 1e-4;
+  $("#conservation").innerHTML = `
+    ${fmtInt(a.agentic.txn_count)} + ${fmtInt(a.contested.txn_count)} + ${fmtInt(a.contamination.txn_count)}<br>
+    &nbsp;&nbsp;= ${fmtInt(sumN)} payments <span class="ok">${okN ? "✓ equals the total" : "✗ MISMATCH"}</span><br><br>
+    ${fmtMoneyFull(a.agentic.volume_usdc)} + ${fmtMoneyFull(a.contested.volume_usdc)} + ${fmtMoneyFull(a.contamination.volume_usdc)}<br>
+    &nbsp;&nbsp;= ${fmtMoneyFull(sum$)} <span class="ok">${ok$ ? "✓ equals the total" : "✗ MISMATCH"}</span>`;
+  $("#artifact-list").innerHTML = `
+    <li><span>artifact</span><span>dist/economy.json</span></li>
+    <li><span>methodology_version</span><span>${RAW.meta.methodology_version}</span></li>
+    <li><span>generated_at</span><span>${RAW.meta.generated_at}</span></li>
+    <li><span>data_through_day</span><span>${RAW.meta.data_through_day}</span></li>
+    <li><span>classification</span><span>facilitator allowlist v1 — 112 addresses</span></li>`;
+  $("#rail-stamp").textContent = "DATA THROUGH " + RAW.meta.data_through_day + " · METHODOLOGY v" + RAW.meta.methodology_version;
+}
+
+/* ———————————————————————— tooltip ———————————————————————— */
+const tip = $("#tip");
+function showTip(e, html){
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  const pad = 14;
+  let tx = e.clientX + pad, ty = e.clientY + pad;
+  const r = tip.getBoundingClientRect();
+  if (tx + r.width > innerWidth - 8) tx = e.clientX - r.width - pad;
+  if (ty + r.height > innerHeight - 8) ty = e.clientY - r.height - pad;
+  tip.style.left = tx + "px"; tip.style.top = ty + "px";
+}
+function hideTip(){ tip.style.display = "none"; }
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest("[data-tip]");
+  if (t) showTip(e, t.getAttribute("data-tip"));
+  else if (!e.target.closest("#daily-hover") && !e.target.closest("#velo-hover")) hideTip();
+});
+
+/* ———————————————————————— toggles ———————————————————————— */
+document.querySelectorAll(".wintoggle button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".wintoggle button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    state.win = b.dataset.win;
+    renderHero(); renderTypical(); renderBands(); renderPricePoints(); renderGas();
+  });
+});
+document.querySelectorAll(".minitoggle").forEach(t => {
+  t.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      t.querySelectorAll("button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      state[t.dataset.for] = b.dataset.metric === "vol" ? "vol" : "txns";
+      if (t.dataset.for === "daily") renderDaily();
+      if (t.dataset.for === "bands") renderBands();
+    });
+  });
+});
+
+/* ———————————————————————— reveal on scroll + rail active ———————————————————————— */
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }), {threshold:.12});
+document.querySelectorAll(".rv").forEach(el => io.observe(el));
+/* failsafe: never strand content invisible (fast scrolls, fragment jumps, exotic browsers) */
+setTimeout(() => document.querySelectorAll(".rv:not(.in)").forEach(el => el.classList.add("in")), 1400);
+
+const sections = [...document.querySelectorAll("section.chapter")];
+const railLinks = [...document.querySelectorAll(".rail a")];
+const sio = new IntersectionObserver(es => {
+  es.forEach(e => {
+    if (e.isIntersecting){
+      railLinks.forEach(l => l.classList.toggle("active", l.getAttribute("href") === "#"+e.target.id));
+    }
+  });
+}, {rootMargin:"-30% 0px -60% 0px"});
+sections.forEach(s => sio.observe(s));
+
+/* ———————————————————————— boot + resize ———————————————————————— */
+function renderAll(){
+  renderHero(); renderClaims(); renderMonthly(); renderDaily();
+  renderTypical(); renderBands(); renderPricePoints(); renderGas();
+  renderVelocity(); renderProvenance();
+}
+let rsz;
+addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { renderDaily(); renderVelocity(); drawConnector(); }, 160); });
+renderAll();
+</script>
+</body>
+</html>

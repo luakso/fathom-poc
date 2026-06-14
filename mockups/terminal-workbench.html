@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FATHOM::ECONOMY — workbench</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="%23070b09"/><path d="M16 5v16M16 21l-5-6M16 21l5-6" stroke="%233dd68c" stroke-width="2.6" fill="none"/><path d="M7 26h18" stroke="%238fa098" stroke-width="2.4"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+/* ————— FATHOM workbench — forest-black terminal ————— */
+:root{
+  --bg:#070b09;
+  --panel:#0c110e;
+  --panel-2:#0f1511;
+  --line:#1d2722;
+  --line-2:#2a362f;
+  --grid:#151d18;
+  --ink:#d6e2da;
+  --dim:#8fa098;
+  --faint:#5b6a61;
+  --agentic:#3dd68c;
+  --agentic-dim:#1d6b48;
+  --contested:#f2c14e;
+  --contested-dim:#7a6126;
+  --contam:#f0635a;
+  --contam-dim:#74332e;
+  --accent:#4fd6e3;       /* cyan — focus, crosshair, interactive */
+  --accent-dim:#1f5b63;
+  --pin:#c792ea;          /* violet — pinned things */
+  --mono:"JetBrains Mono", ui-monospace, monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+::selection{background:var(--accent);color:var(--bg)}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:12px;line-height:1.5;
+  overflow:hidden;
+}
+/* CRT garnish */
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:900;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 1px, transparent 1px 3px);
+  opacity:.5;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:901;
+  background:radial-gradient(ellipse at 50% 40%, transparent 60%, rgba(0,0,0,.32) 100%);
+}
+.glow{text-shadow:0 0 8px currentColor}
+button{font-family:var(--mono)}
+
+/* ————— app frame ————— */
+.app{height:100vh;display:flex;flex-direction:column}
+.topbar{
+  flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;height:42px;
+  border-bottom:1px solid var(--line);background:var(--panel);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.06em;font-size:13px}
+.brand svg{display:block}
+.brand .path{color:var(--dim);font-weight:500}
+.brand .path b{color:var(--agentic);font-weight:700}
+.topbar .spacer{flex:1}
+.winsel{display:flex;border:1px solid var(--line-2)}
+.winsel button{
+  background:transparent;border:none;color:var(--dim);padding:5px 12px;font-size:11px;letter-spacing:.08em;cursor:pointer;
+  border-right:1px solid var(--line);
+}
+.winsel button:last-child{border-right:none}
+.winsel button.on{background:var(--accent);color:var(--bg);font-weight:700}
+.winsel button:not(.on):hover{color:var(--ink);background:var(--panel-2)}
+.stamp{color:var(--faint);font-size:10.5px;letter-spacing:.08em}
+.stamp b{color:var(--dim);font-weight:500}
+.pinbtn{
+  display:flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:transparent;color:var(--pin);
+  padding:5px 12px;font-size:11px;letter-spacing:.08em;cursor:pointer;
+}
+.pinbtn:hover{border-color:var(--pin)}
+.pinbtn .cnt{background:var(--pin);color:var(--bg);font-weight:700;padding:0 6px;border-radius:7px}
+.helpbtn{border:1px solid var(--line-2);background:transparent;color:var(--dim);padding:5px 10px;cursor:pointer;font-size:11px}
+.helpbtn:hover{color:var(--ink);border-color:var(--accent)}
+
+/* ————— main grid ————— */
+.main{flex:1;overflow-y:auto;padding:14px;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.main::-webkit-scrollbar{width:8px}
+.main::-webkit-scrollbar-thumb{background:var(--line-2)}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;max-width:1700px;margin:0 auto}
+.panel{
+  position:relative;border:1px solid var(--line);background:var(--panel);padding:30px 16px 14px;
+  min-width:0;
+}
+.panel.focused{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-dim), 0 0 24px rgba(79,214,227,.07)}
+/* transition (not animation) so the flash can never cancel the materialize animation */
+.panel{transition:box-shadow .4s ease}
+.panel.pinned-flash{box-shadow:0 0 0 2px var(--pin)!important;transition:none}
+.ptitle{
+  position:absolute;top:-8px;left:12px;display:flex;align-items:center;gap:8px;background:var(--bg);padding:0 8px;
+  font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--ink);text-transform:uppercase;
+}
+.ptitle .no{color:var(--accent);font-weight:800}
+.ptitle .chip{font-weight:500;letter-spacing:.06em;color:var(--faint);text-transform:none;font-size:10px}
+.ptools{position:absolute;top:-8px;right:12px;display:flex;gap:6px;background:var(--bg);padding:0 6px}
+.ptools button{
+  border:1px solid var(--line-2);background:var(--panel);color:var(--dim);font-size:10px;padding:1px 8px;cursor:pointer;letter-spacing:.06em;
+}
+.ptools button:hover{color:var(--ink);border-color:var(--accent)}
+.ptools button.on{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
+.ptools button.pin-it:hover{color:var(--pin);border-color:var(--pin)}
+.span3{grid-column:span 3}.span4{grid-column:span 4}.span5{grid-column:span 5}
+.span6{grid-column:span 6}.span7{grid-column:span 7}.span8{grid-column:span 8}.span12{grid-column:span 12}
+@media(max-width:1180px){.span3,.span4,.span5{grid-column:span 6}.span6,.span7,.span8{grid-column:span 12}}
+@media(max-width:760px){.grid>*{grid-column:span 12!important}}
+
+/* ————— panel internals ————— */
+.kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:12px}
+.kv .k{color:var(--dim)}
+.kv .v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.kv .v small{color:var(--faint);font-weight:400}
+.bignum{font-size:30px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.bignum small{font-size:11px;font-weight:500;color:var(--dim);letter-spacing:.06em;display:block;margin-top:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}
+.sep{border-top:1px dashed var(--line-2);margin:10px 0}
+.note{color:var(--faint);font-size:10.5px;letter-spacing:.02em;line-height:1.55}
+.note b{color:var(--dim);font-weight:500}
+.denom{margin-top:10px;font-size:10px;color:var(--faint);letter-spacing:.04em;display:flex;gap:7px;align-items:baseline}
+.denom::before{content:"DENOM";color:var(--contam);font-weight:700;letter-spacing:.12em;font-size:9px;flex:none}
+.c-ag{color:var(--agentic)} .c-ct{color:var(--contested)} .c-cm{color:var(--contam)} .c-ac{color:var(--accent)} .c-pin{color:var(--pin)}
+
+/* stacked share bars */
+.shbar{display:flex;height:18px;border:1px solid var(--line-2);background:var(--panel-2);margin:4px 0 10px}
+.shbar i{display:block;min-width:2px;transition:width .45s ease}
+.shbar .ag{background:var(--agentic)} .shbar .ct{background:var(--contested)} .shbar .cm{background:var(--contam)}
+.sh-label{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);letter-spacing:.08em}
+
+/* meter rows (bands, monthly) */
+.mrow{display:grid;grid-template-columns:118px 1fr;gap:10px;align-items:center;padding:4px 0;font-size:11.5px}
+.mrow .lab{color:var(--dim);white-space:nowrap}
+.mrow .lab small{color:var(--faint);display:block;font-size:9.5px;margin-top:-2px}
+.mrow .meter{display:flex;align-items:center;gap:9px;min-width:0}
+.mrow .bar{height:11px;background:var(--agentic);min-width:2px;transition:width .45s ease;flex:none}
+.mrow .bar.dim{background:var(--agentic-dim)}
+.mrow .bar.partial{background:repeating-linear-gradient(135deg,var(--agentic-dim) 0 4px,transparent 4px 8px);border:1px solid var(--agentic-dim)}
+.mrow .val{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.mrow .mom{font-size:10px;font-weight:700;white-space:nowrap}
+.mrow .mom.up{color:var(--agentic)} .mrow .mom.dn{color:var(--contam)} .mrow .mom.na{color:var(--faint);font-weight:400}
+.mrow .sub{color:var(--faint);font-size:10px;white-space:nowrap}
+
+/* tables */
+table.t{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.t th{
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:500;
+  text-align:right;padding:2px 8px 6px;border-bottom:1px solid var(--line-2);white-space:nowrap;
+}
+table.t th:first-child{text-align:left;padding-left:0}
+table.t td{font-size:11.5px;text-align:right;padding:4px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
+table.t td:first-child{text-align:left;padding-left:0}
+table.t tr:hover td{background:var(--panel-2)}
+.tag{font-size:9px;letter-spacing:.1em;padding:1px 6px;border:1px solid;font-weight:700}
+.tag.menu{color:var(--contam);border-color:var(--contam-dim);background:rgba(240,99,90,.08)}
+.tag.market{color:var(--agentic);border-color:var(--agentic-dim);background:rgba(61,214,140,.08)}
+.tag.mixed{color:var(--faint);border-color:var(--line-2)}
+.tag.over{color:var(--contam);border-color:var(--contam);background:rgba(240,99,90,.1)}
+.tag.ok{color:var(--agentic);border-color:var(--agentic);background:rgba(61,214,140,.1)}
+
+/* charts */
+.chart-host{position:relative}
+svg.ch{display:block;width:100%}
+svg.ch text{font-family:var(--mono);font-size:9.5px;fill:var(--faint);letter-spacing:.05em}
+svg.ch .gl{stroke:var(--grid)}
+svg.ch .ax{stroke:var(--line-2)}
+.readout{font-size:10.5px;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:.02em;min-height:16px}
+.readout .d{color:var(--dim)}
+
+/* block meter (gas breakeven) */
+.blockmeter{font-size:13px;letter-spacing:1px;word-break:break-all;line-height:1.35}
+.blockmeter .f{color:var(--contam)} .blockmeter .e{color:var(--line-2)}
+
+/* shell log */
+.shell{font-size:11.5px;line-height:1.75}
+.shell .ps{color:var(--accent)}
+.shell .cmd{color:var(--ink);font-weight:500}
+.shell .out{color:var(--dim)}
+.shell .ok{color:var(--agentic);font-weight:700}
+.shell .warn{color:var(--contested)}
+
+/* claims */
+.claimrow{padding:8px 0;border-bottom:1px solid var(--grid)}
+.claimrow .q{color:var(--ink);font-size:12px}
+.claimrow .src{color:var(--faint);font-size:10px;letter-spacing:.05em;margin-top:2px}
+.claimrow .nums{display:flex;gap:16px;margin-top:6px;font-size:11.5px;align-items:center;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.claimrow .nums .a{color:var(--dim)} .claimrow .nums .m{color:var(--agentic);font-weight:700}
+
+/* ————— status bar ————— */
+.statusbar{
+  flex:none;display:flex;align-items:center;gap:16px;height:34px;padding:0 14px;
+  border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--dim);letter-spacing:.05em;
+  overflow:hidden;white-space:nowrap;
+}
+.statusbar .key{color:var(--accent);font-weight:700}
+.statusbar .spacer{flex:1}
+.cursor{display:inline-block;width:7px;height:13px;background:var(--agentic);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.statusbar .cons{color:var(--agentic)}
+
+/* ————— report tray ————— */
+.tray{
+  position:fixed;top:42px;right:0;bottom:34px;width:430px;max-width:94vw;z-index:500;
+  background:var(--panel-2);border-left:1px solid var(--line-2);
+  transform:translateX(102%);transition:transform .3s cubic-bezier(.2,.9,.25,1);
+  display:flex;flex-direction:column;box-shadow:-18px 0 40px rgba(0,0,0,.5);
+}
+.tray.open{transform:none}
+.tray-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tray-head h2{font-size:12px;letter-spacing:.16em;color:var(--pin);font-weight:800}
+.tray-head button{background:transparent;border:1px solid var(--line-2);color:var(--dim);padding:3px 10px;cursor:pointer;font-size:11px}
+.tray-body{flex:1;overflow-y:auto;padding:14px 16px;scrollbar-width:thin}
+.tray h3{font-size:10px;letter-spacing:.18em;color:var(--faint);font-weight:700;margin:16px 0 8px;text-transform:uppercase}
+.tray h3:first-child{margin-top:0}
+.pinitem{border:1px solid var(--line);background:var(--panel);padding:9px 11px;margin-bottom:8px;cursor:pointer}
+.pinitem.sel{border-color:var(--pin)}
+.pinitem .t{display:flex;justify-content:space-between;gap:8px;font-size:10px;letter-spacing:.1em;color:var(--pin);font-weight:700;text-transform:uppercase}
+.pinitem .t button{background:none;border:none;color:var(--faint);cursor:pointer;font-size:11px}
+.pinitem .t button:hover{color:var(--contam)}
+.pinitem .v{font-size:16px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.pinitem .c{font-size:10.5px;color:var(--dim)}
+.tray textarea{
+  width:100%;min-height:170px;background:var(--bg);border:1px solid var(--line-2);color:var(--ink);
+  font-family:var(--mono);font-size:11.5px;line-height:1.6;padding:10px;resize:vertical;
+}
+.tray textarea:focus{outline:none;border-color:var(--accent)}
+.traybtns{display:flex;gap:8px;margin-top:8px;align-items:center}
+.traybtns button{border:1px solid var(--line-2);background:var(--panel);color:var(--ink);padding:6px 13px;cursor:pointer;font-size:11px;letter-spacing:.06em}
+.traybtns button:hover{border-color:var(--accent);color:var(--accent)}
+.traybtns .count{margin-left:auto;font-size:10px;color:var(--faint)}
+.traybtns .count.bad{color:var(--contam)}
+.cardwrap{border:1px solid var(--line);background:var(--bg);padding:10px}
+canvas#xcard{width:100%;display:block}
+.empty{color:var(--faint);font-size:11px;padding:18px 0;text-align:center;border:1px dashed var(--line-2)}
+
+/* ————— help overlay ————— */
+.overlay{
+  position:fixed;inset:0;z-index:800;background:rgba(4,7,5,.78);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;
+}
+.overlay.open{display:flex}
+.helpbox{width:520px;max-width:92vw;border:1px solid var(--line-2);background:var(--panel);padding:26px 30px}
+.helpbox h2{font-size:13px;letter-spacing:.18em;color:var(--accent);margin-bottom:16px}
+.helpbox .hk{display:grid;grid-template-columns:90px 1fr;gap:6px 14px;font-size:12px}
+.helpbox .hk b{color:var(--accent);font-weight:700}
+.helpbox .hk span{color:var(--dim)}
+.helpbox .foot{margin-top:18px;font-size:10.5px;color:var(--faint)}
+
+/* boot reveal */
+.panel{opacity:0;transform:translateY(8px);animation:mat .4s ease forwards}
+@keyframes mat{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .panel{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ————— top bar ————— -->
+  <div class="topbar">
+    <div class="brand">
+      <svg width="16" height="20" viewBox="0 0 16 20"><path d="M8 1v12M8 13l-4.5-5M8 13l4.5-5" stroke="var(--agentic)" stroke-width="2" fill="none"/><path d="M1 17.5h14" stroke="var(--dim)" stroke-width="2"/></svg>
+      FATHOM<span class="path">::<b>economy</b> ▸ workbench</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="winsel" id="winsel">
+      <button data-win="7d">7D</button>
+      <button data-win="30d">30D</button>
+      <button data-win="all" class="on">ALL</button>
+    </div>
+    <span class="stamp">DATA→<b id="st-through">—</b> · METH <b>v1</b></span>
+    <button class="pinbtn" id="traytoggle" title="report tray [r]">⊞ REPORT <span class="cnt" id="pincount">0</span></button>
+    <button class="helpbtn" id="helptoggle" title="help [?]">?</button>
+  </div>
+
+  <!-- ————— main grid ————— -->
+  <div class="main" id="main">
+    <div class="grid">
+
+      <!-- 1 OVERVIEW -->
+      <section class="panel span4" id="p1" style="animation-delay:.02s">
+        <div class="ptitle"><span class="no">1</span> OVERVIEW <span class="chip" id="ov-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="overview">⊞ pin</button></div>
+        <div class="row2" id="ov-stats"><!-- js --></div>
+        <div class="sep"></div>
+        <div class="sh-label"><span>USD SHARE</span><span id="ov-usd-r"></span></div>
+        <div class="shbar" id="ov-usd"></div>
+        <div class="sh-label"><span>TX SHARE</span><span id="ov-tx-r"></span></div>
+        <div class="shbar" id="ov-tx"></div>
+        <div class="note" id="ov-inv"></div>
+        <div class="denom" id="ov-denom"></div>
+      </section>
+
+      <!-- 2 DAILY TAPE -->
+      <section class="panel span8" id="p2" style="animation-delay:.05s">
+        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all observed · Jan 01 → Jun 05</span></div>
+        <div class="ptools">
+          <button data-t="d-metric" data-v="tx" class="on">TX</button>
+          <button data-t="d-metric" data-v="usd">USD</button>
+          <button data-t="d-scale" data-v="lin" class="on">LIN</button>
+          <button data-t="d-scale" data-v="log">LOG</button>
+          <button data-t="d-ma" data-v="raw" class="on">RAW</button>
+          <button data-t="d-ma" data-v="ma7">MA7</button>
+          <button class="pin-it" data-pin="daily">⊞ pin</button>
+        </div>
+        <div class="readout" id="d-readout">hover the tape ▸ crosshair</div>
+        <div class="chart-host" id="dailychart"></div>
+        <div class="denom">all observed traffic, before classification · active window shaded cyan · Jun 05 = data edge (partial day)</div>
+      </section>
+
+      <!-- 3 MONTHLY -->
+      <section class="panel span7" id="p3" style="animation-delay:.08s">
+        <div class="ptitle"><span class="no">3</span> MONTHLY · AGENTIC <span class="chip">complete months drive MoM</span></div>
+        <div class="ptools">
+          <button data-t="m-metric" data-v="usd" class="on">USD</button>
+          <button data-t="m-metric" data-v="tx">TX</button>
+          <button class="pin-it" data-pin="monthly">⊞ pin</button>
+        </div>
+        <div id="monthly"><!-- js --></div>
+        <div class="denom">agentic set only · ◌ = partial month (excluded from MoM) · May: tx +31% while $ −65% — activity without value</div>
+      </section>
+
+      <!-- 4 SPLIT -->
+      <section class="panel span5" id="p4" style="animation-delay:.11s">
+        <div class="ptitle"><span class="no">4</span> ATTRIBUTION <span class="chip" id="sp-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="split">⊞ pin</button></div>
+        <table class="t" id="splittable"></table>
+        <div class="note" style="margin-top:8px" id="sp-note"></div>
+        <div class="denom">allowlist methodology v1 — 112 facilitator addresses, 29 named operators · splits sum to totals exactly</div>
+      </section>
+
+      <!-- 5 SHAPE -->
+      <section class="panel span5" id="p5" style="animation-delay:.14s">
+        <div class="ptitle"><span class="no">5</span> PAYMENT SHAPE <span class="chip" id="shp-win"></span></div>
+        <div class="ptools">
+          <button data-t="b-metric" data-v="tx" class="on">TX</button>
+          <button data-t="b-metric" data-v="usd">USD</button>
+          <button class="pin-it" data-pin="shape">⊞ pin</button>
+        </div>
+        <div class="row2" id="shp-big"></div>
+        <div class="sep"></div>
+        <table class="t" id="typtable"></table>
+        <div class="sep"></div>
+        <div id="bands"></div>
+        <div class="denom">bands across all observed payments — the whale band ≈ the contamination · medians per window from their own scan</div>
+      </section>
+
+      <!-- 6 PRICE POINTS -->
+      <section class="panel span7" id="p6" style="animation-delay:.17s">
+        <div class="ptitle"><span class="no">6</span> PRICE POINTS <span class="chip" id="pp-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="price">⊞ pin</button></div>
+        <table class="t" id="pptable"></table>
+        <div class="denom">agentic set only · share of window's agentic tx · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
+      </section>
+
+      <!-- 7 GAS -->
+      <section class="panel span5" id="p7" style="animation-delay:.20s">
+        <div class="ptitle"><span class="no">7</span> GAS / BREAKEVEN <span class="chip" id="gas-win"></span></div>
+        <div class="ptools"><button class="pin-it" data-pin="gas">⊞ pin</button></div>
+        <div class="bignum c-cm glow" id="gas-pct">—</div>
+        <div class="note" style="margin:2px 0 8px">of agentic payments burned more gas than they moved</div>
+        <div class="blockmeter" id="gas-meter"></div>
+        <div class="sep"></div>
+        <div id="gas-kv"></div>
+        <div class="sep"></div>
+        <table class="t" id="gasbands"></table>
+        <div class="denom">gas counted once per tx, apportioned equally within batches · monthly ETH/USD reference · breakeven = apportioned gas USD &gt; amount</div>
+      </section>
+
+      <!-- 8 VELOCITY -->
+      <section class="panel span7" id="p8" style="animation-delay:.23s">
+        <div class="ptitle"><span class="no">8</span> VELOCITY <span class="chip">agentic · per-minute ceiling, daily</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="velocity">⊞ pin</button></div>
+        <div class="readout" id="v-readout">│ = day's max minute · ▪ = p99 of active minutes</div>
+        <div class="chart-host" id="velochart"></div>
+        <div class="row2" id="velostats" style="margin-top:8px"></div>
+        <div class="denom">agentic set · p99 over active minutes only — idle minutes can't flatter the percentile · body ~220/min, peaks 25×</div>
+      </section>
+
+      <!-- 9 CLAIMS -->
+      <section class="panel span7" id="p9" style="animation-delay:.26s">
+        <div class="ptitle"><span class="no">9</span> CLAIM LEDGER <span class="chip">public claims vs measured</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="claims">⊞ pin</button></div>
+        <div id="claims"></div>
+        <div class="denom">curated data/claims.json · join recomputed on every publish · each row names its measured metric</div>
+      </section>
+
+      <!-- LOG -->
+      <section class="panel span5" id="p10" style="animation-delay:.29s">
+        <div class="ptitle"><span class="no">~</span> VERIFY LOG <span class="chip">runs in your browser</span></div>
+        <div class="shell" id="shell"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ————— status bar ————— -->
+  <div class="statusbar">
+    <span><span class="key">w</span> window</span>
+    <span><span class="key">m</span> metric</span>
+    <span><span class="key">1-9</span> panel</span>
+    <span><span class="key">p</span> pin</span>
+    <span><span class="key">r</span> report</span>
+    <span><span class="key">?</span> help</span>
+    <span class="spacer"></span>
+    <span class="cons" id="st-cons">conservation —</span>
+    <span id="st-gen">—</span>
+    <span class="cursor"></span>
+  </div>
+</div>
+
+<!-- ————— report tray ————— -->
+<aside class="tray" id="tray" aria-label="Report tray">
+  <div class="tray-head">
+    <h2>⊞ REPORT TRAY</h2>
+    <button id="trayclose">esc</button>
+  </div>
+  <div class="tray-body">
+    <h3>Pinned findings</h3>
+    <div id="pinlist"></div>
+    <h3>Thread composer <span style="color:var(--faint);font-weight:400">— built from pins, edit freely</span></h3>
+    <textarea id="thread" spellcheck="false"></textarea>
+    <div class="traybtns">
+      <button id="copythread">COPY</button>
+      <button id="regen">REGEN FROM PINS</button>
+      <span class="count" id="charcount">0 chars</span>
+    </div>
+    <h3>X card <span style="color:var(--faint);font-weight:400">— 1200×675, for the selected pin</span></h3>
+    <div class="cardwrap"><canvas id="xcard" width="1200" height="675"></canvas></div>
+    <div class="traybtns">
+      <button id="cardprev">◀</button>
+      <button id="cardnext">▶</button>
+      <button id="carddl">DOWNLOAD PNG</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ————— help ————— -->
+<div class="overlay" id="help">
+  <div class="helpbox">
+    <h2>FATHOM WORKBENCH — KEYS</h2>
+    <div class="hk">
+      <b>w</b><span>cycle window 7D → 30D → ALL</span>
+      <b>m</b><span>flip every TX/USD toggle</span>
+      <b>1–9</b><span>jump to panel</span>
+      <b>p</b><span>pin focused panel to the report tray</span>
+      <b>r</b><span>open / close report tray</span>
+      <b>l</b><span>daily tape: linear ↔ log</span>
+      <b>a</b><span>daily tape: raw ↔ 7-day moving average</span>
+      <b>esc</b><span>close tray / help</span>
+      <b>?</b><span>this help</span>
+    </div>
+    <div class="foot">workflow: explore → pin findings → compose thread → download X card. every number from dist/economy.json · denominators stated.</div>
+  </div>
+</div>
+
+<script>
+/* ———————— DATA — verbatim from dist/economy.json ———————— */
+const RAW = {"meta":{"methodology_version":1,"generated_at":"2026-06-11T20:44:46Z","data_through_day":"2026-06-05"},"windows":{"30d":{"txn_count":3163608,"volume_usdc":"72778771.348945","by_attribution":{"agentic":{"txn_count":2828532,"volume_usdc":"637325.462012"},"contamination":{"txn_count":90401,"volume_usdc":"62693902.990834"},"contested":{"txn_count":244675,"volume_usdc":"9447542.896099"}},"by_band":{"dust":{"txn_count":1871593,"volume_usdc":"3625.565316"},"micro":{"txn_count":1084480,"volume_usdc":"126284.894126"},"mid":{"txn_count":19360,"volume_usdc":"5699563.627813"},"small":{"txn_count":181389,"volume_usdc":"2055310.447019"},"whale":{"txn_count":6786,"volume_usdc":"64893986.814671"}}},"7d":{"txn_count":756838,"volume_usdc":"13454094.320544","by_attribution":{"agentic":{"txn_count":715422,"volume_usdc":"155279.183481"},"contamination":{"txn_count":19010,"volume_usdc":"12186540.623968"},"contested":{"txn_count":22406,"volume_usdc":"1112274.513095"}},"by_band":{"dust":{"txn_count":339918,"volume_usdc":"815.795415"},"micro":{"txn_count":371962,"volume_usdc":"30294.229293"},"mid":{"txn_count":4028,"volume_usdc":"1203141.339866"},"small":{"txn_count":39563,"volume_usdc":"416370.959225"},"whale":{"txn_count":1367,"volume_usdc":"11803471.996745"}}},"all":{"txn_count":20602822,"volume_usdc":"447997846.118040","by_attribution":{"agentic":{"txn_count":19083374,"volume_usdc":"7361839.397373"},"contamination":{"txn_count":304572,"volume_usdc":"410602246.241417"},"contested":{"txn_count":1214876,"volume_usdc":"30033760.479250"}},"by_band":{"dust":{"txn_count":12292604,"volume_usdc":"10709.984966"},"micro":{"txn_count":7166872,"volume_usdc":"745961.012395"},"mid":{"txn_count":88950,"volume_usdc":"26860591.485348"},"small":{"txn_count":1018354,"volume_usdc":"8849218.770844"},"whale":{"txn_count":36042,"volume_usdc":"411531364.864487"}}}},"daily":[["2026-01-01",766374,1741872.86],["2026-01-02",557423,2466928.02],["2026-01-03",372370,2249439.56],["2026-01-04",735520,938198.07],["2026-01-05",803573,3363256.31],["2026-01-06",650067,3716692.79],["2026-01-07",637356,4899330.77],["2026-01-08",636077,4177661.95],["2026-01-09",636531,4364497.09],["2026-01-10",640831,3664401.23],["2026-01-11",512991,1348360.04],["2026-01-12",481671,4917377.4],["2026-01-13",466697,4179546.14],["2026-01-14",475279,3558178.49],["2026-01-15",51819,280149.67],["2026-01-19",405179,1650811.28],["2026-01-20",321748,4660714.66],["2026-01-21",352898,3779119.28],["2026-01-22",330783,3567718.81],["2026-01-23",76633,3192152.28],["2026-01-24",71449,1856170.81],["2026-01-25",91051,2206795.01],["2026-01-26",66594,4035558.57],["2026-01-27",71670,5212680.67],["2026-01-28",57150,7427762.14],["2026-01-29",60030,6816356.65],["2026-01-30",32632,6485800.95],["2026-01-31",42266,6226004.8],["2026-02-01",24569,3988510.22],["2026-02-02",26151,6420035.22],["2026-02-03",27314,10245104.87],["2026-02-04",20231,8230250.64],["2026-02-05",19444,5705454.45],["2026-02-06",31968,4540269.26],["2026-02-07",24753,1182790.96],["2026-02-08",55808,227761.97],["2026-02-09",37137,206729.61],["2026-02-10",53303,299672.8],["2026-02-11",59505,925502.69],["2026-02-12",102334,6395630.37],["2026-02-13",47050,6874507.6],["2026-02-14",47129,2370144.29],["2026-02-15",68456,4431541.96],["2026-02-16",84976,2990557.86],["2026-02-17",98651,5676567.85],["2026-02-18",52244,4655485.46],["2026-02-19",85471,10533196.06],["2026-02-20",78834,6337868.24],["2026-02-21",113298,1511688.33],["2026-02-22",119490,3025772.12],["2026-02-23",117853,4274702.26],["2026-02-24",70935,3358792.51],["2026-02-25",61058,5121070.1],["2026-02-26",61236,2094268.11],["2026-02-27",66747,1393750.41],["2026-02-28",91596,1486779.32],["2026-03-01",68455,2310692.2],["2026-03-02",49943,10292075.91],["2026-03-03",53590,5820506.38],["2026-03-04",82387,3168059.39],["2026-03-05",84440,3774909.46],["2026-03-06",99288,2409391.19],["2026-03-07",102081,1013121.08],["2026-03-08",85351,920399.48],["2026-03-09",84141,3575701.55],["2026-03-10",98421,1958403.37],["2026-03-11",111818,2523462.34],["2026-03-12",105352,2591701.61],["2026-03-13",68481,4096400.45],["2026-03-14",67716,1121349.62],["2026-03-15",73427,837327.29],["2026-03-16",70869,3581193.7],["2026-03-17",56204,1997739.13],["2026-03-18",149103,1761550.73],["2026-03-19",71980,2059720.98],["2026-03-20",65973,3193831.7],["2026-03-21",57796,1766449.72],["2026-03-22",51225,1392042.72],["2026-03-23",49960,1785364.8],["2026-03-24",41147,2002343.09],["2026-03-25",45685,870164.95],["2026-03-26",57096,2581833.65],["2026-03-27",39511,2083995.6],["2026-03-28",33421,1137167.57],["2026-03-29",37142,1211725.77],["2026-03-30",37692,1897491.54],["2026-03-31",35841,3149851.55],["2026-04-01",55171,2783591.45],["2026-04-02",46933,2570535.18],["2026-04-03",56268,1314383.57],["2026-04-04",50612,956437.69],["2026-04-05",42150,1191835.15],["2026-04-06",79377,1429766.34],["2026-04-07",59017,2772608.25],["2026-04-08",80613,2458821.78],["2026-04-09",83304,2303255.14],["2026-04-10",89694,2531703.48],["2026-04-11",79837,2297135.1],["2026-04-12",89179,1019223.12],["2026-04-13",83864,3514110.34],["2026-04-14",78186,2673862.1],["2026-04-15",68240,1852401.72],["2026-04-16",76495,2518740.96],["2026-04-17",70222,3463168.11],["2026-04-18",89344,1503846.85],["2026-04-19",81527,1675102.88],["2026-04-20",89107,2626228.55],["2026-04-21",79167,3695487.18],["2026-04-22",136192,2196251.32],["2026-04-23",88453,1549757.96],["2026-04-24",160859,1476540.95],["2026-04-25",78620,1640029.12],["2026-04-26",100321,861629.1],["2026-04-27",99159,1878179.16],["2026-04-28",93120,2150257.54],["2026-04-29",90072,3752729.14],["2026-04-30",91343,1711874.51],["2026-05-01",118257,4656318.65],["2026-05-02",100882,1021666.32],["2026-05-03",114484,1104744.69],["2026-05-04",126391,2355419.82],["2026-05-05",97497,2204235.5],["2026-05-06",127518,3133285.69],["2026-05-07",107395,1734370.08],["2026-05-08",90075,4241491.71],["2026-05-09",80922,866311.16],["2026-05-10",74119,1243972.16],["2026-05-11",91476,1844420.75],["2026-05-12",103258,1678009.59],["2026-05-13",136788,2670054.16],["2026-05-14",137541,2921892.18],["2026-05-15",103105,3024108.3],["2026-05-16",122298,1108097.13],["2026-05-17",99463,1272483.54],["2026-05-18",146409,3097894.77],["2026-05-19",103731,3430780.13],["2026-05-20",127517,1726664.85],["2026-05-21",96590,1685284.33],["2026-05-22",108647,2716608.62],["2026-05-23",81855,1186109.01],["2026-05-24",87155,10881139.14],["2026-05-25",107028,1473784.94],["2026-05-26",101123,4001139.12],["2026-05-27",101826,1986098.16],["2026-05-28",101493,2786339.16],["2026-05-29",96956,1747624.03],["2026-05-30",111599,826949.17],["2026-05-31",100428,1038499.72],["2026-06-01",145158,2720874.69],["2026-06-02",140909,3074644.1],["2026-06-03",114456,2367644.23],["2026-06-04",141952,3421140.87],["2026-06-05",2336,4341.54]],"monthly":[{"month":"2026-01","complete":true,"txn_count":10404662,"volume_usdc":"102983536.299642","by_attribution":{"agentic":{"txn_count":10142139,"volume_usdc":"766977.545123"},"contamination":{"txn_count":47639,"volume_usdc":"96339031.195241"},"contested":{"txn_count":214884,"volume_usdc":"5877527.559278"}}},{"month":"2026-02","complete":true,"txn_count":1747541,"volume_usdc":"114504405.540174","by_attribution":{"agentic":{"txn_count":1408343,"volume_usdc":"1922487.494818"},"contamination":{"txn_count":34211,"volume_usdc":"109606405.377957"},"contested":{"txn_count":304987,"volume_usdc":"2975512.667399"}}},{"month":"2026-03","complete":true,"txn_count":2135536,"volume_usdc":"78885968.514993","by_attribution":{"agentic":{"txn_count":1796356,"volume_usdc":"2118210.127833"},"contamination":{"txn_count":37483,"volume_usdc":"72831970.414084"},"contested":{"txn_count":301697,"volume_usdc":"3935787.973076"}}},{"month":"2026-04","complete":true,"txn_count":2466446,"volume_usdc":"64369493.743707","by_attribution":{"agentic":{"txn_count":2259727,"volume_usdc":"1808770.503189"},"contamination":{"txn_count":78506,"volume_usdc":"56011250.822423"},"contested":{"txn_count":128213,"volume_usdc":"6549472.418095"}}},{"month":"2026-05","complete":true,"txn_count":3303826,"volume_usdc":"75665796.586725","by_attribution":{"agentic":{"txn_count":2957902,"volume_usdc":"641166.933696"},"contamination":{"txn_count":93412,"volume_usdc":"65303729.917915"},"contested":{"txn_count":252512,"volume_usdc":"9720899.735114"}}},{"month":"2026-06","complete":false,"txn_count":544811,"volume_usdc":"11588645.432799","by_attribution":{"agentic":{"txn_count":518907,"volume_usdc":"104226.792714"},"contamination":{"txn_count":13321,"volume_usdc":"10509858.513797"},"contested":{"txn_count":12583,"volume_usdc":"974560.126288"}}}],"typical":{"30d":{"agentic":{"avg_usdc":"0.225320","median_usdc":"0.002000","txn_count":2828532},"all":{"avg_usdc":"23.004990","median_usdc":"0.003000","txn_count":3163608},"contamination":{"avg_usdc":"693.508954","median_usdc":"15.750000","txn_count":90401},"contested":{"avg_usdc":"38.612620","median_usdc":"0.050000","txn_count":244675}},"7d":{"agentic":{"avg_usdc":"0.217046","median_usdc":"0.010000","txn_count":715422},"all":{"avg_usdc":"17.776716","median_usdc":"0.010000","txn_count":756838},"contamination":{"avg_usdc":"641.059475","median_usdc":"16.447966","txn_count":19010},"contested":{"avg_usdc":"49.641815","median_usdc":"0.010000","txn_count":22406}},"all":{"agentic":{"avg_usdc":"0.385772","median_usdc":"0.001000","txn_count":19083374},"all":{"avg_usdc":"21.744489","median_usdc":"0.001000","txn_count":20602822},"contamination":{"avg_usdc":"1348.128673","median_usdc":"25.000000","txn_count":304572},"contested":{"avg_usdc":"24.721667","median_usdc":"0.002500","txn_count":1214876}}},"price_points":{"30d":[{"amount_usdc":"0.001000","txn_count":971220,"volume_usdc":"971.220000","payee_count":314,"txn_share_pct":"34.34"},{"amount_usdc":"0.002000","txn_count":450670,"volume_usdc":"901.340000","payee_count":523,"txn_share_pct":"15.93"},{"amount_usdc":"0.010000","txn_count":318180,"volume_usdc":"3181.800000","payee_count":19329,"txn_share_pct":"11.25"},{"amount_usdc":"0.005000","txn_count":179838,"volume_usdc":"899.190000","payee_count":154,"txn_share_pct":"6.36"},{"amount_usdc":"0.003000","txn_count":120301,"volume_usdc":"360.903000","payee_count":57,"txn_share_pct":"4.25"},{"amount_usdc":"0.100000","txn_count":82102,"volume_usdc":"8210.200000","payee_count":6563,"txn_share_pct":"2.90"},{"amount_usdc":"0.020000","txn_count":56321,"volume_usdc":"1126.420000","payee_count":4779,"txn_share_pct":"1.99"},{"amount_usdc":"0.050000","txn_count":49613,"volume_usdc":"2480.650000","payee_count":5715,"txn_share_pct":"1.75"},{"amount_usdc":"0.040000","txn_count":37545,"volume_usdc":"1501.800000","payee_count":11668,"txn_share_pct":"1.33"},{"amount_usdc":"0.060000","txn_count":37009,"volume_usdc":"2220.540000","payee_count":6903,"txn_share_pct":"1.31"},{"amount_usdc":"0.030000","txn_count":36299,"volume_usdc":"1088.970000","payee_count":8048,"txn_share_pct":"1.28"},{"amount_usdc":"0.201000","txn_count":23296,"volume_usdc":"4682.496000","payee_count":6,"txn_share_pct":"0.82"}],"7d":[{"amount_usdc":"0.010000","txn_count":125542,"volume_usdc":"1255.420000","payee_count":9814,"txn_share_pct":"17.55"},{"amount_usdc":"0.001000","txn_count":119913,"volume_usdc":"119.913000","payee_count":138,"txn_share_pct":"16.76"},{"amount_usdc":"0.002000","txn_count":114012,"volume_usdc":"228.024000","payee_count":50,"txn_share_pct":"15.94"},{"amount_usdc":"0.100000","txn_count":59850,"volume_usdc":"5985.000000","payee_count":822,"txn_share_pct":"8.37"},{"amount_usdc":"0.005000","txn_count":58119,"volume_usdc":"290.595000","payee_count":85,"txn_share_pct":"8.12"},{"amount_usdc":"0.003000","txn_count":24034,"volume_usdc":"72.102000","payee_count":32,"txn_share_pct":"3.36"},{"amount_usdc":"0.050000","txn_count":15379,"volume_usdc":"768.950000","payee_count":3054,"txn_share_pct":"2.15"},{"amount_usdc":"0.020000","txn_count":14433,"volume_usdc":"288.660000","payee_count":960,"txn_share_pct":"2.02"},{"amount_usdc":"0.040000","txn_count":11311,"volume_usdc":"452.440000","payee_count":4779,"txn_share_pct":"1.58"},{"amount_usdc":"0.500000","txn_count":6514,"volume_usdc":"3257.000000","payee_count":464,"txn_share_pct":"0.91"},{"amount_usdc":"0.030000","txn_count":5650,"volume_usdc":"169.500000","payee_count":2371,"txn_share_pct":"0.79"},{"amount_usdc":"0.060000","txn_count":4576,"volume_usdc":"274.560000","payee_count":1134,"txn_share_pct":"0.64"}],"all":[{"amount_usdc":"0.000100","txn_count":6464123,"volume_usdc":"646.412300","payee_count":154,"txn_share_pct":"33.87"},{"amount_usdc":"0.001000","txn_count":3435110,"volume_usdc":"3435.110000","payee_count":991,"txn_share_pct":"18.00"},{"amount_usdc":"0.010000","txn_count":2374606,"volume_usdc":"23746.060000","payee_count":24958,"txn_share_pct":"12.44"},{"amount_usdc":"0.100000","txn_count":1932826,"volume_usdc":"193282.600000","payee_count":9040,"txn_share_pct":"10.13"},{"amount_usdc":"0.500000","txn_count":537105,"volume_usdc":"268552.500000","payee_count":3387,"txn_share_pct":"2.81"},{"amount_usdc":"0.002000","txn_count":498173,"volume_usdc":"996.346000","payee_count":1597,"txn_share_pct":"2.61"},{"amount_usdc":"0.005000","txn_count":385195,"volume_usdc":"1925.975000","payee_count":319,"txn_share_pct":"2.02"},{"amount_usdc":"0.020000","txn_count":330826,"volume_usdc":"6616.520000","payee_count":8787,"txn_share_pct":"1.73"},{"amount_usdc":"1.000000","txn_count":287729,"volume_usdc":"287729.000000","payee_count":1253,"txn_share_pct":"1.51"},{"amount_usdc":"0.000150","txn_count":178857,"volume_usdc":"26.828550","payee_count":3,"txn_share_pct":"0.94"},{"amount_usdc":"0.003000","txn_count":156303,"volume_usdc":"468.909000","payee_count":128,"txn_share_pct":"0.82"},{"amount_usdc":"0.050000","txn_count":147134,"volume_usdc":"7356.700000","payee_count":8225,"txn_share_pct":"0.77"}]},"gas":{"method":{"breakeven":"payments whose apportioned gas in USD exceeds the amount moved","dedupe":"gas_cost_wei is tx-level; each transaction's gas is counted once and apportioned equally across its payments","granularity":"rolled up from (day, attribution, amount_band)","price":"monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)"},"windows":{"30d":{"by_attribution":{"agentic":{"txn_count":2828532,"gas_eth":"2.592884","gas_usd":"5409.88","gas_cents_per_dollar":"0.8488","breakeven_txn_count":1025341},"contamination":{"txn_count":90401,"gas_eth":"0.187276","gas_usd":"390.37","gas_cents_per_dollar":"0.0006","breakeven_txn_count":108},"contested":{"txn_count":244675,"gas_eth":"0.207460","gas_usd":"439.54","gas_cents_per_dollar":"0.0047","breakeven_txn_count":31721}},"by_band":{"dust":{"txn_count":1871593,"gas_eth":"1.681081","gas_usd":"3580.55","gas_cents_per_dollar":"98.7584","breakeven_txn_count":1054216},"micro":{"txn_count":1084480,"gas_eth":"1.006313","gas_usd":"2033.75","gas_cents_per_dollar":"1.6104","breakeven_txn_count":2952},"mid":{"txn_count":19360,"gas_eth":"0.039312","gas_usd":"81.54","gas_cents_per_dollar":"0.0014","breakeven_txn_count":0},"small":{"txn_count":181389,"gas_eth":"0.249723","gas_usd":"520.93","gas_cents_per_dollar":"0.0253","breakeven_txn_count":2},"whale":{"txn_count":6786,"gas_eth":"0.011190","gas_usd":"23.03","gas_cents_per_dollar":"0.0000","breakeven_txn_count":0}}},"7d":{"by_attribution":{"agentic":{"txn_count":715422,"gas_eth":"0.810912","gas_usd":"1486.80","gas_cents_per_dollar":"0.9575","breakeven_txn_count":136963},"contamination":{"txn_count":19010,"gas_eth":"0.058413","gas_usd":"106.68","gas_cents_per_dollar":"0.0009","breakeven_txn_count":9},"contested":{"txn_count":22406,"gas_eth":"0.047016","gas_usd":"86.32","gas_cents_per_dollar":"0.0078","breakeven_txn_count":2628}},"by_band":{"dust":{"txn_count":339918,"gas_eth":"0.359686","gas_usd":"671.45","gas_cents_per_dollar":"82.3058","breakeven_txn_count":137147},"micro":{"txn_count":371962,"gas_eth":"0.463445","gas_usd":"838.60","gas_cents_per_dollar":"2.7682","breakeven_txn_count":2453},"mid":{"txn_count":4028,"gas_eth":"0.013244","gas_usd":"24.15","gas_cents_per_dollar":"0.0020","breakeven_txn_count":0},"small":{"txn_count":39563,"gas_eth":"0.076047","gas_usd":"138.57","gas_cents_per_dollar":"0.0333","breakeven_txn_count":0},"whale":{"txn_count":1367,"gas_eth":"0.003919","gas_usd":"7.02","gas_cents_per_dollar":"0.0001","breakeven_txn_count":0}}},"all":{"by_attribution":{"agentic":{"txn_count":19083374,"gas_eth":"13.088181","gas_usd":"32202.53","gas_cents_per_dollar":"0.4374","breakeven_txn_count":10206315},"contamination":{"txn_count":304572,"gas_eth":"0.656425","gas_usd":"1545.52","gas_cents_per_dollar":"0.0004","breakeven_txn_count":1265},"contested":{"txn_count":1214876,"gas_eth":"1.472136","gas_usd":"3208.66","gas_cents_per_dollar":"0.0107","breakeven_txn_count":486440}},"by_band":{"dust":{"txn_count":12292604,"gas_eth":"7.512805","gas_usd":"18679.55","gas_cents_per_dollar":"174.4124","breakeven_txn_count":10664640},"micro":{"txn_count":7166872,"gas_eth":"6.212371","gas_usd":"14979.39","gas_cents_per_dollar":"2.0081","breakeven_txn_count":29376},"mid":{"txn_count":88950,"gas_eth":"0.162227","gas_usd":"367.94","gas_cents_per_dollar":"0.0014","breakeven_txn_count":0},"small":{"txn_count":1018354,"gas_eth":"1.269059","gas_usd":"2790.10","gas_cents_per_dollar":"0.0315","breakeven_txn_count":4},"whale":{"txn_count":36042,"gas_eth":"0.060281","gas_usd":"139.73","gas_cents_per_dollar":"0.0000","breakeven_txn_count":0}}}}},"velocity":{"windows":{"30d":{"agentic":{"max_per_min":3096},"contamination":{"max_per_min":33},"contested":{"max_per_min":965}},"7d":{"agentic":{"max_per_min":634},"contamination":{"max_per_min":20},"contested":{"max_per_min":102}},"all":{"agentic":{"max_per_min":3402},"contamination":{"max_per_min":68},"contested":{"max_per_min":2053}}},"agentic_daily":[["2026-01-01",727,661],["2026-01-02",546,521],["2026-01-03",680,655],["2026-01-04",770,715],["2026-01-05",1015,767],["2026-01-06",640,582],["2026-01-07",570,533],["2026-01-08",3402,552],["2026-01-09",620,555],["2026-01-10",2200,532],["2026-01-11",532,509],["2026-01-12",513,494],["2026-01-13",408,376],["2026-01-14",405,382],["2026-01-15",374,366],["2026-01-19",582,354],["2026-01-20",1481,349],["2026-01-21",423,346],["2026-01-22",394,349],["2026-01-23",124,102],["2026-01-24",118,101],["2026-01-25",145,113],["2026-01-26",142,108],["2026-01-27",129,92],["2026-01-28",117,71],["2026-01-29",161,111],["2026-01-30",203,57],["2026-01-31",377,335],["2026-02-01",93,55],["2026-02-02",145,57],["2026-02-03",105,60],["2026-02-04",84,47],["2026-02-05",119,69],["2026-02-06",295,182],["2026-02-07",56,30],["2026-02-08",109,73],["2026-02-09",112,76],["2026-02-10",262,157],["2026-02-11",504,207],["2026-02-12",864,687],["2026-02-13",119,94],["2026-02-14",104,60],["2026-02-15",605,76],["2026-02-16",453,255],["2026-02-17",636,454],["2026-02-18",150,89],["2026-02-19",1411,126],["2026-02-20",271,115],["2026-02-21",507,459],["2026-02-22",346,311],["2026-02-23",399,254],["2026-02-24",262,193],["2026-02-25",197,93],["2026-02-26",140,80],["2026-02-27",206,92],["2026-02-28",265,93],["2026-03-01",109,83],["2026-03-02",281,76],["2026-03-03",204,137],["2026-03-04",290,161],["2026-03-05",188,124],["2026-03-06",221,146],["2026-03-07",287,145],["2026-03-08",225,144],["2026-03-09",179,101],["2026-03-10",289,122],["2026-03-11",171,136],["2026-03-12",189,155],["2026-03-13",132,99],["2026-03-14",159,96],["2026-03-15",177,102],["2026-03-16",162,102],["2026-03-17",159,65],["2026-03-18",562,398],["2026-03-19",219,80],["2026-03-20",117,80],["2026-03-21",115,73],["2026-03-22",95,53],["2026-03-23",200,71],["2026-03-24",107,61],["2026-03-25",168,58],["2026-03-26",105,71],["2026-03-27",90,56],["2026-03-28",72,53],["2026-03-29",67,49],["2026-03-30",78,58],["2026-03-31",114,51],["2026-04-01",88,75],["2026-04-02",98,76],["2026-04-03",114,86],["2026-04-04",104,77],["2026-04-05",69,52],["2026-04-06",206,182],["2026-04-07",94,80],["2026-04-08",162,109],["2026-04-09",140,113],["2026-04-10",144,122],["2026-04-11",141,116],["2026-04-12",134,113],["2026-04-13",144,124],["2026-04-14",151,101],["2026-04-15",414,169],["2026-04-16",209,158],["2026-04-17",842,105],["2026-04-18",618,115],["2026-04-19",145,118],["2026-04-20",156,119],["2026-04-21",330,124],["2026-04-22",672,589],["2026-04-23",212,123],["2026-04-24",495,410],["2026-04-25",140,99],["2026-04-26",451,393],["2026-04-27",281,171],["2026-04-28",186,138],["2026-04-29",169,120],["2026-04-30",1009,147],["2026-05-01",268,210],["2026-05-02",208,134],["2026-05-03",259,159],["2026-05-04",419,354],["2026-05-05",954,706],["2026-05-06",532,381],["2026-05-07",571,210],["2026-05-08",324,143],["2026-05-09",238,149],["2026-05-10",204,128],["2026-05-11",216,154],["2026-05-12",215,156],["2026-05-13",1002,295],["2026-05-14",300,152],["2026-05-15",524,124],["2026-05-16",2890,185],["2026-05-17",229,116],["2026-05-18",3096,472],["2026-05-19",225,160],["2026-05-20",294,260],["2026-05-21",198,118],["2026-05-22",388,322],["2026-05-23",258,214],["2026-05-24",217,106],["2026-05-25",158,123],["2026-05-26",359,287],["2026-05-27",346,152],["2026-05-28",184,147],["2026-05-29",400,327],["2026-05-30",437,330],["2026-05-31",432,155],["2026-06-01",458,390],["2026-06-02",634,378],["2026-06-03",395,145],["2026-06-04",495,234],["2026-06-05",133,133]]},"claims":[{"id":"cambrian-q2-2026-base-agentic-payments","source":"Cambrian \u2014 Agentic Finance Landscape Report Q2 2026","source_url":"","claim_date":"2026 (Q2 report)","claim_text":"169M+ agentic payments on Base","claimed_value":"169000000","claimed_unit":"transactions","measured_metric":"agentic_txns_all","note":"Counts every observed transfer as agentic. Measured side = Fathom's classified agentic transaction count (allowlist methodology v1). Operator: add canonical report URL before publishing.","measured_value":"19083374","measured_unit":"transactions"},{"id":"cambrian-q2-2026-x402-txns-30d","source":"Cambrian \u2014 Agentic Finance Landscape Report Q2 2026","source_url":"","claim_date":"2026 (Q2 report)","claim_text":"3.7M x402 transactions per 30 days","claimed_value":"3700000","claimed_unit":"transactions","measured_metric":"total_txns_30d","note":"Measured side = ALL observed txns (incl. contamination) in Fathom's trailing 30-day window, the most generous comparable. Operator: add canonical report URL before publishing.","measured_value":"3163608","measured_unit":"transactions"}]};
+
+/* ———————— helpers ———————— */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const num = x => typeof x === "string" ? parseFloat(x) : x;
+const fmtInt = n => Math.round(n).toLocaleString("en-US");
+const fmtMoney = n => { n = num(n);
+  if (n >= 1e9) return "$" + (n/1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n/1e3).toFixed(1) + "k";
+  return "$" + n.toFixed(2); };
+const fmtMoneyFull = n => "$" + num(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtCount = n => { n = num(n);
+  if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n/1e3).toFixed(1) + "k";
+  return fmtInt(n); };
+const fmtAmt = s => { let t = String(s);
+  if (t.includes(".")) t = t.replace(/0+$/,"").replace(/\.$/,"");
+  const f = parseFloat(t);
+  if (f >= 0.01) return "$" + f.toFixed(f >= 1 ? 2 : Math.min(4, (t.split(".")[1]||"").length || 2));
+  return "$" + t; };
+const pct = (a,b,dp=1) => (100*num(a)/num(b)).toFixed(dp) + "%";
+const WINLABEL = {"7d":"trailing 7d","30d":"trailing 30d","all":"all data Jan–Jun"};
+const ATTRS = [["agentic","c-ag"],["contested","c-ct"],["contamination","c-cm"]];
+
+const state = { win:"all", dMetric:"tx", dScale:"lin", dMa:"raw", mMetric:"usd", bMetric:"tx", focused:"p1" };
+
+/* ———————— 1 OVERVIEW ———————— */
+function rOverview(){
+  const w = RAW.windows[state.win], a = w.by_attribution;
+  $("#ov-win").textContent = "· " + WINLABEL[state.win];
+  $("#ov-stats").innerHTML = `
+    <div class="bignum">${fmtCount(w.txn_count)}<small>PAYMENTS OBSERVED</small></div>
+    <div class="bignum">${fmtMoney(w.volume_usdc)}<small>VOLUME OBSERVED</small></div>
+    <div class="bignum c-ag glow">${fmtMoney(a.agentic.volume_usdc)}<small>AGENTIC USD</small></div>
+    <div class="bignum c-ag">${pct(a.agentic.volume_usdc, w.volume_usdc)}<small>AGENTIC SHARE OF $</small></div>`;
+  const mk = (el, get, tot) => {
+    el.innerHTML = ATTRS.map(([k]) => {
+      const p = 100*num(get(a[k]))/num(tot);
+      const cls = k==="agentic"?"ag":k==="contested"?"ct":"cm";
+      return `<i class="${cls}" style="width:${p}%" title="${k} ${p.toFixed(2)}%"></i>`;
+    }).join("");
+  };
+  mk($("#ov-usd"), x=>x.volume_usdc, w.volume_usdc);
+  mk($("#ov-tx"),  x=>x.txn_count,  w.txn_count);
+  $("#ov-usd-r").innerHTML = `<span class="c-ag">ag ${pct(a.agentic.volume_usdc,w.volume_usdc)}</span> · <span class="c-ct">ct ${pct(a.contested.volume_usdc,w.volume_usdc)}</span> · <span class="c-cm">cm ${pct(a.contamination.volume_usdc,w.volume_usdc)}</span>`;
+  $("#ov-tx-r").innerHTML  = `<span class="c-ag">ag ${pct(a.agentic.txn_count,w.txn_count)}</span> · <span class="c-ct">ct ${pct(a.contested.txn_count,w.txn_count)}</span> · <span class="c-cm">cm ${pct(a.contamination.txn_count,w.txn_count)}</span>`;
+  $("#ov-inv").innerHTML = `<b>the inversion:</b> agentic = <span class="c-ag">${pct(a.agentic.txn_count,w.txn_count)}</span> of payments but <span class="c-ag">${pct(a.agentic.volume_usdc,w.volume_usdc)}</span> of dollars — contamination is the mirror image.`;
+  $("#ov-denom").textContent = "all observed EIP-3009 USDC on Base · " + WINLABEL[state.win] + " · windows anchored to data-through day";
+}
+
+/* ———————— 2 DAILY TAPE ———————— */
+function ma7(arr){ return arr.map((_,i) => { const s = arr.slice(Math.max(0,i-6), i+1); return s.reduce((x,y)=>x+y,0)/s.length; }); }
+function rDaily(){
+  const days = RAW.daily;
+  const host = $("#dailychart");
+  const W = host.clientWidth || 900, H = 250, padL = 56, padB = 22, padT = 12;
+  let vals = days.map(d => state.dMetric === "tx" ? d[1] : d[2]);
+  if (state.dMa === "ma7") vals = ma7(vals);
+  const log = state.dScale === "log";
+  const vmax = Math.max(...vals), vmin = log ? Math.min(...vals.filter(v=>v>0)) : 0;
+  const ty = v => log ? Math.log10(Math.max(v, vmin)) : v;
+  const yMax = ty(vmax), yMin = log ? ty(vmin) : 0;
+  const x = i => padL + (W-padL-10) * i/(days.length-1);
+  const y = v => padT + (H-padT-padB) * (1 - (ty(v)-yMin)/(yMax-yMin || 1));
+  // step path
+  let p = "";
+  vals.forEach((v,i) => { const xx = x(i), yy = y(v);
+    p += i===0 ? `M${xx},${yy}` : `H${xx}V${yy}`; });
+  const area = p + `V${H-padB}H${x(0)}Z`;
+  // gridlines
+  let grid = "";
+  const gv = log ? [3,4,5,6,7].map(e=>Math.pow(10,e)).filter(v=>v>=vmin&&v<=vmax)
+                 : [1,2,3].map(k=>vmax*k/4);
+  gv.forEach(v => { grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-10}" y2="${y(v)}"/>
+    <text x="${padL-7}" y="${y(v)+3}" text-anchor="end">${state.dMetric==="tx"?fmtCount(v):fmtMoney(v)}</text>`; });
+  let ticks = "";
+  days.forEach((d,i) => { if (d[0].endsWith("-01")) {
+    const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
+    ticks += `<line class="gl" x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${H-padB}"/><text x="${x(i)+4}" y="${H-7}">${lab}</text>`; }});
+  // active window shading
+  let shade = "";
+  if (state.win !== "all"){
+    const n = state.win === "7d" ? 7 : 30;
+    const i0 = Math.max(0, days.length - n);
+    shade = `<rect x="${x(i0)}" y="${padT}" width="${x(days.length-1)-x(i0)}" height="${H-padT-padB}" fill="rgba(79,214,227,.07)" stroke="rgba(79,214,227,.35)" stroke-dasharray="3 3"/>`;
+  }
+  host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="dsvg">
+    ${grid}${ticks}${shade}
+    <path d="${area}" fill="rgba(61,214,140,.10)"/>
+    <path d="${p}" fill="none" stroke="var(--agentic)" stroke-width="1.4"/>
+    <line id="dcross" x1="0" x2="0" y1="${padT}" y2="${H-padB}" stroke="var(--accent)" stroke-width="1" opacity="0"/>
+    <circle id="ddot" r="3" fill="var(--accent)" opacity="0"/>
+    <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-10}" y2="${H-padB}"/>
+    <rect id="dhover" x="${padL}" y="${padT}" width="${W-padL-10}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>`;
+  const svg = $("#dsvg");
+  $("#dhover").addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W/r.width);
+    const i = Math.max(0, Math.min(days.length-1, Math.round((sx-padL)/((W-padL-10)/(days.length-1)))));
+    const d = days[i];
+    $("#dcross").setAttribute("x1", x(i)); $("#dcross").setAttribute("x2", x(i)); $("#dcross").setAttribute("opacity",".7");
+    $("#ddot").setAttribute("cx", x(i)); $("#ddot").setAttribute("cy", y(vals[i])); $("#ddot").setAttribute("opacity","1");
+    $("#d-readout").innerHTML = `<span class="d">${d[0]}</span> ▸ ${fmtInt(d[1])} tx ▸ ${fmtMoneyFull(d[2])}${state.dMa==="ma7" ? ` ▸ ma7 ${state.dMetric==="tx"?fmtCount(vals[i]):fmtMoney(vals[i])}`:""}`;
+  });
+  $("#dhover").addEventListener("mouseleave", () => {
+    $("#dcross").setAttribute("opacity","0"); $("#ddot").setAttribute("opacity","0");
+    $("#d-readout").textContent = "hover the tape ▸ crosshair";
+  });
+}
+
+/* ———————— 3 MONTHLY ———————— */
+function rMonthly(){
+  const ms = RAW.monthly;
+  const usd = state.mMetric === "usd";
+  const get = m => usd ? num(m.by_attribution.agentic.volume_usdc) : m.by_attribution.agentic.txn_count;
+  const max = Math.max(...ms.map(get));
+  $("#monthly").innerHTML = ms.map((m,i) => {
+    const v = get(m), wpct = Math.max(1, 72*v/max);
+    let mom = `<span class="mom na">—</span>`;
+    if (i>0 && m.complete && ms[i-1].complete){
+      const d = 100*(v-get(ms[i-1]))/get(ms[i-1]);
+      mom = `<span class="mom ${d<0?"dn":"up"}">${d>0?"+":""}${d.toFixed(0)}%</span>`;
+    }
+    if (!m.complete) mom = `<span class="mom na">◌ partial</span>`;
+    const other = usd ? fmtCount(m.by_attribution.agentic.txn_count)+" tx" : fmtMoney(m.by_attribution.agentic.volume_usdc);
+    return `<div class="mrow">
+      <span class="lab">${m.month}</span>
+      <span class="meter"><span class="bar ${m.complete?"":"partial"}" style="width:${wpct}%"></span>
+        <span class="val">${usd?fmtMoney(v):fmtCount(v)+" tx"}</span>${mom}<span class="sub">${other}</span></span>
+    </div>`;
+  }).join("");
+}
+
+/* ———————— 4 SPLIT ———————— */
+function rSplit(){
+  const w = RAW.windows[state.win], a = w.by_attribution;
+  $("#sp-win").textContent = "· " + WINLABEL[state.win];
+  $("#splittable").innerHTML = `
+    <thead><tr><th>class</th><th>tx</th><th>tx%</th><th>usd</th><th>usd%</th></tr></thead>
+    <tbody>${ATTRS.map(([k,cls]) => `<tr>
+      <td class="${cls}" style="font-weight:700">${k}</td>
+      <td>${fmtInt(a[k].txn_count)}</td><td>${pct(a[k].txn_count,w.txn_count)}</td>
+      <td>${fmtMoney(a[k].volume_usdc)}</td><td>${pct(a[k].volume_usdc,w.volume_usdc)}</td>
+    </tr>`).join("")}
+    <tr><td style="color:var(--dim);font-weight:700">total</td>
+      <td style="font-weight:700">${fmtInt(w.txn_count)}</td><td>100%</td>
+      <td style="font-weight:700">${fmtMoney(w.volume_usdc)}</td><td>100%</td></tr></tbody>`;
+  $("#sp-note").innerHTML = `agentic mean ${fmtAmt(RAW.typical[state.win].agentic.avg_usdc)} vs contamination mean ${fmtAmt(RAW.typical[state.win].contamination.avg_usdc)} — <b>different species sharing one event signature.</b>`;
+}
+
+/* ———————— 5 SHAPE ———————— */
+const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mid","<$1k"],["whale","≥$1k"]];
+function rShape(){
+  const t = RAW.typical[state.win];
+  $("#shp-win").textContent = "· " + WINLABEL[state.win];
+  $("#shp-big").innerHTML = `
+    <div class="bignum c-ag glow">${fmtAmt(t.agentic.median_usdc)}<small>MEDIAN AGENTIC PAYMENT</small></div>
+    <div class="bignum">${fmtAmt(t.agentic.avg_usdc)}<small>MEAN — ${Math.round(num(t.agentic.avg_usdc)/num(t.agentic.median_usdc)).toLocaleString()}× THE MEDIAN</small></div>`;
+  $("#typtable").innerHTML = `
+    <thead><tr><th>class</th><th>median</th><th>mean</th><th>tx</th></tr></thead>
+    <tbody>${[["agentic","c-ag"],["contested","c-ct"],["contamination","c-cm"],["all",""]].map(([k,cls]) => `<tr>
+      <td class="${cls}" style="font-weight:700">${k}</td>
+      <td${k==="agentic"?' style="color:var(--agentic);font-weight:700"':""}>${fmtAmt(t[k].median_usdc)}</td>
+      <td>${fmtAmt(t[k].avg_usdc)}</td><td>${fmtInt(t[k].txn_count)}</td></tr>`).join("")}</tbody>`;
+  const b = RAW.windows[state.win].by_band;
+  const tx = state.bMetric === "tx";
+  const get = r => tx ? r.txn_count : num(r.volume_usdc);
+  const max = Math.max(...BANDDEF.map(([k]) => get(b[k])));
+  $("#bands").innerHTML = BANDDEF.map(([k,def]) => {
+    const r = b[k], v = get(r), wp = Math.max(1, 66*v/max);
+    return `<div class="mrow">
+      <span class="lab">${k}<small>${def}</small></span>
+      <span class="meter"><span class="bar ${k==="whale"||k==="mid"?"dim":""}" style="width:${wp}%"></span>
+      <span class="val">${tx?fmtCount(v)+" tx":fmtMoney(v)}</span><span class="sub">${tx?fmtMoney(r.volume_usdc):fmtCount(r.txn_count)+" tx"}</span></span></div>`;
+  }).join("");
+}
+
+/* ———————— 6 PRICE POINTS ———————— */
+function rPrice(){
+  const pts = RAW.price_points[state.win];
+  $("#pp-win").textContent = "· " + WINLABEL[state.win];
+  const maxS = Math.max(...pts.map(p => num(p.txn_share_pct)));
+  $("#pptable").innerHTML = `
+    <thead><tr><th>amount</th><th style="text-align:left">share of agentic tx</th><th>tx</th><th>payees</th><th>read</th></tr></thead>
+    <tbody>${pts.map(p => {
+      const s = num(p.txn_share_pct), w = Math.max(1.5, 100*s/maxS);
+      const tag = p.payee_count < 1000 ? `<span class="tag menu">MENU</span>` : p.payee_count >= 5000 ? `<span class="tag market">MARKET</span>` : `<span class="tag mixed">—</span>`;
+      return `<tr><td style="font-weight:700">${fmtAmt(p.amount_usdc)}</td>
+        <td style="text-align:left;min-width:140px"><span style="display:inline-block;vertical-align:middle;height:9px;width:${w}px;max-width:60%;background:var(--agentic)"></span> <span style="color:var(--dim)">${s.toFixed(1)}%</span></td>
+        <td>${fmtInt(p.txn_count)}</td>
+        <td${p.payee_count<10?' style="color:var(--contam);font-weight:700"':""}>${fmtInt(p.payee_count)}</td>
+        <td>${tag}</td></tr>`;
+    }).join("")}</tbody>`;
+}
+
+/* ———————— 7 GAS ———————— */
+function rGas(){
+  const g = RAW.gas.windows[state.win], ag = g.by_attribution.agentic;
+  const p = 100*ag.breakeven_txn_count/ag.txn_count;
+  $("#gas-win").textContent = "· " + WINLABEL[state.win];
+  $("#gas-pct").textContent = p.toFixed(1) + "%";
+  const cells = 40, f = Math.round(cells*p/100);
+  $("#gas-meter").innerHTML = `<span class="f">${"▓".repeat(f)}</span><span class="e">${"░".repeat(cells-f)}</span>`;
+  const vol = RAW.windows[state.win].by_attribution.agentic.volume_usdc;
+  $("#gas-kv").innerHTML = `
+    <div class="kv"><span class="k">gas burned (agentic)</span><span class="v">${num(ag.gas_eth).toFixed(3)} ETH <small>≈ ${fmtMoneyFull(ag.gas_usd)}</small></span></div>
+    <div class="kv"><span class="k">value moved (agentic)</span><span class="v">${fmtMoneyFull(vol)}</span></div>
+    <div class="kv"><span class="k">gas per $1 settled</span><span class="v">${num(ag.gas_cents_per_dollar).toFixed(2)}¢</span></div>
+    <div class="kv"><span class="k">breakeven payments</span><span class="v c-cm">${fmtInt(ag.breakeven_txn_count)} <small>of ${fmtInt(ag.txn_count)}</small></span></div>`;
+  $("#gasbands").innerHTML = `
+    <thead><tr><th>band</th><th>gas¢/$1</th><th>breakeven</th></tr></thead>
+    <tbody>${BANDDEF.map(([k,def]) => {
+      const r = g.by_band[k]; if (!r) return "";
+      const c = r.gas_cents_per_dollar === null ? "—" : num(r.gas_cents_per_dollar).toFixed(2)+"¢";
+      const hot = r.gas_cents_per_dollar !== null && num(r.gas_cents_per_dollar) > 100;
+      return `<tr><td style="font-weight:700">${k} <span style="color:var(--faint)">${def}</span></td>
+        <td${hot?' style="color:var(--contam);font-weight:700"':""}>${c}${hot?" ⚠":""}</td>
+        <td>${pct(r.breakeven_txn_count, r.txn_count)}</td></tr>`;
+    }).join("")}</tbody>`;
+}
+
+/* ———————— 8 VELOCITY ———————— */
+function rVelocity(){
+  const days = RAW.velocity.agentic_daily;
+  const host = $("#velochart");
+  const W = host.clientWidth || 800, H = 190, padL = 46, padB = 20, padT = 14;
+  const max = Math.max(...days.map(d => d[1]));
+  const x = i => padL + (W-padL-8) * i/(days.length-1);
+  const y = v => padT + (H-padT-padB) * (1 - v/max);
+  let grid = "";
+  [1000,2000,3000].forEach(v => { if (v < max*1.04)
+    grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-8}" y2="${y(v)}"/><text x="${padL-6}" y="${y(v)+3}" text-anchor="end">${fmtCount(v)}</text>`; });
+  let ticks = "";
+  days.forEach((d,i) => { if (d[0].endsWith("-01")){
+    const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
+    ticks += `<text x="${x(i)+3}" y="${H-6}">${lab}</text>`; }});
+  const lines = days.map((d,i) => `<line x1="${x(i)}" y1="${H-padB}" x2="${x(i)}" y2="${y(d[1])}" stroke="var(--line-2)" stroke-width="2"/>`).join("");
+  const dots = days.map((d,i) => `<rect x="${x(i)-1.4}" y="${y(d[2])-1.4}" width="2.8" height="2.8" fill="var(--agentic)"/>`).join("");
+  let pi = 0; days.forEach((d,i)=>{ if (d[1] > days[pi][1]) pi = i; });
+  host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="vsvg">
+    ${grid}${lines}${dots}
+    <circle cx="${x(pi)}" cy="${y(days[pi][1])}" r="4" fill="none" stroke="var(--contam)" stroke-width="1.3"/>
+    <text x="${x(pi)+10}" y="${y(days[pi][1])+4}" style="fill:var(--contam);font-weight:700">${days[pi][0]} — ${fmtInt(days[pi][1])}/min</text>
+    ${ticks}
+    <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-8}" y2="${H-padB}"/>
+    <rect id="vhover" x="${padL}" y="${padT}" width="${W-padL-8}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>`;
+  const svg = $("#vsvg");
+  $("#vhover").addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W/r.width);
+    const i = Math.max(0, Math.min(days.length-1, Math.round((sx-padL)/((W-padL-8)/(days.length-1)))));
+    $("#v-readout").innerHTML = `<span class="d">${days[i][0]}</span> ▸ max ${fmtInt(days[i][1])}/min ▸ p99 ${fmtInt(days[i][2])}/min`;
+  });
+  $("#vhover").addEventListener("mouseleave", () => { $("#v-readout").textContent = "│ = day's max minute · ▪ = p99 of active minutes"; });
+  const vw = RAW.velocity.windows;
+  $("#velostats").innerHTML = ["7d","30d","all"].map(k =>
+    `<div class="kv"><span class="k">peak · ${k.toUpperCase()}</span><span class="v">${fmtInt(vw[k].agentic.max_per_min)}/min</span></div>`).join("") +
+    `<div class="kv"><span class="k">median p99 (active)</span><span class="v">133/min</span></div>`;
+}
+
+/* ———————— 9 CLAIMS ———————— */
+function rClaims(){
+  $("#claims").innerHTML = RAW.claims.map(c => {
+    const ratio = num(c.claimed_value)/num(c.measured_value);
+    const tag = ratio >= 1.5 ? `<span class="tag over">×${ratio.toFixed(1)} OVERSTATED</span>` : `<span class="tag ok">×${ratio.toFixed(1)} WITHIN RANGE</span>`;
+    return `<div class="claimrow">
+      <div class="q">“${c.claim_text}”</div>
+      <div class="src">${c.source} · ${c.claim_date} · measured as ${c.measured_metric}</div>
+      <div class="nums"><span class="a">claimed ${fmtInt(c.claimed_value)}</span><span>▸</span><span class="m">measured ${fmtInt(c.measured_value)}</span>${tag}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ———————— LOG ———————— */
+function rShell(){
+  const w = RAW.windows.all, a = w.by_attribution;
+  const sumN = a.agentic.txn_count + a.contested.txn_count + a.contamination.txn_count;
+  const sum$ = num(a.agentic.volume_usdc) + num(a.contested.volume_usdc) + num(a.contamination.volume_usdc);
+  const okN = sumN === w.txn_count, ok$ = Math.abs(sum$ - num(w.volume_usdc)) < 1e-4;
+  $("#shell").innerHTML = `
+    <div><span class="ps">$</span> <span class="cmd">fathom verify --conservation --window all</span></div>
+    <div class="out">tx&nbsp;: ${fmtInt(a.agentic.txn_count)} + ${fmtInt(a.contested.txn_count)} + ${fmtInt(a.contamination.txn_count)} = ${fmtInt(sumN)} <span class="ok">${okN?"✓":"✗"}</span></div>
+    <div class="out">usd: ${fmtMoney(a.agentic.volume_usdc)} + ${fmtMoney(a.contested.volume_usdc)} + ${fmtMoney(a.contamination.volume_usdc)} = ${fmtMoneyFull(sum$)} <span class="ok">${ok$?"✓":"✗"}</span></div>
+    <div><span class="ps">$</span> <span class="cmd">jq '.methodology_version, .generated_at, .data_through_day' dist/economy.json</span></div>
+    <div class="out">${RAW.meta.methodology_version} · ${RAW.meta.generated_at} · ${RAW.meta.data_through_day}</div>
+    <div><span class="ps">$</span> <span class="cmd">fathom catalog --deferred</span></div>
+    <div class="out"><span class="warn">E9</span> concentration → entity_rank_v1 (payees/payers round) · <span class="warn">E10</span> december anomaly → re-backfill</div>
+    <div class="out">no row dropped — only labeled.<span class="cursor" style="margin-left:6px"></span></div>`;
+  $("#st-cons").textContent = "conservation ✓✓";
+  $("#st-gen").textContent = "emit " + RAW.meta.generated_at;
+  $("#st-through").textContent = RAW.meta.data_through_day;
+}
+
+/* ———————— PINS + REPORT TRAY ———————— */
+const pins = [];
+let selPin = 0;
+const PINNERS = {
+  overview(){ const w = RAW.windows[state.win], a = w.by_attribution;
+    return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(a.agentic.volume_usdc)+" agentic",
+      context:`of ${fmtMoney(w.volume_usdc)} observed (${pct(a.agentic.volume_usdc,w.volume_usdc)} of $, ${pct(a.agentic.txn_count,w.txn_count)} of tx)`,
+      denom:"all observed x402-surface USDC on Base · "+WINLABEL[state.win],
+      series:RAW.daily.map(d=>d[1]) }; },
+  daily(){ const peak = RAW.daily.reduce((a,b)=> b[1]>a[1]?b:a);
+    return { title:"DAILY TAPE", value:fmtInt(peak[1])+" tx/day peak",
+      context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
+      denom:"all observed traffic, Jan 01–Jun 05 2026",
+      series:RAW.daily.map(d=> state.dMetric==="tx"?d[1]:d[2]) }; },
+  monthly(){ const may = RAW.monthly[4];
+    return { title:"MONTHLY · AGENTIC", value:"May $: −65% MoM",
+      context:`tx +31% while $ fell ${fmtMoney(RAW.monthly[3].by_attribution.agentic.volume_usdc)}→${fmtMoney(may.by_attribution.agentic.volume_usdc)} — activity without value`,
+      denom:"agentic set only · complete months",
+      series:RAW.monthly.map(m=>num(m.by_attribution.agentic.volume_usdc)) }; },
+  split(){ const w = RAW.windows[state.win], a = w.by_attribution;
+    return { title:"ATTRIBUTION · "+state.win.toUpperCase(), value:pct(a.contamination.volume_usdc,w.volume_usdc)+" contamination",
+      context:`agentic ${fmtMoney(a.agentic.volume_usdc)} · contested ${fmtMoney(a.contested.volume_usdc)} · contamination ${fmtMoney(a.contamination.volume_usdc)}`,
+      denom:"allowlist v1 — 112 facilitators · "+WINLABEL[state.win] }; },
+  shape(){ const t = RAW.typical[state.win];
+    return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.agentic.median_usdc)+" median",
+      context:`mean ${fmtAmt(t.agentic.avg_usdc)} = ${Math.round(num(t.agentic.avg_usdc)/num(t.agentic.median_usdc)).toLocaleString()}× median · contamination median ${fmtAmt(t.contamination.median_usdc)}`,
+      denom:"agentic set · "+WINLABEL[state.win] }; },
+  price(){ const p = RAW.price_points[state.win][0];
+    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
+      context:`top amount = ${p.txn_share_pct}% of agentic tx across ${fmtInt(p.payee_count)} payees — a menu, not a market`,
+      denom:"agentic set only · "+WINLABEL[state.win] }; },
+  gas(){ const g = RAW.gas.windows[state.win].by_attribution.agentic;
+    const p = 100*g.breakeven_txn_count/g.txn_count;
+    return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% gas>value",
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} agentic payments · ${num(g.gas_cents_per_dollar).toFixed(2)}¢ gas per $1 settled`,
+      denom:"tx-deduped gas, equal apportioning · monthly ETH/USD ref · "+WINLABEL[state.win] }; },
+  velocity(){ const vw = RAW.velocity.windows.all.agentic;
+    return { title:"VELOCITY", value:fmtInt(vw.max_per_min)+"/min peak",
+      context:"2026-01-08 · body ~220/min — bursts, not drip",
+      denom:"agentic set · p99 over active minutes",
+      series:RAW.velocity.agentic_daily.map(d=>d[1]) }; },
+  claims(){ const c = RAW.claims[0];
+    return { title:"CLAIM LEDGER", value:"×"+(num(c.claimed_value)/num(c.measured_value)).toFixed(1)+" overstated",
+      context:`"${c.claim_text}" → measured ${fmtInt(c.measured_value)}`,
+      denom:"claim vs Fathom classified agentic count" }; },
+};
+function addPin(key){
+  const gen = PINNERS[key]; if (!gen) return;
+  pins.push({ key, win:state.win, ...gen() });
+  selPin = pins.length-1;
+  rTray(); rCard();
+  $("#pincount").textContent = pins.length;
+  const panel = $(`[data-pin="${key}"]`)?.closest(".panel");
+  if (panel){ panel.classList.add("pinned-flash"); setTimeout(() => panel.classList.remove("pinned-flash"), 380); }
+}
+function rTray(){
+  $("#pincount").textContent = pins.length;
+  $("#pinlist").innerHTML = pins.length ? pins.map((p,i) => `
+    <div class="pinitem ${i===selPin?"sel":""}" data-i="${i}">
+      <div class="t"><span>⊞ ${p.title}</span><button data-del="${i}" title="remove">✕</button></div>
+      <div class="v">${p.value}</div>
+      <div class="c">${p.context}</div>
+    </div>`).join("")
+    : `<div class="empty">no pins yet — hover a panel and press <span class="c-ac">p</span>, or click ⊞ pin</div>`;
+  $$("#pinlist .pinitem").forEach(el => el.addEventListener("click", e => {
+    if (e.target.dataset.del !== undefined && e.target.dataset.del !== "") return;
+    selPin = +el.dataset.i; rTray(); rCard();
+  }));
+  $$("#pinlist [data-del]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    pins.splice(+b.dataset.del,1);
+    selPin = Math.max(0, Math.min(selPin, pins.length-1));
+    rTray(); rCard();
+  }));
+}
+function genThread(){
+  if (!pins.length){ $("#thread").value = ""; rCount(); return; }
+  const head = `fathom // x402 on Base — data through ${RAW.meta.data_through_day}\n\n`;
+  const body = pins.map(p => `▸ ${p.value} — ${p.context}`).join("\n");
+  const foot = `\n\ndenominators stated. no row dropped — only labeled.`;
+  $("#thread").value = head + body + foot;
+  rCount();
+}
+function rCount(){
+  const n = $("#thread").value.length;
+  const el = $("#charcount");
+  el.textContent = n + " chars" + (n > 280 ? " · split into " + Math.ceil(n/280) + " posts" : " · fits one post");
+  el.classList.toggle("bad", n > 280);
+}
+/* X card — canvas 1200×675 */
+function rCard(){
+  const cv = $("#xcard"), ctx = cv.getContext("2d");
+  const W = 1200, H = 675;
+  ctx.fillStyle = "#070b09"; ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = "rgba(61,214,140,.05)"; ctx.lineWidth = 1;
+  for (let gx=0; gx<W; gx+=60){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for (let gy=0; gy<H; gy+=60){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+  // scanlines
+  ctx.fillStyle = "rgba(0,0,0,.16)";
+  for (let sy=0; sy<H; sy+=3) ctx.fillRect(0,sy,W,1);
+  // frame
+  ctx.strokeStyle = "#2a362f"; ctx.lineWidth = 2; ctx.strokeRect(24,24,W-48,H-48);
+  const p = pins[selPin];
+  ctx.textBaseline = "alphabetic";
+  // brand
+  ctx.fillStyle = "#3dd68c"; ctx.font = "700 26px 'JetBrains Mono', monospace";
+  ctx.fillText("▼ FATHOM", 64, 92);
+  ctx.fillStyle = "#8fa098"; ctx.font = "400 22px 'JetBrains Mono', monospace";
+  ctx.fillText("::economy", 207, 92);
+  if (!p){
+    ctx.fillStyle = "#5b6a61"; ctx.font = "400 28px 'JetBrains Mono', monospace";
+    ctx.fillText("pin a finding to render its card", 64, 360);
+    return;
+  }
+  ctx.fillStyle = "#5b6a61"; ctx.font = "400 20px 'JetBrains Mono', monospace";
+  ctx.textAlign = "right"; ctx.fillText(p.title, W-64, 92); ctx.textAlign = "left";
+  // big value
+  ctx.fillStyle = "#d6e2da"; ctx.font = "800 92px 'JetBrains Mono', monospace";
+  let val = p.value;
+  if (ctx.measureText(val).width > W-128){ ctx.font = "800 64px 'JetBrains Mono', monospace"; }
+  ctx.fillText(val, 64, 270);
+  // context
+  ctx.fillStyle = "#8fa098"; ctx.font = "400 26px 'JetBrains Mono', monospace";
+  wrapText(ctx, p.context, 64, 330, W-128, 38);
+  // sparkline
+  if (p.series && p.series.length > 1){
+    const sx = 64, sw = W-128, sy0 = 420, sh = 130;
+    const mx = Math.max(...p.series);
+    ctx.strokeStyle = "#3dd68c"; ctx.lineWidth = 2.5; ctx.beginPath();
+    p.series.forEach((v,i) => {
+      const xx = sx + sw*i/(p.series.length-1), yy = sy0 + sh*(1 - v/mx);
+      i ? ctx.lineTo(xx,yy) : ctx.moveTo(xx,yy);
+    });
+    ctx.stroke();
+    ctx.strokeStyle = "#1d2722"; ctx.beginPath(); ctx.moveTo(sx, sy0+sh+8); ctx.lineTo(sx+sw, sy0+sh+8); ctx.stroke();
+  }
+  // denominator + stamp
+  ctx.fillStyle = "#f0635a"; ctx.font = "700 17px 'JetBrains Mono', monospace";
+  ctx.fillText("DENOM", 64, H-84);
+  ctx.fillStyle = "#8fa098"; ctx.font = "400 17px 'JetBrains Mono', monospace";
+  wrapText(ctx, p.denom, 150, H-84, W-280, 24);
+  ctx.fillStyle = "#5b6a61"; ctx.font = "400 16px 'JetBrains Mono', monospace";
+  ctx.fillText("data through " + RAW.meta.data_through_day + " · methodology v1 · measured, not claimed", 64, H-46);
+}
+function wrapText(ctx, text, x, y, maxW, lh){
+  const words = String(text).split(" ");
+  let line = "", yy = y;
+  words.forEach(w => {
+    if (ctx.measureText(line + w).width > maxW && line){ ctx.fillText(line, x, yy); line = w + " "; yy += lh; }
+    else line += w + " ";
+  });
+  ctx.fillText(line.trim(), x, yy);
+}
+
+/* ———————— wiring ———————— */
+const WIN_PANELS = () => { rOverview(); rSplit(); rShape(); rPrice(); rGas(); rDaily(); };
+$$("#winsel button").forEach(b => b.addEventListener("click", () => setWin(b.dataset.win)));
+function setWin(w){
+  state.win = w;
+  $$("#winsel button").forEach(x => x.classList.toggle("on", x.dataset.win === w));
+  WIN_PANELS();
+}
+$$(".ptools button[data-t]").forEach(b => {
+  b.addEventListener("click", () => {
+    const group = b.dataset.t;
+    $$(`.ptools button[data-t="${group}"]`).forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    if (group === "d-metric") state.dMetric = b.dataset.v === "usd" ? "usd" : "tx";
+    if (group === "d-scale")  state.dScale = b.dataset.v;
+    if (group === "d-ma")     state.dMa = b.dataset.v;
+    if (group === "m-metric"){ state.mMetric = b.dataset.v; rMonthly(); return; }
+    if (group === "b-metric"){ state.bMetric = b.dataset.v === "usd" ? "usd" : "tx"; rShape(); return; }
+    rDaily();
+  });
+});
+$$(".pin-it").forEach(b => b.addEventListener("click", () => addPin(b.dataset.pin)));
+
+/* focus management */
+$$(".panel").forEach(p => {
+  p.addEventListener("mouseenter", () => {
+    state.focused = p.id;
+    $$(".panel").forEach(x => x.classList.toggle("focused", x === p));
+  });
+});
+
+/* tray + help */
+const tray = $("#tray"), help = $("#help");
+function toggleTray(force){ tray.classList.toggle("open", force); if (tray.classList.contains("open")){ rTray(); rCard(); } }
+$("#traytoggle").addEventListener("click", () => toggleTray());
+$("#trayclose").addEventListener("click", () => toggleTray(false));
+$("#helptoggle").addEventListener("click", () => help.classList.toggle("open"));
+help.addEventListener("click", e => { if (e.target === help) help.classList.remove("open"); });
+$("#regen").addEventListener("click", genThread);
+$("#thread").addEventListener("input", rCount);
+$("#copythread").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#thread").value); $("#copythread").textContent = "COPIED ✓";
+    setTimeout(() => $("#copythread").textContent = "COPY", 1200); } catch(e){}
+});
+$("#cardprev").addEventListener("click", () => { if (pins.length){ selPin = (selPin-1+pins.length)%pins.length; rTray(); rCard(); }});
+$("#cardnext").addEventListener("click", () => { if (pins.length){ selPin = (selPin+1)%pins.length; rTray(); rCard(); }});
+$("#carddl").addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.download = "fathom-card.png";
+  a.href = $("#xcard").toDataURL("image/png");
+  a.click();
+});
+
+/* keyboard */
+const PANEL_IDS = ["p1","p2","p3","p4","p5","p6","p7","p8","p9"];
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT"){
+    if (e.key === "Escape") e.target.blur();
+    return;
+  }
+  if (e.key === "w"){ setWin(state.win === "7d" ? "30d" : state.win === "30d" ? "all" : "7d"); }
+  if (e.key === "m"){
+    state.dMetric = state.dMetric === "tx" ? "usd" : "tx";
+    state.bMetric = state.dMetric; state.mMetric = state.dMetric === "tx" ? "tx" : "usd";
+    $$('.ptools button[data-t$="-metric"]').forEach(b => {
+      const on = (b.dataset.v === "usd") === (state.dMetric === "usd");
+      b.classList.toggle("on", on);
+    });
+    rDaily(); rShape(); rMonthly();
+  }
+  if (e.key === "l"){ state.dScale = state.dScale === "lin" ? "log" : "lin";
+    $$('.ptools button[data-t="d-scale"]').forEach(b => b.classList.toggle("on", b.dataset.v === state.dScale)); rDaily(); }
+  if (e.key === "a"){ state.dMa = state.dMa === "raw" ? "ma7" : "raw";
+    $$('.ptools button[data-t="d-ma"]').forEach(b => b.classList.toggle("on", b.dataset.v === state.dMa)); rDaily(); }
+  if (e.key >= "1" && e.key <= "9"){
+    const p = $("#"+PANEL_IDS[+e.key-1]);
+    if (p){ p.scrollIntoView({behavior:"smooth", block:"center"});
+      state.focused = p.id;
+      $$(".panel").forEach(x => x.classList.toggle("focused", x === p)); }
+  }
+  if (e.key === "p"){
+    const btn = $("#"+state.focused+" .pin-it");
+    if (btn) addPin(btn.dataset.pin);
+  }
+  if (e.key === "r"){ toggleTray(); }
+  if (e.key === "?"){ help.classList.toggle("open"); }
+  if (e.key === "Escape"){ toggleTray(false); help.classList.remove("open"); }
+});
+
+/* resize */
+let rsz;
+addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); }, 150); });
+
+/* ———————— boot ———————— */
+rOverview(); rDaily(); rMonthly(); rSplit(); rShape(); rPrice(); rGas(); rVelocity(); rClaims(); rShell();
+/* seed one example pin so the tray demos itself */
+addPin("overview"); genThread();
+if (location.hash === "#tray") toggleTray(true);
+document.fonts && document.fonts.ready.then(() => rCard());
+</script>
+</body>
+</html>

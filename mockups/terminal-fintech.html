@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fathom — Terminal / Fintech</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0f1a; --panel:#101726; --panel-2:#151d30; --line:#1e2840; --line-2:#2c3a5a;
+    --ink:#e8edf6; --ink-dim:#94a1bd; --ink-faint:#5e6c8a;
+    --blue:#4f8cff; --blue-soft:#6ea0ff;
+    --agentic:#34d39a; --contested:#f0b429; --contam:#f06a5a;
+    --grid:#172033; --sans:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .shell{display:grid;grid-template-columns:228px 1fr;min-height:100vh}
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid var(--line)}
+  .brand .glyph{width:26px;height:26px;border-radius:7px;background:var(--blue);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px}
+  .brand b{font-weight:700;letter-spacing:.04em;font-size:17px}
+  .brand .v{font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-left:auto;border:1px solid var(--line-2);border-radius:4px;padding:2px 6px}
+  .nav{padding:14px 12px;flex:1}
+  .nav .grp{font-size:10px;letter-spacing:.14em;color:var(--ink-faint);padding:14px 10px 8px;text-transform:uppercase;font-weight:600}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;color:var(--ink-dim);text-decoration:none;border-radius:8px;font-size:13.5px;font-weight:500}
+  .nav a svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.8}
+  .nav a:hover{background:var(--panel-2);color:var(--ink)}
+  .nav a.on{background:rgba(79,140,255,.14);color:var(--blue-soft)}
+  .nav a.soon{opacity:.4}
+  .rail .foot{padding:14px 18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+  .rail .foot .live{color:var(--agentic)}
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;gap:16px;padding:0 26px;height:60px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+  .crumbs{font-size:13px;color:var(--ink-dim)}.crumbs b{color:var(--ink);font-weight:600}
+  .spacer{flex:1}
+  .lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-right:8px;font-weight:600}
+  .seg{display:inline-flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:var(--panel)}
+  .seg button{background:transparent;color:var(--ink-dim);border:0;font-family:var(--mono);font-size:11.5px;padding:7px 14px;cursor:pointer}
+  .seg button.on{background:var(--blue);color:#fff;font-weight:600}
+  .denom{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line-2);border-radius:8px;padding:7px 13px;background:var(--panel);cursor:pointer;font-size:12.5px}
+  .denom .v{font-family:var(--mono);color:var(--blue-soft);font-weight:500}
+  .denom svg{width:10px;height:10px;stroke:var(--ink-dim);fill:none;stroke-width:2}
+  .content{padding:24px 26px;max-width:1520px}
+  .pagehead{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px}
+  .pagehead h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
+  .pagehead .sub{color:var(--ink-dim);font-size:13px;margin-top:4px}
+  .pagehead .note{font-size:12px;color:var(--ink-faint);text-align:right;max-width:340px;line-height:1.55}.pagehead .note b{color:var(--contam)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px 18px;position:relative}
+  .stat .k{font-size:11px;letter-spacing:.04em;color:var(--ink-dim);font-weight:500}
+  .stat .v{font-family:var(--mono);font-weight:600;font-size:28px;margin-top:10px;letter-spacing:-.01em}
+  .stat .d{font-size:12px;margin-top:6px;display:flex;gap:6px;align-items:center}
+  .badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:6px;font-weight:500}
+  .badge.up{color:var(--agentic);background:rgba(52,211,154,.12)} .badge.down{color:var(--contam);background:rgba(240,106,90,.12)}
+  .muted{color:var(--ink-dim)}
+  .stat .spark{position:absolute;right:16px;bottom:15px;width:80px;height:26px}
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .panel .ph{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .panel .ph .t{font-size:14px;font-weight:600}
+  .panel .ph .tag{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);background:var(--panel-2);border-radius:6px;padding:3px 9px}
+  .panel .pb{padding:18px}
+  .span2{grid-column:1 / -1}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--ink-dim);align-items:center;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+  .gaugewrap .scl{font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding:11px 16px;border-bottom:1px solid var(--line);font-weight:600}
+  th.r,td.r{text-align:right}
+  td{padding:11px 16px;border-bottom:1px solid var(--grid)} td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  tbody tr:hover{background:var(--panel-2)}
+  .fac{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  .rk{font-family:var(--mono);color:var(--ink-faint)}
+  .chip{font-size:11px;padding:2px 9px;border-radius:6px;font-weight:500}
+  .chip.ag{color:var(--agentic);background:rgba(52,211,154,.12)}
+  .chip.co{color:var(--contested);background:rgba(240,180,41,.12)}
+  .chip.cx{color:var(--contam);background:rgba(240,106,90,.12)}
+  .barcell{position:relative}.barcell .fill{position:absolute;left:0;top:4px;bottom:4px;background:rgba(79,140,255,.12);border-radius:3px}
+  .axislabel{font-size:10px;fill:var(--ink-faint);font-family:var(--mono)}
+  .boot{animation:boot .6s cubic-bezier(.2,.7,.2,1) both}@keyframes boot{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><span class="glyph">F</span><b>Fathom</b><span class="v">v1</span></div>
+    <nav class="nav">
+      <div class="grp">Index</div>
+      <a href="#" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+      <div class="grp">Layers</div>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>Facilitators</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Payment Economics</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 20V8M10 20V4M16 20v-8M22 20H2"/></svg>Payees</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0112 0M16 6h5M18.5 3.5v5"/></svg>Payers</a>
+      <a href="#" class="soon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Agent Identity</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Temporal</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 2L2 7v6c0 5 4 8 10 9 6-1 10-4 10-9V7z"/></svg>Contamination</a>
+    </nav>
+    <div class="foot"><span class="live">●</span> Base · USDC<br>Indexed to block 31,204,118</div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs">Index / <b>Overview</b></div>
+      <div class="spacer"></div>
+      <div><span class="lbl">Window</span><span class="seg" id="win"><button>7D</button><button class="on">30D</button><button>90D</button><button>All</button></span></div>
+      <div><span class="lbl">Denominator</span><span class="denom"><span class="v">Non-contamination</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
+    </div>
+    <div class="content">
+      <div class="pagehead">
+        <div><h1>The Agent Economy — Overview</h1><div class="sub">Base · x402 settlement on USDC · trailing 30 days</div></div>
+        <div class="note">Figures on the non-contamination surface. <b>92%</b> of raw volume is batch / treasury / AA infrastructure, excluded by the v1 denylist.</div>
+      </div>
+      <div class="stats">
+        <div class="stat boot" style="animation-delay:.03s"><div class="k">30-Day Volume</div><div class="v">$4.21M</div><div class="d"><span class="badge up">▲ 43.0%</span><span class="muted">vs prior 30D</span></div><svg class="spark" data-spark="vol"></svg></div>
+        <div class="stat boot" style="animation-delay:.08s"><div class="k">Active Facilitators</div><div class="v">41</div><div class="d"><span class="badge up">▲ 6</span><span class="muted">new this period</span></div><svg class="spark" data-spark="fac"></svg></div>
+        <div class="stat boot" style="animation-delay:.13s"><div class="k">Active Payers</div><div class="v">3,108</div><div class="d"><span class="badge down">▼ 4.1%</span><span class="muted">dust-filtered</span></div><svg class="spark" data-spark="pay"></svg></div>
+        <div class="stat boot" style="animation-delay:.18s"><div class="k">Contamination</div><div class="v" style="color:var(--contam)">92.1%</div><div class="d"><span class="muted">of raw $ excluded</span></div><svg class="spark" data-spark="con"></svg></div>
+      </div>
+      <div class="grid">
+        <div class="panel boot" style="animation-delay:.22s"><div class="ph"><span class="t">Daily settled volume</span><span class="tag">USD · non-contam</span></div><div class="pb"><svg id="ts" viewBox="0 0 760 250" style="width:100%;height:250px"></svg></div></div>
+        <div class="panel boot" style="animation-delay:.26s"><div class="ph"><span class="t">Settlement concentration</span><span class="tag">HHI</span></div><div class="pb gaugewrap"><svg id="hhi" viewBox="0 0 260 156" style="width:100%;height:156px"></svg><div class="scl">0 = competitive&nbsp;&nbsp;·&nbsp;&nbsp;1 = monopoly</div></div></div>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <div class="panel boot" style="animation-delay:.3s"><div class="ph"><span class="t">Attribution of volume, by month</span><span class="legend"><span><i style="background:var(--agentic)"></i>Agentic</span><span><i style="background:var(--contested)"></i>Contested</span><span><i style="background:var(--contam)"></i>Contamination</span></span></div><div class="pb"><svg id="stack" viewBox="0 0 760 230" style="width:100%;height:230px"></svg></div></div>
+        <div class="panel boot" style="animation-delay:.34s"><div class="ph"><span class="t">Payment-size distribution</span><span class="tag">count vs value</span></div><div class="pb"><svg id="hist" viewBox="0 0 360 230" style="width:100%;height:230px"></svg><div class="legend" style="justify-content:center;margin-top:8px"><span><i style="background:var(--ink-dim)"></i>Txn count</span><span><i style="background:var(--blue)"></i>USD sum</span></div></div></div>
+      </div>
+      <div class="grid" style="margin-top:16px;grid-template-columns:1fr">
+        <div class="panel boot span2" style="animation-delay:.38s"><div class="ph"><span class="t">Facilitators, ranked by share of honest volume</span><span class="tag">non-contam</span></div><table id="board"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const DATA={
+  ts:(()=>{const a=[];for(let i=0;i<120;i++){const base=22000+i*240;const spike=(i>78&&i<96)?60000*Math.exp(-Math.pow(i-87,2)/26):0;const noise=Math.sin(i/3)*6000+Math.cos(i/7)*4000;a.push(Math.max(6000,base+spike+noise));}return a;})(),
+  hhi:0.37,
+  stack:[{m:'Jan',ag:.71,co:3.1,cx:52},{m:'Feb',ag:.62,co:2.6,cx:44},{m:'Mar',ag:.78,co:3.4,cx:49},{m:'Apr',ag:.69,co:3.0,cx:41},{m:'May',ag:.81,co:3.6,cx:47},{m:'Jun',ag:.82,co:3.4,cx:49.7}],
+  hist:[{b:'≤.001',c:1840,u:.4},{b:'≤.01',c:920,u:3},{b:'≤.1',c:410,u:21},{b:'≤1',c:88,u:160},{b:'≤10',c:21,u:540},{b:'≤100',c:6.2,u:980},{b:'>100',c:1.1,u:2540}],
+  board:[
+    {f:'0x8073…b2c1',label:'Coinbase x402',sh:31.2,tx:'412,008',pe:1840,gas:0.0021,a:'ag'},
+    {f:'0x1f4a…9d3e',label:'thirdweb',sh:18.7,tx:'231,540',pe:920,gas:0.0019,a:'ag'},
+    {f:'0xa757…64a4',label:'Unlabeled batch',sh:12.1,tx:'88,210',pe:7896,gas:0.0044,a:'co'},
+    {f:'0x5ff1…2789',label:'EntryPoint 0.6',sh:9.4,tx:'71,330',pe:540,gas:0.0061,a:'cx'},
+    {f:'0x9c2b…77fa',label:'PayAI',sh:7.8,tx:'52,110',pe:430,gas:0.0023,a:'ag'},
+    {f:'0xca11…ca11',label:'Multicall3',sh:5.1,tx:'1,204,880',pe:210,gas:0.0009,a:'cx'},
+    {f:'0x3dd2…ee07',label:'Unlabeled',sh:4.2,tx:'33,910',pe:157,gas:0.0038,a:'co'},
+    {f:'0x6b1c…40af',label:'Nevermined',sh:3.6,tx:'28,400',pe:120,gas:0.0026,a:'ag'},
+  ],
+  sparks:{vol:[3,4,3,5,6,5,7,8,7,9,11,10,13],fac:[30,31,33,34,35,35,37,38,39,40,40,41],pay:[34,33,35,34,32,33,31,32,30,31],con:[88,89,90,91,92,91,92,93,92,92]}
+};
+const C={ink:'#e8edf6',dim:'#94a1bd',faint:'#5e6c8a',blue:'#4f8cff',ag:'#34d39a',co:'#f0b429',cx:'#f06a5a',grid:'#1e2840'};
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const line=(p,x1,y1,x2,y2,s,w=1)=>p.appendChild(el('line',{x1,y1,x2,y2,stroke:s,'stroke-width':w}));
+document.querySelectorAll('[data-spark]').forEach(svg=>{const d=DATA.sparks[svg.dataset.spark],W=80,H=26,mx=Math.max(...d),mn=Math.min(...d);svg.setAttribute('viewBox',`0 0 ${W} ${H}`);const pts=d.map((v,i)=>`${i/(d.length-1)*W},${H-2-((v-mn)/(mx-mn||1))*(H-4)}`).join(' ');const col=svg.dataset.spark==='con'?C.cx:(svg.dataset.spark==='pay'?C.dim:C.blue);svg.appendChild(el('polyline',{points:pts,fill:'none',stroke:col,'stroke-width':1.6,'stroke-linejoin':'round'}));});
+(function(){const svg=document.getElementById('ts'),W=760,H=250,pl=46,pr=10,pt=14,pb=24,d=DATA.ts,mx=Math.max(...d);const X=i=>pl+i/(d.length-1)*(W-pl-pr),Y=v=>pt+(1-v/mx)*(H-pt-pb);for(let g=0;g<=4;g++){const y=pt+g/4*(H-pt-pb);line(svg,pl,y,W-pr,y,C.grid,1);svg.appendChild(el('text',{x:6,y:y+3,class:'axislabel'})).textContent='$'+Math.round(mx*(1-g/4)/1000)+'k';}const pts=d.map((v,i)=>`${X(i)},${Y(v)}`).join(' ');const grad=el('linearGradient',{id:'fg',x1:0,y1:0,x2:0,y2:1});grad.appendChild(el('stop',{offset:0,'stop-color':C.blue,'stop-opacity':.28}));grad.appendChild(el('stop',{offset:1,'stop-color':C.blue,'stop-opacity':0}));svg.appendChild(grad);svg.appendChild(el('polygon',{points:`${pl},${H-pb} ${pts} ${W-pr},${H-pb}`,fill:'url(#fg)'}));svg.appendChild(el('polyline',{points:pts,fill:'none',stroke:C.blue,'stroke-width':2,'stroke-linejoin':'round'}));const si=87,sx=X(si),sy=Y(d[si]);line(svg,sx,sy-6,sx,pt+4,C.co,.8);svg.appendChild(el('circle',{cx:sx,cy:sy,r:3.4,fill:C.co}));svg.appendChild(el('text',{x:sx-4,y:pt+2,class:'axislabel',fill:C.co,'text-anchor':'end'})).textContent='Dec spike';})();
+(function(){const svg=document.getElementById('hhi'),cx=130,cy=132,r=94,v=DATA.hhi;const pt=a=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];const a0=Math.PI,a1=2*Math.PI;function arc(f,t,col,w){const[x0,y0]=pt(f),[x1,y1]=pt(t);const lg=(t-f)>Math.PI?1:0;svg.appendChild(el('path',{d:`M ${x0} ${y0} A ${r} ${r} 0 ${lg} 1 ${x1} ${y1}`,fill:'none',stroke:col,'stroke-width':12,'stroke-linecap':'round'}));}arc(a0,a1,C.grid,12);arc(a0,a0+(a1-a0)*v,C.blue,12);const[hx,hy]=pt(a0+(a1-a0)*v);svg.appendChild(el('circle',{cx:hx,cy:hy,r:5,fill:C.blue}));const t1=el('text',{x:cx,y:cy-16,'text-anchor':'middle',fill:C.ink,'font-size':32,'font-weight':600,'font-family':'IBM Plex Mono'});t1.textContent=v.toFixed(2);svg.appendChild(t1);const t2=el('text',{x:cx,y:cy-1,'text-anchor':'middle',fill:C.faint,'font-size':9.5,'letter-spacing':1.5,'font-family':'IBM Plex Mono'});t2.textContent='MODERATE';svg.appendChild(t2);})();
+(function(){const svg=document.getElementById('stack'),W=760,H=230,pl=42,pr=12,pt=12,pb=26,d=DATA.stack;const tot=d.map(m=>m.ag+m.co+m.cx),mx=Math.max(...tot),gap=(W-pl-pr)/d.length,bw=gap*.5,Yp=H-pt-pb;for(let g=0;g<=4;g++){const y=pt+g/4*Yp;line(svg,pl,y,W-pr,y,C.grid,1);svg.appendChild(el('text',{x:6,y:y+3,class:'axislabel'})).textContent='$'+Math.round(mx*(1-g/4))+'M';}d.forEach((m,i)=>{const x=pl+i*gap+(gap-bw)/2;let yb=H-pb;[['cx',m.cx,C.cx],['co',m.co,C.co],['ag',m.ag,C.ag]].forEach(([k,val,col])=>{const h=val/mx*Yp;yb-=h;svg.appendChild(el('rect',{x,y:yb,width:bw,height:h,fill:col,rx:3}));});svg.appendChild(el('text',{x:x+bw/2,y:H-9,'text-anchor':'middle',class:'axislabel'})).textContent=m.m;});})();
+(function(){const svg=document.getElementById('hist'),W=360,H=230,pl=34,pr=28,pt=12,pb=30,d=DATA.hist;const mc=Math.max(...d.map(x=>x.c)),mu=Math.max(...d.map(x=>x.u)),gap=(W-pl-pr)/d.length,bw=gap*.5,Yp=H-pt-pb;const Yu=v=>pt+(1-v/mu)*Yp;for(let g=0;g<=4;g++){const y=pt+g/4*Yp;line(svg,pl,y,W-pr,y,C.grid,1);}d.forEach((x,i)=>{const bx=pl+i*gap+(gap-bw)/2,h=x.c/mc*Yp;svg.appendChild(el('rect',{x:bx,y:H-pb-h,width:bw,height:h,fill:C.dim,opacity:.45,rx:2}));svg.appendChild(el('text',{x:pl+i*gap+gap/2,y:H-10,'text-anchor':'middle',class:'axislabel'})).textContent=x.b;});const lp=d.map((x,i)=>`${pl+i*gap+gap/2},${Yu(x.u)}`).join(' ');svg.appendChild(el('polyline',{points:lp,fill:'none',stroke:C.blue,'stroke-width':2,'stroke-linejoin':'round'}));d.forEach((x,i)=>svg.appendChild(el('circle',{cx:pl+i*gap+gap/2,cy:Yu(x.u),r:2.6,fill:C.blue})));})();
+(function(){const t=document.getElementById('board');const mx=Math.max(...DATA.board.map(r=>r.sh));const rows=DATA.board.map((r,i)=>{const chip=r.a==='ag'?'<span class="chip ag">agentic</span>':r.a==='co'?'<span class="chip co">contested</span>':'<span class="chip cx">contamination</span>';return `<tr><td class="rk">${i+1}</td><td><span class="fac">${r.f}</span> <span class="muted">${r.label}</span></td><td>${chip}</td><td class="num r barcell"><span class="fill" style="width:${r.sh/mx*100}%"></span>${r.sh.toFixed(1)}%</td><td class="num r muted">${r.tx}</td><td class="num r muted">${r.pe.toLocaleString()}</td><td class="num r muted">$${r.gas.toFixed(4)}</td></tr>`;}).join('');t.innerHTML=`<thead><tr><th>#</th><th>Facilitator</th><th>Attribution</th><th class="r">Share</th><th class="r">Transactions</th><th class="r">Payees</th><th class="r">Avg gas $</th></tr></thead><tbody>${rows}</tbody>`;})();
+document.querySelectorAll('#win button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#win button').forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+</script>
+</body>
+</html>

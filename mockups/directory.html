@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fathom — Agent Directory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d12; --panel:#15171f; --panel-2:#1b1e28; --line:#242838; --line-2:#323750;
+    --ink:#eef1f7; --dim:#969db4; --faint:#5f6680;
+    --blue:#4d8dff; --green:#34d399; --gold:#f5b945; --rose:#fb7185; --violet:#9b8cff;
+    --agentic:#34d399; --contested:#f5b945; --contam:#fb7185;
+    --sans:'Plus Jakarta Sans',sans-serif; --mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(800px 300px at 80% -10%,rgba(77,141,255,.07),transparent 60%)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* topbar */
+  .topbar{display:flex;align-items:center;gap:16px;padding:0 24px;height:60px;border-bottom:1px solid var(--line);background:rgba(12,13,18,.85);backdrop-filter:blur(10px);position:sticky;top:0;z-index:10}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.01em}
+  .brand .g{width:26px;height:26px;border-radius:8px;background:linear-gradient(140deg,var(--blue),var(--violet));display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}
+  .search{flex:1;max-width:460px;display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:9px 13px;color:var(--dim)}
+  .search input{flex:1;background:transparent;border:0;color:var(--ink);font-family:var(--sans);font-size:13.5px;outline:none}
+  .search input::placeholder{color:var(--faint)}
+  .search .kbd{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line-2);border-radius:5px;padding:1px 6px}
+  .spacer{flex:1}
+  .nav{display:flex;gap:6px}
+  .nav a{font-size:13px;color:var(--dim);text-decoration:none;padding:7px 12px;border-radius:8px;font-weight:500}
+  .nav a.on{background:var(--panel-2);color:var(--ink)} .nav a:hover{color:var(--ink)}
+  /* layout */
+  .wrap{display:grid;grid-template-columns:240px 1fr;gap:0;min-height:calc(100vh - 60px)}
+  .facets{border-right:1px solid var(--line);padding:22px 20px;position:sticky;top:60px;height:calc(100vh - 60px);overflow:auto}
+  .facets h3{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:20px 0 10px}
+  .facets h3:first-child{margin-top:0}
+  .facet{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:13px;color:var(--dim);cursor:pointer}
+  .facet input{accent-color:var(--blue)}
+  .facet .ct{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .facet.on{color:var(--ink)}
+  .tagrow{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:11px;color:var(--dim);border:1px solid var(--line-2);border-radius:999px;padding:3px 10px;cursor:pointer}
+  .tag.on{background:rgba(77,141,255,.14);border-color:var(--blue);color:#bcd3ff}
+  /* main */
+  .main{padding:22px 24px 50px;max-width:1320px}
+  .pagehead{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+  .pagehead h1{font-size:23px;font-weight:800;letter-spacing:-.02em}
+  .pagehead .sub{color:var(--dim);font-size:13px;margin-top:3px}
+  .pagehead .sort{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim)}
+  .pagehead .sort select{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;color:var(--ink);font-family:var(--sans);font-size:12.5px;padding:6px 10px}
+  /* funnel / authenticity strip */
+  .authstrip{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:20px}
+  .funnel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .funnel .t{font-size:12px;color:var(--dim);font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .funnel .t .i{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:auto}
+  .fstage{display:flex;align-items:center;gap:12px;margin-bottom:9px}
+  .fstage .fl{width:120px;font-size:11.5px;color:var(--dim)}
+  .fstage .fbar{flex:1;height:22px;border-radius:6px;background:var(--panel-2);overflow:hidden;position:relative}
+  .fstage .ff{height:100%;border-radius:6px;display:flex;align-items:center;padding-left:10px;font-family:var(--mono);font-size:11px;font-weight:600;color:#06140f}
+  .miss{display:flex;flex-direction:column;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+  .miss .big{font-size:40px;font-weight:800;letter-spacing:-.02em;color:var(--rose)}
+  .miss .cap{font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.5}.miss .cap b{color:var(--ink)}
+  /* grid */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:1100px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;transition:transform .15s,border-color .15s;cursor:pointer}
+  .pcard:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .pcard.spot{grid-column:span 3;display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;background:linear-gradient(120deg,rgba(77,141,255,.08),rgba(155,140,255,.04));border-color:var(--line-2)}
+  .pc-head{display:flex;align-items:flex-start;gap:12px}
+  .avatar{width:44px;height:44px;border-radius:11px;flex:none;border:1px solid var(--line-2)}
+  .spot .avatar{width:72px;height:72px;border-radius:16px}
+  .nm{font-weight:700;font-size:15px;display:flex;align-items:center;gap:7px}
+  .spot .nm{font-size:22px}
+  .verif{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--green);color:#06140f;font-size:10px;font-weight:800}
+  .addr{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:2px}
+  .rep-ring{margin-left:auto;position:relative;width:46px;height:46px;flex:none}
+  .rep-ring .rv{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700}
+  .chips{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+  .chip{font-size:10.5px;padding:2px 9px;border-radius:7px;font-weight:600}
+  .chip.ag{color:var(--agentic);background:rgba(52,211,153,.13)} .chip.co{color:var(--contested);background:rgba(245,185,69,.13)} .chip.cx{color:var(--contam);background:rgba(251,113,133,.13)}
+  .chip.eco{color:var(--violet);background:rgba(155,140,255,.12)}
+  .pstats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+  .pstats .s .v{font-family:var(--mono);font-size:14px;font-weight:600}
+  .pstats .s .l{font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+  .skills{display:flex;gap:5px;margin-top:12px;flex-wrap:wrap}
+  .skill{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+  .spk{margin-top:12px}
+  .spot .spotmid{align-self:center}
+  .spot .pstats{grid-template-columns:repeat(4,1fr);border:0;padding:0;margin-top:14px}
+  .spotcta{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="g">F</span>Fathom</div>
+    <div class="search"><span>⌕</span><input placeholder="Search 3,108 agents, facilitators, skills…"><span class="kbd">⌘K</span></div>
+    <div class="spacer"></div>
+    <nav class="nav"><a class="on">Directory</a><a>Facilitators</a><a>Economics</a><a>Methodology</a></nav>
+  </div>
+  <div class="wrap">
+    <aside class="facets">
+      <h3>Attribution</h3>
+      <label class="facet on"><input type="checkbox" checked> Agentic <span class="ct">1,204</span></label>
+      <label class="facet"><input type="checkbox"> Contested <span class="ct">1,640</span></label>
+      <label class="facet"><input type="checkbox"> Contamination <span class="ct">264</span></label>
+      <h3>Identity</h3>
+      <label class="facet on"><input type="checkbox" checked> Verified (ERC-8004) <span class="ct">312</span></label>
+      <label class="facet"><input type="checkbox"> Has reputation <span class="ct">880</span></label>
+      <h3>Ecosystem</h3>
+      <div class="tagrow"><span class="tag on">Base</span><span class="tag">Virtuals</span><span class="tag">Olas</span><span class="tag">Coinbase</span><span class="tag">Nevermined</span></div>
+      <h3>Skills</h3>
+      <div class="tagrow"><span class="tag">settlement</span><span class="tag">data</span><span class="tag">trading</span><span class="tag">routing</span><span class="tag">metering</span><span class="tag">research</span></div>
+      <h3>Min volume (30d)</h3>
+      <div class="tagrow"><span class="tag on">any</span><span class="tag">$1k+</span><span class="tag">$10k+</span><span class="tag">$100k+</span></div>
+    </aside>
+    <main class="main">
+      <div class="pagehead">
+        <div><h1>Agent Directory</h1><div class="sub">3,108 active agents on Base · trailing 30 days · non-contamination</div></div>
+        <div class="sort">Sort <select><option>Volume (30d)</option><option>Reputation</option><option>Most active</option><option>Newest</option></select></div>
+      </div>
+
+      <div class="authstrip">
+        <div class="funnel">
+          <div class="t">Identity authenticity funnel <span class="i">registry → rail</span></div>
+          <div id="funnel"></div>
+        </div>
+        <div class="miss">
+          <div class="big">3.3%</div>
+          <div class="cap">of <b>258.7k registered</b> agents are even active in the registry. Far fewer ever transact on the measured rail — <b>identity ≠ activity</b>.</div>
+        </div>
+      </div>
+
+      <div class="grid" id="grid"></div>
+    </main>
+  </div>
+<script>
+const AGENTS=[
+  {id:'0x8073…b2c1',name:'Coinbase x402',a:'ag',verified:true,rep:0.92,eco:['Coinbase','Base'],skills:['settlement','facilitation','sdk'],vol:1313520,tx:412008,cp:1840,age:'14 mo',spot:true},
+  {id:'0x1f4a…9d3e',name:'thirdweb',a:'ag',verified:true,rep:0.88,eco:['Base'],skills:['settlement','sdk'],vol:787270,tx:231540,cp:920,age:'11 mo'},
+  {id:'0x9c2b…77fa',name:'PayAI',a:'ag',verified:true,rep:0.81,eco:['Virtuals'],skills:['payments','routing'],vol:328380,tx:52110,cp:430,age:'7 mo'},
+  {id:'0x4e8d…1a2b',name:'Olas Mech',a:'ag',verified:true,rep:0.79,eco:['Olas'],skills:['research','data'],vol:241900,tx:38400,cp:610,age:'9 mo'},
+  {id:'0x6b1c…40af',name:'Nevermined',a:'ag',verified:false,rep:0.64,eco:['Base'],skills:['data','metering'],vol:151560,tx:28400,cp:120,age:'5 mo'},
+  {id:'0xa757…64a4',name:'(unlabeled)',a:'co',verified:false,rep:0.41,eco:['Base'],skills:['batch'],vol:120900,tx:88210,cp:7896,age:'3 mo'},
+  {id:'0x2d9f…ce71',name:'Autonolas Trader',a:'ag',verified:true,rep:0.74,eco:['Olas'],skills:['trading'],vol:98300,tx:14200,cp:88,age:'6 mo'},
+  {id:'0x3dd2…ee07',name:'(unlabeled)',a:'co',verified:false,rep:0.33,eco:['Base'],skills:['routing'],vol:42100,tx:33910,cp:157,age:'2 mo'},
+  {id:'0x7c01…b3d9',name:'DataPing',a:'ag',verified:true,rep:0.69,eco:['Virtuals'],skills:['data','metering'],vol:38800,tx:9100,cp:204,age:'4 mo'},
+];
+const C={blue:'#4d8dff',green:'#34d399',gold:'#f5b945',rose:'#fb7185',violet:'#9b8cff',line:'#242838',dim:'#969db4'};
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+function identicon(seed,cls){let h=0;for(const c of seed)h=(h*31+c.charCodeAt(0))>>>0;const hue=h%360;const fg=`hsl(${hue} 62% 58%)`,bg=`hsl(${hue} 30% 16%)`;const s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 5 5');s.setAttribute('class',cls);s.appendChild(el('rect',{x:0,y:0,width:5,height:5,fill:bg}));for(let x=0;x<3;x++)for(let y=0;y<5;y++){h=(h*1103515245+12345)>>>0;if((h>>16&1)){[x,4-x].forEach(xx=>s.appendChild(el('rect',{x:xx,y,width:1.02,height:1.02,fill:fg})));}}return s.outerHTML;}
+function repRing(v){const r=20,c=2*Math.PI*r,col=v>=0.8?C.green:v>=0.6?C.gold:C.rose;return `<svg viewBox="0 0 46 46" class="rep-ring"><circle cx="23" cy="23" r="${r}" fill="none" stroke="${C.line}" stroke-width="4"/><circle cx="23" cy="23" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c*v).toFixed(1)} ${c}" transform="rotate(-90 23 23)"/></svg><div class="rep-ring" style="margin:0"><div class="rv">${v.toFixed(2)}</div></div>`;}
+function spark(seed,w,h){let s=0;for(const c of seed)s+=c.charCodeAt(0);const d=Array.from({length:14},(_,i)=>40+30*Math.sin(i/2+s)+i*3+(s%17));const mx=Math.max(...d),mn=Math.min(...d);const pts=d.map((v,i)=>`${(i/(d.length-1)*w).toFixed(1)},${(h-2-((v-mn)/(mx-mn||1))*(h-4)).toFixed(1)}`).join(' ');return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px"><polyline points="${pts}" fill="none" stroke="${C.blue}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;}
+function chip(a){return a==='ag'?'<span class="chip ag">agentic</span>':a==='co'?'<span class="chip co">contested</span>':'<span class="chip cx">contamination</span>';}
+function card(a){
+  const eco=a.eco.map(e=>`<span class="chip eco">${e}</span>`).join('');
+  const skills=a.skills.map(s=>`<span class="skill">${s}</span>`).join('');
+  const stats=`<div class="pstats"><div class="s"><div class="v">$${(a.vol/1000).toFixed(0)}k</div><div class="l">Vol 30d</div></div><div class="s"><div class="v">${(a.tx/1000).toFixed(0)}k</div><div class="l">Txns</div></div><div class="s"><div class="v">${a.cp.toLocaleString()}</div><div class="l">Counterparties</div></div><div class="s"><div class="v">${a.age}</div><div class="l">Active</div></div></div>`;
+  return `<div class="pcard"><div class="pc-head">${identicon(a.id,'avatar')}<div style="flex:1"><div class="nm">${a.name} ${a.verified?'<span class="verif">✔</span>':''}</div><div class="addr">${a.id}</div></div>${repRing(a.rep)}</div><div class="chips">${chip(a.a)}${eco}</div>${stats}<div class="spk">${spark(a.id,300,30)}</div><div class="skills">${skills}</div></div>`;
+}
+function spotlight(a){
+  const skills=a.skills.map(s=>`<span class="skill">${s}</span>`).join('');
+  return `<div class="pcard spot">
+    <div style="display:flex;gap:18px;align-items:center">${identicon(a.id,'avatar')}<div><div class="nm">${a.name} <span class="verif">✔</span></div><div class="addr">${a.id}</div><div class="chips" style="margin-top:8px">${chip(a.a)}${a.eco.map(e=>`<span class="chip eco">${e}</span>`).join('')}</div></div></div>
+    <div class="spotmid"><div class="pstats"><div class="s"><div class="v">$${(a.vol/1e6).toFixed(2)}M</div><div class="l">Volume 30d</div></div><div class="s"><div class="v">${a.tx.toLocaleString()}</div><div class="l">Transactions</div></div><div class="s"><div class="v">${a.cp.toLocaleString()}</div><div class="l">Counterparties</div></div><div class="s"><div class="v">${a.rep.toFixed(2)}</div><div class="l">Reputation</div></div></div><div class="skills" style="margin-top:14px">${skills}</div></div>
+    <div class="spotcta">${repRing(a.rep)}<button class="btn">View profile</button><button class="btn ghost">Compare</button></div>
+  </div>`;
+}
+(function(){const g=document.getElementById('grid');let html='';AGENTS.forEach(a=>html+=a.spot?spotlight(a):card(a));g.innerHTML=html;})();
+/* funnel */
+(function(){const stages=[['Registered','258.7k',1,C.violet],['Registry-active','8.5k',0.42,C.blue],['Transacting (rail)','3.1k',0.26,C.green],['Above dust','1.9k',0.18,C.gold]];
+  document.getElementById('funnel').innerHTML=stages.map(([l,v,w,c])=>`<div class="fstage"><div class="fl">${l}</div><div class="fbar"><div class="ff" style="width:${w*100}%;background:${c}">${v}</div></div></div>`).join('');})();
+/* facet/tag cosmetic toggles */
+document.querySelectorAll('.tag').forEach(t=>t.onclick=()=>t.classList.toggle('on'));
+document.querySelectorAll('.facet').forEach(f=>f.onclick=()=>f.classList.toggle('on'));
+</script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fathom — Made for Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#06070a; --panel:#0c0e13; --panel-2:#10131a; --line:#191d27; --line-2:#262c3a;
+    --ink:#cdd4df; --dim:#7c8694; --faint:#525c6b;
+    --k:#d6a55c; --s:#82d6a6; --n:#6cb6ff; --b:#d782c4; --p:#54607240; --cm:#4d5868;
+    --mint:#2dd4bf; --get:#5ad19b; --agentic:#2dd4bf; --contested:#f5c451; --contam:#fb7185;
+    --mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  body.mode-agent .as-human{display:none!important}
+  body.mode-human .as-json{display:none!important}
+  .num{font-variant-numeric:tabular-nums}
+  .shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+  /* rail = resource tree */
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line)}
+  .brand .glyph{font-size:16px;color:var(--mint)}
+  .brand b{font-weight:800;letter-spacing:.14em;font-size:14px}
+  .rail .grp{font-size:9px;letter-spacing:.2em;color:var(--faint);padding:14px 14px 6px;text-transform:uppercase}
+  .res{display:flex;align-items:center;gap:9px;padding:7px 14px;color:var(--dim);text-decoration:none;font-size:12px}
+  .res .m{font-size:8.5px;color:var(--get);border:1px solid rgba(90,209,155,.3);border-radius:3px;padding:0 4px;letter-spacing:.04em}
+  .res:hover{background:var(--panel-2);color:var(--ink)}
+  .res.on{background:rgba(45,212,191,.07);color:var(--mint);box-shadow:inset 2px 0 0 var(--mint)}
+  .res.soon{opacity:.4}
+  .rail .foot{margin-top:auto;padding:13px 14px;border-top:1px solid var(--line);font-size:9.5px;color:var(--faint);line-height:1.7}
+  .rail .foot a{color:var(--mint);text-decoration:none}
+  /* topbar */
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;gap:12px;padding:0 18px;height:50px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+  .endpoint{display:flex;align-items:center;gap:9px;font-size:12px}
+  .endpoint .verb{color:var(--get);font-weight:700}
+  .endpoint .path{color:var(--ink)}
+  .status{font-size:11px;color:var(--dim)}.status b{color:var(--get)}
+  .spacer{flex:1}
+  .toggle{display:flex;border:1px solid var(--line-2);border-radius:7px;overflow:hidden}
+  .toggle button{background:transparent;color:var(--dim);border:0;font-family:var(--mono);font-size:11px;padding:6px 13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .toggle button.on{background:var(--mint);color:#04100d;font-weight:600}
+  .seg{display:flex;border:1px solid var(--line-2);border-radius:7px;overflow:hidden}
+  .seg button{background:transparent;color:var(--dim);border:0;font-family:var(--mono);font-size:11px;padding:6px 11px;cursor:pointer}
+  .seg button.on{background:var(--panel-2);color:var(--mint)}
+  .denom{font-size:11px;color:var(--dim);border:1px solid var(--line-2);border-radius:7px;padding:5px 10px;cursor:pointer}.denom b{color:var(--mint)}
+  /* content */
+  .content{padding:18px;max-width:1180px}
+  .respbar{display:flex;align-items:center;gap:12px;margin-bottom:14px;color:var(--faint);font-size:11px}
+  .respbar .dot{width:7px;height:7px;border-radius:50%;background:var(--get);box-shadow:0 0 8px var(--get)}
+  .respbar .tag{margin-left:auto;border:1px solid var(--line);border-radius:5px;padding:2px 8px;color:var(--dim)}
+  .block{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .block .bh{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .block .bh .name{color:var(--mint);font-size:11px;letter-spacing:.06em}.block .bh .name::before{content:"\"";color:var(--faint)}.block .bh .name::after{content:"\": {";color:var(--faint)}
+  .block .bh .meta{font-size:10px;color:var(--faint)}
+  .block .bb{padding:13px 16px}
+  /* json styling */
+  .json{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+  .k{color:var(--k)} .s{color:var(--s)} .n{color:var(--n)} .b{color:var(--b)} .pu{color:var(--faint)} .cm{color:var(--cm);font-style:italic}
+  .line{display:flex;align-items:center;gap:10px}
+  .line .ispark{flex:none;width:80px;height:16px;opacity:.9;margin-left:auto}
+  /* human cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .stat .kk{font-size:10px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+  .stat .vv{font-size:26px;font-weight:700;margin-top:8px}
+  .stat .dd{font-size:11px;margin-top:4px;color:var(--dim)}
+  .up{color:var(--agentic)} .down{color:var(--contam)}
+  /* agent objects */
+  .agents-json .obj{display:grid;grid-template-columns:30px 1fr;gap:12px;padding:10px 0;border-bottom:1px dashed var(--line)}
+  .agents-json .obj:last-child{border-bottom:0}
+  .ident{width:28px;height:28px;border-radius:7px;border:1px solid var(--line-2)}
+  .agent-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .acard{display:flex;gap:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .acard .id2{width:40px;height:40px;border-radius:9px;flex:none;border:1px solid var(--line-2)}
+  .acard .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
+  .verif{color:var(--get)}
+  .acard .ad{font-size:10.5px;color:var(--faint)}
+  .acard .row{display:flex;gap:14px;margin-top:7px;font-size:10.5px;color:var(--dim)}
+  .acard .row b{color:var(--ink)}
+  .skills{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .skill{font-size:9px;color:var(--mint);border:1px solid rgba(45,212,191,.3);border-radius:999px;padding:1px 7px}
+  .rep{margin-left:auto;text-align:right}.rep .rv{font-weight:700;color:var(--mint)}.rep .rl{font-size:9px;color:var(--faint)}
+  .chip{font-size:9px;padding:1px 7px;border-radius:4px}
+  .chip.ag{color:var(--agentic);border:1px solid rgba(45,212,191,.3)} .chip.co{color:var(--contested);border:1px solid rgba(245,196,81,.3)} .chip.cx{color:var(--contam);border:1px solid rgba(251,113,133,.3)}
+  /* chart toggle */
+  .viewtabs{display:flex;gap:0;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+  .viewtabs button{background:transparent;color:var(--dim);border:0;font-family:var(--mono);font-size:10px;padding:3px 10px;cursor:pointer}
+  .viewtabs button.on{background:var(--mint);color:#04100d}
+  .axislabel{font-size:9px;fill:var(--faint);font-family:var(--mono)}
+  .boot{animation:boot .5s ease both}@keyframes boot{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body class="mode-agent">
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><span class="glyph">◢</span><b>FATHOM</b></div>
+    <div class="grp">resources</div>
+    <a class="res on"><span class="m">GET</span>/economy/overview</a>
+    <a class="res"><span class="m">GET</span>/facilitators</a>
+    <a class="res"><span class="m">GET</span>/payments</a>
+    <a class="res"><span class="m">GET</span>/payees</a>
+    <a class="res"><span class="m">GET</span>/payers</a>
+    <a class="res"><span class="m">GET</span>/agents</a>
+    <a class="res soon"><span class="m">GET</span>/agents/identity</a>
+    <a class="res"><span class="m">GET</span>/contamination</a>
+    <div class="foot">schema · <a href="#">openapi.json</a><br>agents · <a href="#">/llms.txt</a><br>mcp · <a href="#">fathom-mcp</a></div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="endpoint"><span class="verb">GET</span><span class="path">/v1/economy/overview</span></div>
+      <div class="status">· <b>200 OK</b> · 38ms · application/json</div>
+      <div class="spacer"></div>
+      <div class="toggle" id="mode"><button data-mode="human">human</button><button data-mode="agent" class="on">⛁ agent</button></div>
+      <div class="seg" id="win"><button>7d</button><button class="on">30d</button><button>90d</button><button>all</button></div>
+      <div class="denom">denom: <b>non_contam</b></div>
+    </div>
+    <div class="content">
+      <div class="respbar"><span class="dot"></span> response · 6 fields · <span class="cm">// rendered for both humans and machines</span><span class="tag">reproducible: true</span></div>
+
+      <!-- meta -->
+      <div class="block boot" style="animation-delay:.02s">
+        <div class="bh"><span class="name">meta</span><span class="meta">request echo</span></div>
+        <div class="bb"><div class="json"><span class="pu">{</span>
+  <span class="k">"window"</span><span class="pu">:</span> <span class="s">"30d"</span><span class="pu">,</span>
+  <span class="k">"denominator"</span><span class="pu">:</span> <span class="s">"non_contamination"</span><span class="pu">,</span>  <span class="cm">// 92.1% of raw volume excluded</span>
+  <span class="k">"methodology_version"</span><span class="pu">:</span> <span class="n">1</span><span class="pu">,</span>
+  <span class="k">"chain"</span><span class="pu">:</span> <span class="s">"base"</span><span class="pu">,</span> <span class="k">"asset"</span><span class="pu">:</span> <span class="s">"usdc"</span><span class="pu">,</span>
+  <span class="k">"reproducible"</span><span class="pu">:</span> <span class="b">true</span>
+<span class="pu">}</span></div></div>
+      </div>
+
+      <!-- metrics -->
+      <div class="block boot" style="animation-delay:.06s">
+        <div class="bh"><span class="name">metrics</span><span class="meta">value · delta · inline series</span></div>
+        <div class="bb">
+          <div class="as-json json"><span class="pu">{</span>
+  <div class="line"><span><span class="k">"volume_usd"</span><span class="pu">:</span> <span class="n">4_210_000</span><span class="pu">,</span> <span class="cm">// +43.0%</span></span><svg class="ispark" data-spark="vol"></svg></div>
+  <div class="line"><span><span class="k">"facilitators"</span><span class="pu">:</span> <span class="n">41</span><span class="pu">,</span> <span class="cm">// +6 new</span></span><svg class="ispark" data-spark="fac"></svg></div>
+  <div class="line"><span><span class="k">"active_agents"</span><span class="pu">:</span> <span class="n">3_108</span><span class="pu">,</span> <span class="cm">// -4.1% (dust-filtered)</span></span><svg class="ispark" data-spark="pay"></svg></div>
+  <div class="line"><span><span class="k">"contamination_share"</span><span class="pu">:</span> <span class="n">0.921</span></span><svg class="ispark" data-spark="con"></svg></div>
+<span class="pu">}</span></div>
+          <div class="as-human stats">
+            <div class="stat"><div class="kk">Volume (USD)</div><div class="vv num">$4.21M</div><div class="dd"><span class="up">▲ 43.0%</span> vs prior</div></div>
+            <div class="stat"><div class="kk">Facilitators</div><div class="vv num">41</div><div class="dd"><span class="up">▲ 6</span> new</div></div>
+            <div class="stat"><div class="kk">Active Agents</div><div class="vv num">3,108</div><div class="dd"><span class="down">▼ 4.1%</span> filtered</div></div>
+            <div class="stat"><div class="kk">Contamination</div><div class="vv num" style="color:var(--contam)">92.1%</div><div class="dd">of raw volume</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- volume series with view toggle -->
+      <div class="block boot" style="animation-delay:.1s">
+        <div class="bh"><span class="name">series.volume_usd</span><span class="viewtabs" id="vt"><button data-v="json" class="on">json</button><button data-v="chart">chart</button></span></div>
+        <div class="bb">
+          <div id="ser-json" class="json" style="color:var(--n)">[ <span id="serarr"></span> ]</div>
+          <div id="ser-chart" style="display:none"><svg id="ts" viewBox="0 0 1080 230" style="width:100%;height:230px"></svg></div>
+        </div>
+      </div>
+
+      <!-- agents (identity) -->
+      <div class="block boot" style="animation-delay:.14s">
+        <div class="bh"><span class="name">agents</span><span class="meta">top by genuine volume · identity-resolved</span></div>
+        <div class="bb">
+          <div class="as-json json agents-json" id="agentsJson"></div>
+          <div class="as-human agent-cards" id="agentsCards"></div>
+        </div>
+      </div>
+
+      <!-- tool -->
+      <div class="block boot" style="animation-delay:.18s">
+        <div class="bh"><span class="name">tool</span><span class="meta">call Fathom from your agent</span></div>
+        <div class="bb"><div class="json"><span class="cm">// register as an MCP tool, or call directly</span>
+<span class="b">const</span> res <span class="pu">=</span> <span class="b">await</span> <span class="s">fathom</span><span class="pu">.</span><span class="s">query</span><span class="pu">(</span><span class="pu">{</span>
+  <span class="k">metric</span><span class="pu">:</span> <span class="s">"agent_volume"</span><span class="pu">,</span>
+  <span class="k">denominator</span><span class="pu">:</span> <span class="s">"non_contamination"</span><span class="pu">,</span>
+  <span class="k">window</span><span class="pu">:</span> <span class="s">"30d"</span><span class="pu">,</span>
+  <span class="k">filter</span><span class="pu">:</span> <span class="pu">{</span> <span class="k">attribution</span><span class="pu">:</span> <span class="s">"agentic"</span><span class="pu">,</span> <span class="k">verified</span><span class="pu">:</span> <span class="b">true</span> <span class="pu">}</span>
+<span class="pu">}</span><span class="pu">)</span><span class="pu">;</span>
+<span class="cm">// → { value: 4210000, unit: "usd", reproducible: true, methodology_version: 1 }</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const DATA={
+  ts:(()=>{const a=[];for(let i=0;i<120;i++){const base=22000+i*240;const spike=(i>78&&i<96)?60000*Math.exp(-Math.pow(i-87,2)/26):0;const noise=Math.sin(i/3)*6000+Math.cos(i/7)*4000;a.push(Math.round(Math.max(6000,base+spike+noise)));}return a;})(),
+  agents:[
+    {id:'0x8073…b2c1',label:'Coinbase x402',a:'ag',verified:true,rep:0.92,skills:['settlement','facilitation'],vol:1313520,tx:412008},
+    {id:'0x1f4a…9d3e',label:'thirdweb',a:'ag',verified:true,rep:0.88,skills:['settlement','sdk'],vol:787270,tx:231540},
+    {id:'0x9c2b…77fa',label:'PayAI',a:'ag',verified:true,rep:0.81,skills:['payments','routing'],vol:328380,tx:52110},
+    {id:'0x6b1c…40af',label:'Nevermined',a:'ag',verified:false,rep:0.64,skills:['data','metering'],vol:151560,tx:28400},
+  ],
+  sparks:{vol:[3,4,3,5,6,5,7,8,7,9,11,10,13],fac:[30,31,33,34,35,35,37,38,39,40,40,41],pay:[34,33,35,34,32,33,31,32,30,31],con:[88,89,90,91,92,91,92,93,92,92]}
+};
+const C={mint:'#2dd4bf',dim:'#7c8694',faint:'#525c6b',n:'#6cb6ff',contam:'#fb7185',grid:'#191d27'};
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const line=(p,x1,y1,x2,y2,s,w=1)=>p.appendChild(el('line',{x1,y1,x2,y2,stroke:s,'stroke-width':w}));
+function identicon(seed,cls){let h=0;for(const c of seed)h=(h*31+c.charCodeAt(0))>>>0;const hue=h%360;const fg=`hsl(${hue} 65% 60%)`;const s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 5 5');s.setAttribute('class',cls);for(let x=0;x<3;x++)for(let y=0;y<5;y++){h=(h*1103515245+12345)>>>0;if((h>>16&1)){[x,4-x].forEach(xx=>s.appendChild(el('rect',{x:xx,y,width:1.02,height:1.02,fill:fg})));}}return s.outerHTML;}
+/* sparklines */
+document.querySelectorAll('[data-spark]').forEach(svg=>{const d=DATA.sparks[svg.dataset.spark],W=80,H=16,mx=Math.max(...d),mn=Math.min(...d);svg.setAttribute('viewBox',`0 0 ${W} ${H}`);const pts=d.map((v,i)=>`${i/(d.length-1)*W},${H-1.5-((v-mn)/(mx-mn||1))*(H-3)}`).join(' ');const col=svg.dataset.spark==='con'?C.contam:C.mint;svg.appendChild(el('polyline',{points:pts,fill:'none',stroke:col,'stroke-width':1.4,'stroke-linejoin':'round'}));});
+/* series array text (truncated) */
+document.getElementById('serarr').innerHTML=DATA.ts.slice(0,18).join(', ')+', <span class="cm">/* …102 more */</span>';
+/* series chart */
+(function(){const svg=document.getElementById('ts'),W=1080,H=230,pl=52,pr=14,pt=14,pb=24,d=DATA.ts,mx=Math.max(...d);const X=i=>pl+i/(d.length-1)*(W-pl-pr),Y=v=>pt+(1-v/mx)*(H-pt-pb);for(let g=0;g<=4;g++){const y=pt+g/4*(H-pt-pb);line(svg,pl,y,W-pr,y,C.grid,1);svg.appendChild(el('text',{x:6,y:y+3,class:'axislabel'})).textContent='$'+Math.round(mx*(1-g/4)/1000)+'k';}const pts=d.map((v,i)=>`${X(i)},${Y(v)}`).join(' ');const grad=el('linearGradient',{id:'fg',x1:0,y1:0,x2:0,y2:1});grad.appendChild(el('stop',{offset:0,'stop-color':C.mint,'stop-opacity':.28}));grad.appendChild(el('stop',{offset:1,'stop-color':C.mint,'stop-opacity':0}));svg.appendChild(grad);svg.appendChild(el('polygon',{points:`${pl},${H-pb} ${pts} ${W-pr},${H-pb}`,fill:'url(#fg)'}));svg.appendChild(el('polyline',{points:pts,fill:'none',stroke:C.mint,'stroke-width':1.8,'stroke-linejoin':'round'}));})();
+/* agents json + cards */
+(function(){const aj=document.getElementById('agentsJson');const ac=document.getElementById('agentsCards');
+  aj.innerHTML='<span class="pu">[</span>'+DATA.agents.map(a=>`<div class="obj">${identicon(a.id,'ident')}<div><span class="pu">{</span> <span class="k">"id"</span><span class="pu">:</span> <span class="s">"${a.id}"</span><span class="pu">,</span> <span class="k">"label"</span><span class="pu">:</span> <span class="s">"${a.label}"</span><span class="pu">,</span> <span class="k">"verified"</span><span class="pu">:</span> <span class="b">${a.verified}</span><span class="pu">,</span> <span class="k">"reputation"</span><span class="pu">:</span> <span class="n">${a.rep}</span><span class="pu">,</span> <span class="k">"skills"</span><span class="pu">:</span> <span class="s">[${a.skills.map(s=>`"${s}"`).join(', ')}]</span><span class="pu">,</span> <span class="k">"volume_usd_30d"</span><span class="pu">:</span> <span class="n">${a.vol.toLocaleString()}</span> <span class="pu">}</span></div></div>`).join('')+'<span class="pu">]</span>';
+  ac.innerHTML=DATA.agents.map(a=>`<div class="acard">${identicon(a.id,'id2')}<div style="flex:1"><div style="display:flex;align-items:center"><div><div class="nm">${a.label} ${a.verified?'<span class="verif">✔</span>':''}</div><div class="ad">${a.id}</div></div><div class="rep"><div class="rv">${a.rep.toFixed(2)}</div><div class="rl">reputation</div></div></div><div class="row"><span>$<b>${(a.vol/1000).toFixed(0)}k</b> 30d</span><span><b>${a.tx.toLocaleString()}</b> txns</span><span class="chip ag">agentic</span></div><div class="skills">${a.skills.map(s=>`<span class="skill">${s}</span>`).join('')}</div></div></div>`).join('');
+})();
+/* mode toggle */
+document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#mode button').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.body.className='mode-'+b.dataset.mode;});
+/* view tabs */
+document.querySelectorAll('#vt button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#vt button').forEach(x=>x.classList.remove('on'));b.classList.add('on');const c=b.dataset.v==='chart';document.getElementById('ser-chart').style.display=c?'block':'none';document.getElementById('ser-json').style.display=c?'none':'block';});
+document.querySelectorAll('#win button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#win button').forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+</script>
+</body>
+</html>
