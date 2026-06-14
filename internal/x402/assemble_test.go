@@ -196,6 +196,52 @@ func TestAssemble_SkipsAuthMissingCompanionTransfer(t *testing.T) {
 	require.Equal(t, AssembleStats{AuthLogs: 1, Denied: 0, Kept: 0, Dropped: 1}, stats)
 }
 
+func TestAssemble_PopulatesCaptureFields(t *testing.T) {
+	facilitator := "0xfaC1000000000000000000000000000000000001"
+	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
+	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+
+	// Full transferWithAuthorization calldata so DecodeAuthorizationWindow fires.
+	input := []byte{0xe3, 0xee, 0x16, 0x0e}
+	input = append(input, make([]byte, 32)...)                // from
+	input = append(input, make([]byte, 32)...)                // to
+	input = append(input, make([]byte, 32)...)                // value
+	input = append(input, make32WithUint64(1_700_000_000)...) // validAfter
+	input = append(input, make32WithUint64(1_700_003_600)...) // validBefore
+	input = append(input, make32WithUint64(0xab)...)          // nonce
+
+	tx := txFixture("0xdead", facilitator, USDCProxyBase.Hex(), input)
+	tx.Hash = common.HexToHash("0xdead")
+
+	logs := []Log{
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(bytes32(0xab))}, TxHash: tx.Hash, LogIndex: 0, TxIndex: 5, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payer), common.HexToHash(payee)}, Data: make32WithUint64(1_000_000), TxHash: tx.Hash, LogIndex: 1, TxIndex: 5, BlockNumber: 42},
+	}
+	block := Block{Number: 42, Timestamp: 1_700_000_000, Hash: common.HexToHash("0xb42"), BaseFeePerGas: big.NewInt(500_000_000)}
+
+	out, stats := Assemble(
+		logs,
+		map[common.Hash]Transaction{tx.Hash: tx},
+		map[common.Hash][]Log{tx.Hash: logs},
+		map[uint64]Block{42: block},
+	)
+	require.Equal(t, AssembleStats{AuthLogs: 1, Denied: 0, Kept: 1, Dropped: 0}, stats)
+	require.Len(t, out, 1)
+	p := out[0]
+
+	require.Equal(t, "transfer", p.SettlementKind)
+	require.False(t, p.SelfSettled, "facilitator != payee here")
+	require.NotNil(t, p.ValidAfter)
+	require.Equal(t, time.Unix(1_700_000_000, 0).UTC(), *p.ValidAfter)
+	require.NotNil(t, p.ValidBefore)
+	require.Equal(t, time.Unix(1_700_003_600, 0).UTC(), *p.ValidBefore)
+	require.Equal(t, input, p.InputCalldata, "full calldata captured")
+	require.Equal(t, common.HexToHash("0xb42"), common.HexToHash(p.BlockHash), "block hash captured")
+	require.Equal(t, uint32(5), p.TransactionIndex)
+	require.Equal(t, uint8(6), p.TokenDecimals)
+	require.Equal(t, "USDC", p.TokenSymbol)
+}
+
 // helpers
 func bytes32(b byte) []byte {
 	out := make([]byte, 32)

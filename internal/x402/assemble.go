@@ -131,6 +131,11 @@ func Assemble(
 		methodSel := make([]byte, 4)
 		copy(methodSel, tx.Input[:4])
 
+		settlementKind := SettlementKind(tx.Input)
+		selfSettled := strings.EqualFold(tx.From.Hex(), to.Hex())
+		validAfterRaw, validBeforeRaw, _ := DecodeAuthorizationWindow(tx.Input)
+		inputCopy := append([]byte(nil), tx.Input...)
+
 		out = append(out, Payment{
 			Chain:                ChainBase,
 			TxHash:               strings.ToLower(lg.TxHash.Hex()),
@@ -159,6 +164,15 @@ func Assemble(
 			BaseFeePerGas:        block.BaseFeePerGas,
 			MaxFeePerGas:         tx.MaxFeePerGas,
 			MaxPriorityFeePerGas: tx.MaxPriorityFeePerGas,
+			SettlementKind:       settlementKind,
+			SelfSettled:          selfSettled,
+			ValidAfter:           unixToTimePtr(validAfterRaw),
+			ValidBefore:          unixToTimePtr(validBeforeRaw),
+			InputCalldata:        inputCopy,
+			BlockHash:            strings.ToLower(block.Hash.Hex()),
+			TransactionIndex:     lg.TxIndex,
+			TokenDecimals:        USDCDecimals,
+			TokenSymbol:          "USDC",
 		})
 		stats.Kept++
 	}

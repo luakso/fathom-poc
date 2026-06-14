@@ -58,6 +58,34 @@ type Payment struct {
 	BaseFeePerGas        *big.Int // nullable on legacy txs
 	MaxFeePerGas         *big.Int // EIP-1559 fee cap the sender bid; nil on legacy/EIP-2930
 	MaxPriorityFeePerGas *big.Int // EIP-1559 tip cap the sender bid; nil on legacy/EIP-2930
+
+	// v2 capture fields (settlement shape + provenance)
+	SettlementKind   string     // "transfer" | "receive" — from the outer selector
+	SelfSettled      bool       // facilitator == payee (no independent facilitator)
+	ValidAfter       *time.Time // EIP-3009 window lower bound; nil when absent / out of range
+	ValidBefore      *time.Time // EIP-3009 window upper bound (expiry); nil when absent / out of range
+	InputCalldata    []byte     // full tx.input — re-decode any arg later without a re-scan
+	BlockHash        string     // lowercased block hash
+	TransactionIndex uint32     // position of the tx in its block
+	TokenDecimals    uint8      // 6 for USDC
+	TokenSymbol      string     // "USDC"
+}
+
+// unixToTimePtr converts an EIP-3009 window bound (unix seconds as a big.Int)
+// to a *time.Time, returning nil when the value is absent, non-positive (no
+// lower bound), or outside the range we store as a timestamp — e.g. the
+// 2^256-1 "no expiry" sentinel. The upper guard (year 2100) keeps sentinels
+// out of timestamptz.
+func unixToTimePtr(v *big.Int) *time.Time {
+	if v == nil || !v.IsInt64() {
+		return nil
+	}
+	secs := v.Int64()
+	if secs <= 0 || secs > 4102444800 { // > 2100-01-01 → treat as sentinel
+		return nil
+	}
+	t := time.Unix(secs, 0).UTC()
+	return &t
 }
 
 // USDCFromRaw converts a USDC base-unit amount to a six-decimal decimal.
