@@ -22,3 +22,8 @@ export const pct = (a,b,dp=1) => (100*num(a)/num(b)).toFixed(dp) + "%";
 
 export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mid","<$1k"],["whale","≥$1k"]];
 export const ATTRS = [["agentic","c-ag"],["contested","c-ct"],["contamination","c-cm"]];
+
+// Shared verdict vocabulary — panel tags and pin/X-card text must agree, so
+// the thresholds live here, in one place, not in each renderer.
+export const priceRead = p => p.payee_count < 1000 ? "menu" : p.payee_count >= 5000 ? "market" : "mixed";
+export const claimVerdict = ratio => ratio >= 1.5 ? "overstated" : "within range";

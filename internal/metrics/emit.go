@@ -147,8 +147,13 @@ func writeFileAtomic(outDir, name string, b []byte) error {
 
 // writeSite copies the embedded dashboard into outDir. It runs AFTER the JSON
 // artifacts so a mid-failure never leaves a page pointing at missing data.
+// Files under assets/ that the embed no longer ships are pruned, so renames
+// and deletes converge instead of accumulating stale modules in the served
+// directory. Only assets/ is pruned: the outDir root also holds the JSON
+// artifacts, which are not the site's to manage.
 func writeSite(outDir string) error {
-	return fs.WalkDir(web.Site, "site", func(path string, d fs.DirEntry, err error) error {
+	shipped := map[string]bool{}
+	err := fs.WalkDir(web.Site, "site", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walk embedded site: %w", err)
 		}
@@ -160,6 +165,38 @@ func writeSite(outDir string) error {
 			return fmt.Errorf("read embedded %s: %w", path, err)
 		}
 		rel := strings.TrimPrefix(path, "site/")
+		shipped[rel] = true
 		return writeFileAtomic(outDir, rel, b)
+	})
+	if err != nil {
+		return err
+	}
+	return pruneStale(outDir, "assets", shipped)
+}
+
+// pruneStale removes files under outDir/sub that are not in shipped (keyed by
+// slash-separated path relative to outDir).
+func pruneStale(outDir, sub string, shipped map[string]bool) error {
+	return filepath.WalkDir(filepath.Join(outDir, sub), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil // first emit: nothing to prune
+			}
+			return fmt.Errorf("prune %s: %w", sub, err)
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(outDir, path)
+		if err != nil {
+			return fmt.Errorf("prune %s: %w", sub, err)
+		}
+		if !shipped[filepath.ToSlash(rel)] {
+			//nolint:gosec // G122: pruning the publisher's own outDir/assets tree (paths walked from it), not attacker-controlled input — symlink TOCTOU is not a threat here.
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("remove stale %s: %w", rel, err)
+			}
+		}
+		return nil
 	})
 }

@@ -1,6 +1,7 @@
 // Report tray: pin findings -> compose thread -> 1200x675 X card.
 import { $, $$ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict } from "./format.js";
+import { medianOf, peakIndex } from "./stats.js";
 import { state, data, winLabel } from "./state.js";
 
 const pins = [];
@@ -36,36 +37,45 @@ const PINNERS = {
   split(){ const w = data.windows[state.win], a = w.by_attribution;
     return { title:"ATTRIBUTION · "+state.win.toUpperCase(), value:pct(a.contamination.volume_usdc,w.volume_usdc)+" contamination",
       context:`agentic ${fmtMoney(a.agentic.volume_usdc)} · contested ${fmtMoney(a.contested.volume_usdc)} · contamination ${fmtMoney(a.contamination.volume_usdc)}`,
-      denom:"allowlist v1 — 112 facilitators · "+winLabel[state.win] }; },
+      denom:`allowlist methodology v${data.meta.methodology_version} · `+winLabel[state.win] }; },
   shape(){ const t = data.typical[state.win];
+    if (!t.agentic.txn_count) return null;
+    const xMed = num(t.agentic.avg_usdc)/num(t.agentic.median_usdc);
     return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.agentic.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.agentic.avg_usdc)} = ${Math.round(num(t.agentic.avg_usdc)/num(t.agentic.median_usdc)).toLocaleString()}× median · contamination median ${fmtAmt(t.contamination.median_usdc)}`,
+      context:`mean ${fmtAmt(t.agentic.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · contamination median ${fmtAmt(t.contamination.median_usdc)}`,
       denom:"agentic set · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
+    if (!p) return null;
+    const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
     return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${p.txn_share_pct}% of agentic tx across ${fmtInt(p.payee_count)} payees — a menu, not a market`,
+      context:`top amount = ${p.txn_share_pct}% of agentic tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
       denom:"agentic set only · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win].by_attribution.agentic;
+    if (!g.txn_count) return null;
     const p = 100*g.breakeven_txn_count/g.txn_count;
     return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% gas>value",
       context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} agentic payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} gas per $1 settled`,
       denom:"tx-deduped gas, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all.agentic;
     const days = data.velocity.agentic_daily;
-    let pi = 0; days.forEach((d,i) => { if (d[1] > days[pi][1]) pi = i; });
-    const med = [...days.map(d => d[1])].sort((a,b) => a-b)[Math.floor(days.length/2)] ?? 0;
+    if (!days.length) return null;
+    const pi = peakIndex(days.map(d => d[1]));
+    const med = medianOf(days.map(d => d[2]));
     return { title:"VELOCITY", value:fmtInt(vw.max_per_min)+"/min peak",
-      context:`${days[pi][0]} · body ~${fmtInt(med)}/min — bursts, not drip`,
+      context:`${days[pi][0]} · body ~${fmtInt(med)}/min p99 — bursts, not drip`,
       denom:"agentic set · p99 over active minutes",
       series: days.map(d => d[1]) }; },
   claims(){ const c = data.claims[0];
-    return { title:"CLAIM LEDGER", value:"×"+(num(c.claimed_value)/num(c.measured_value)).toFixed(1)+" overstated",
+    if (!c) return null;
+    const ratio = num(c.claimed_value)/num(c.measured_value);
+    return { title:"CLAIM LEDGER", value:"×"+ratio.toFixed(1)+" "+claimVerdict(ratio),
       context:`"${c.claim_text}" → measured ${fmtInt(c.measured_value)}`,
       denom:"claim vs Fathom classified agentic count" }; },
 };
 export function addPin(key){
   const gen = PINNERS[key]; if (!gen) return;
-  pins.push({ key, win:state.win, ...gen() });
+  const pin = gen(); if (!pin) return; // panel has nothing pinnable in this window
+  pins.push({ key, win:state.win, ...pin });
   selPin = pins.length-1;
   rTray(); rCard();
   $("#pincount").textContent = pins.length;
@@ -160,7 +170,7 @@ export function rCard(){
   ctx.fillStyle = "#8fa098"; ctx.font = "400 17px 'JetBrains Mono', monospace";
   wrapText(ctx, p.denom, 150, H-84, W-280, 24);
   ctx.fillStyle = "#5b6a61"; ctx.font = "400 16px 'JetBrains Mono', monospace";
-  ctx.fillText("data through " + data.meta.data_through_day + " · methodology v1 · measured, not claimed", 64, H-46);
+  ctx.fillText(`data through ${data.meta.data_through_day} · methodology v${data.meta.methodology_version} · measured, not claimed`, 64, H-46);
 }
 function wrapText(ctx, text, x, y, maxW, lh){
   const words = String(text).split(" ");

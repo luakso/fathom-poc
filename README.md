@@ -1,6 +1,6 @@
 # Fathom
 
-A weekly published index of agent-mediated payment flow. Architecture details: [`docs/architecture.md`](docs/architecture.md).
+A reproducible measurement layer for agent-mediated payments: it indexes the observable x402 settlement surface (Base), classifies every payment by identity, and publishes the result as a static, citable dashboard. Architecture details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Prerequisites
 

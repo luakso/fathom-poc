@@ -3,9 +3,8 @@
 // hover listeners die with their nodes (no leak).
 import { $ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount } from "./format.js";
+import { medianOf, peakIndex } from "./stats.js";
 import { state, data } from "./state.js";
-
-const medianOf = a => [...a].sort((x,y) => x-y)[Math.floor(a.length/2)] ?? 0;
 
 function ma7(arr){ return arr.map((_,i) => { const s = arr.slice(Math.max(0,i-6), i+1); return s.reduce((x,y)=>x+y,0)/s.length; }); }
 export function rDaily(){
@@ -72,11 +71,11 @@ export function rMonthly(){
   const ms = data.monthly;
   const usd = state.mMetric === "usd";
   const get = m => usd ? num(m.by_attribution.agentic.volume_usdc) : m.by_attribution.agentic.txn_count;
-  const max = Math.max(...ms.map(get));
+  const max = Math.max(...ms.map(get)) || 1;
   $("#monthly").innerHTML = ms.map((m,i) => {
     const v = get(m), wpct = Math.max(1, 72*v/max);
     let mom = `<span class="mom na">—</span>`;
-    if (i>0 && m.complete && ms[i-1].complete){
+    if (i>0 && m.complete && ms[i-1].complete && get(ms[i-1]) > 0){
       const d = 100*(v-get(ms[i-1]))/get(ms[i-1]);
       mom = `<span class="mom ${d<0?"dn":"up"}">${d>0?"+":""}${d.toFixed(0)}%</span>`;
     }
@@ -94,12 +93,19 @@ export function rMonthly(){
 export function rVelocity(){
   const days = data.velocity.agentic_daily;
   const host = $("#velochart");
+  if (!days.length){
+    host.innerHTML = `<div class="readout">no agentic velocity rows in this cube</div>`;
+    $("#velostats").innerHTML = "";
+    return;
+  }
   const W = host.clientWidth || 800, H = 190, padL = 46, padB = 20, padT = 14;
-  const max = Math.max(...days.map(d => d[1]));
+  const max = Math.max(...days.map(d => d[1])) || 1;
   const x = i => padL + (W-padL-8) * (days.length > 1 ? i/(days.length-1) : 0.5);
   const y = v => padT + (H-padT-padB) * (1 - v/max);
   let grid = "";
-  [1000,2000,3000].forEach(v => { if (v < max*1.04)
+  // gridlines at quarter-multiples of the max, like the daily tape — derived
+  // from the data so the axis stays labeled at any traffic level
+  [1,2,3].map(k => max*k/4).forEach(v => {
     grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-8}" y2="${y(v)}"/><text x="${padL-6}" y="${y(v)+3}" text-anchor="end">${fmtCount(v)}</text>`; });
   let ticks = "";
   days.forEach((d,i) => { if (d[0].endsWith("-01")){
@@ -107,7 +113,7 @@ export function rVelocity(){
     ticks += `<text x="${x(i)+3}" y="${H-6}">${lab}</text>`; }});
   const lines = days.map((d,i) => `<line x1="${x(i)}" y1="${H-padB}" x2="${x(i)}" y2="${y(d[1])}" stroke="var(--line-2)" stroke-width="2"/>`).join("");
   const dots = days.map((d,i) => `<rect x="${x(i)-1.4}" y="${y(d[2])-1.4}" width="2.8" height="2.8" fill="var(--agentic)"/>`).join("");
-  let pi = 0; days.forEach((d,i)=>{ if (d[1] > days[pi][1]) pi = i; });
+  const pi = peakIndex(days.map(d => d[1]));
   host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="vsvg">
     ${grid}${lines}${dots}
     <circle cx="${x(pi)}" cy="${y(days[pi][1])}" r="4" fill="none" stroke="var(--contam)" stroke-width="1.3"/>

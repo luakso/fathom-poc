@@ -71,6 +71,7 @@ function wire(){
 
   const PANEL_IDS = ["p1","p2","p3","p4","p5","p6","p7","p8","p9"];
   document.addEventListener("keydown", e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return; // browser chords (Cmd+R, Ctrl+W…) are not ours
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT"){
       if (e.key === "Escape") e.target.blur();
       return;
@@ -111,6 +112,7 @@ function wire(){
 /* ————— status bar + banner from integrity results ————— */
 function applyMeta(view, issues){
   $("#st-through").textContent = view.meta.data_through_day;
+  $("#st-meth").textContent = "v" + view.meta.methodology_version;
   $("#st-gen").textContent = "emit " + view.meta.generated_at;
   const mon = d => new Date(d + "T00:00:00Z").toLocaleString("en-US", { month:"short", day:"2-digit", timeZone:"UTC" });
   $("#d-range").textContent = `${mon(view.daily[0][0])} → ${mon(view.meta.data_through_day)}`;

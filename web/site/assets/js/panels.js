@@ -1,6 +1,7 @@
 // Non-chart panel renderers, moved verbatim from the mockup.
 import { $ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, ATTRS } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, ATTRS, priceRead, claimVerdict } from "./format.js";
+import { USD_TOLERANCE } from "./adapter.js";
 import { state, data, winLabel } from "./state.js";
 
 /* ———————— 1 OVERVIEW ———————— */
@@ -42,15 +43,17 @@ export function rSplit(){
       <td style="font-weight:700">${fmtInt(w.txn_count)}</td><td>100%</td>
       <td style="font-weight:700">${fmtMoney(w.volume_usdc)}</td><td>100%</td></tr></tbody>`;
   $("#sp-note").innerHTML = `agentic mean ${fmtAmt(data.typical[state.win].agentic.avg_usdc)} vs contamination mean ${fmtAmt(data.typical[state.win].contamination.avg_usdc)} — <b>different species sharing one event signature.</b>`;
+  $("#sp-denom").textContent = `allowlist methodology v${data.meta.methodology_version} · full address list in facilitators.json · splits sum to totals exactly`;
 }
 
 /* ———————— 5 SHAPE ———————— */
 export function rShape(){
   const t = data.typical[state.win];
+  const xMed = num(t.agentic.avg_usdc)/num(t.agentic.median_usdc);
   $("#shp-win").textContent = "· " + winLabel[state.win];
   $("#shp-big").innerHTML = `
     <div class="bignum c-ag glow">${fmtAmt(t.agentic.median_usdc)}<small>MEDIAN AGENTIC PAYMENT</small></div>
-    <div class="bignum">${fmtAmt(t.agentic.avg_usdc)}<small>MEAN — ${Math.round(num(t.agentic.avg_usdc)/num(t.agentic.median_usdc)).toLocaleString()}× THE MEDIAN</small></div>`;
+    <div class="bignum">${fmtAmt(t.agentic.avg_usdc)}<small>MEAN — ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× THE MEDIAN</small></div>`;
   $("#typtable").innerHTML = `
     <thead><tr><th>class</th><th>median</th><th>mean</th><th>tx</th></tr></thead>
     <tbody>${[["agentic","c-ag"],["contested","c-ct"],["contamination","c-cm"],["all",""]].map(([k,cls]) => `<tr>
@@ -60,7 +63,7 @@ export function rShape(){
   const b = data.windows[state.win].by_band;
   const tx = state.bMetric === "tx";
   const get = r => tx ? r.txn_count : num(r.volume_usdc);
-  const max = Math.max(...BANDDEF.map(([k]) => get(b[k])));
+  const max = Math.max(...BANDDEF.map(([k]) => get(b[k]))) || 1;
   $("#bands").innerHTML = BANDDEF.map(([k,def]) => {
     const r = b[k], v = get(r), wp = Math.max(1, 66*v/max);
     return `<div class="mrow">
@@ -74,12 +77,17 @@ export function rShape(){
 export function rPrice(){
   const pts = data.price_points[state.win];
   $("#pp-win").textContent = "· " + winLabel[state.win];
-  const maxS = Math.max(...pts.map(p => num(p.txn_share_pct)));
+  if (!pts.length){
+    $("#pptable").innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no agentic payments in this window</td></tr></tbody>`;
+    return;
+  }
+  const maxS = Math.max(...pts.map(p => num(p.txn_share_pct))) || 1;
+  const TAG = { menu:`<span class="tag menu">MENU</span>`, market:`<span class="tag market">MARKET</span>`, mixed:`<span class="tag mixed">—</span>` };
   $("#pptable").innerHTML = `
     <thead><tr><th>amount</th><th style="text-align:left">share of agentic tx</th><th>tx</th><th>payees</th><th>read</th></tr></thead>
     <tbody>${pts.map(p => {
       const s = num(p.txn_share_pct), w = Math.max(1.5, 100*s/maxS);
-      const tag = p.payee_count < 1000 ? `<span class="tag menu">MENU</span>` : p.payee_count >= 5000 ? `<span class="tag market">MARKET</span>` : `<span class="tag mixed">—</span>`;
+      const tag = TAG[priceRead(p)];
       return `<tr><td style="font-weight:700">${fmtAmt(p.amount_usdc)}</td>
         <td style="text-align:left;min-width:140px"><span style="display:inline-block;vertical-align:middle;height:9px;width:${w}px;max-width:60%;background:var(--agentic)"></span> <span style="color:var(--dim)">${s.toFixed(1)}%</span></td>
         <td>${fmtInt(p.txn_count)}</td>
@@ -116,9 +124,14 @@ export function rGas(){
 
 /* ———————— 9 CLAIMS ———————— */
 export function rClaims(){
+  if (!data.claims.length){
+    $("#claims").innerHTML = `<div style="color:var(--faint);padding:14px 0">no claims curated — data/claims.json is empty for this publish</div>`;
+    return;
+  }
   $("#claims").innerHTML = data.claims.map(c => {
     const ratio = num(c.claimed_value)/num(c.measured_value);
-    const tag = ratio >= 1.5 ? `<span class="tag over">×${ratio.toFixed(1)} OVERSTATED</span>` : `<span class="tag ok">×${ratio.toFixed(1)} WITHIN RANGE</span>`;
+    const verdict = claimVerdict(ratio);
+    const tag = `<span class="tag ${verdict === "overstated" ? "over" : "ok"}">×${ratio.toFixed(1)} ${verdict.toUpperCase()}</span>`;
     return `<div class="claimrow">
       <div class="q">“${c.claim_text}”</div>
       <div class="src">${/^https?:\/\//i.test(c.source_url) ? `<a href="${c.source_url.replace(/"/g,"%22")}" target="_blank" rel="noopener" style="color:inherit">${c.source}</a>` : c.source} · ${c.claim_date} · measured as ${c.measured_metric}</div>
@@ -132,7 +145,7 @@ export function rShell(){
   const w = data.windows.all, a = w.by_attribution;
   const sumN = a.agentic.txn_count + a.contested.txn_count + a.contamination.txn_count;
   const sum$ = num(a.agentic.volume_usdc) + num(a.contested.volume_usdc) + num(a.contamination.volume_usdc);
-  const okN = sumN === w.txn_count, ok$ = Math.abs(sum$ - num(w.volume_usdc)) < 1e-4;
+  const okN = sumN === w.txn_count, ok$ = Math.abs(sum$ - num(w.volume_usdc)) <= USD_TOLERANCE;
   $("#shell").innerHTML = `
     <div><span class="ps">$</span> <span class="cmd">fathom verify --conservation --window all</span></div>
     <div class="out">tx&nbsp;: ${fmtInt(a.agentic.txn_count)} + ${fmtInt(a.contested.txn_count)} + ${fmtInt(a.contamination.txn_count)} = ${fmtInt(sumN)} <span class="ok">${okN?"✓":"✗"}</span></div>

@@ -40,7 +40,7 @@
       <button data-win="30d">30D</button>
       <button data-win="all" class="on">ALL</button>
     </div>
-    <span class="stamp">DATA→<b id="st-through">—</b> · METH <b>v1</b></span>
+    <span class="stamp">DATA→<b id="st-through">—</b> · METH <b id="st-meth">—</b></span>
     <button class="pinbtn" id="traytoggle" title="report tray [r]">⊞ REPORT <span class="cnt" id="pincount">0</span></button>
     <button class="helpbtn" id="helptoggle" title="help [?]">?</button>
   </div>
@@ -89,7 +89,7 @@
           <button class="pin-it" data-pin="monthly">⊞ pin</button>
         </div>
         <div id="monthly"><!-- js --></div>
-        <div class="denom">agentic set only · ◌ = partial month (excluded from MoM) · May: tx +31% while $ −65% — activity without value</div>
+        <div class="denom">agentic set only · ◌ = partial month (excluded from MoM)</div>
       </section>
 
       <!-- 4 SPLIT -->
@@ -98,7 +98,7 @@
         <div class="ptools"><button class="pin-it" data-pin="split">⊞ pin</button></div>
         <table class="t" id="splittable"></table>
         <div class="note" style="margin-top:8px" id="sp-note"></div>
-        <div class="denom">allowlist methodology v1 — 112 facilitator addresses, 29 named operators · splits sum to totals exactly</div>
+        <div class="denom" id="sp-denom">facilitator allowlist · splits sum to totals exactly</div>
       </section>
 
       <!-- 5 SHAPE -->
@@ -146,7 +146,7 @@
         <div class="readout" id="v-readout">│ = day's max minute · ▪ = p99 of active minutes</div>
         <div class="chart-host" id="velochart"></div>
         <div class="row2" id="velostats" style="margin-top:8px"></div>
-        <div class="denom">agentic set · p99 over active minutes only — idle minutes can't flatter the percentile · body ~220/min, peaks 25×</div>
+        <div class="denom">agentic set · p99 over active minutes only — idle minutes can't flatter the percentile</div>
       </section>
 
       <!-- 9 CLAIMS -->
