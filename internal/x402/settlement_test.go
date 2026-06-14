@@ -1,6 +1,7 @@
 package x402
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,12 +35,12 @@ func TestDecodeAuthorizationWindow(t *testing.T) {
 	// Build calldata: selector(4) + from + to + value + validAfter + validBefore + nonce.
 	build := func(selector []byte, validAfter, validBefore uint64) []byte {
 		out := append([]byte{}, selector...)
-		out = append(out, make([]byte, 32)...)       // from
-		out = append(out, make([]byte, 32)...)       // to
-		out = append(out, make([]byte, 32)...)       // value
-		out = append(out, leftPad32(validAfter)...)  // validAfter
-		out = append(out, leftPad32(validBefore)...) // validBefore
-		out = append(out, make([]byte, 32)...)       // nonce
+		out = append(out, make([]byte, 32)...)              // from
+		out = append(out, make([]byte, 32)...)              // to
+		out = append(out, make([]byte, 32)...)              // value
+		out = append(out, make32WithUint64(validAfter)...)  // validAfter
+		out = append(out, make32WithUint64(validBefore)...) // validBefore
+		out = append(out, make([]byte, 32)...)              // nonce
 		return out
 	}
 
@@ -73,13 +74,24 @@ func TestDecodeAuthorizationWindow(t *testing.T) {
 		_, _, ok := DecodeAuthorizationWindow([]byte{0xe3, 0xee, 0x16, 0x0e})
 		require.False(t, ok)
 	})
-}
 
-// leftPad32 right-aligns a uint64 into a 32-byte EVM word.
-func leftPad32(v uint64) []byte {
-	out := make([]byte, 32)
-	for i := 0; i < 8; i++ {
-		out[31-i] = byte(v >> (8 * i))
-	}
-	return out
+	t.Run("transferWithAuth bytes-overload decodes the window", func(t *testing.T) {
+		t.Parallel()
+		input := build([]byte{0xcf, 0x09, 0x29, 0x95}, 1_700_000_000, 1_700_003_600)
+		va, vb, ok := DecodeAuthorizationWindow(input)
+		require.True(t, ok)
+		require.Equal(t, uint64(1_700_000_000), va.Uint64())
+		require.Equal(t, uint64(1_700_003_600), vb.Uint64())
+	})
+
+	t.Run("decodes the 2^256-1 no-expiry sentinel without truncation", func(t *testing.T) {
+		t.Parallel()
+		input := append([]byte{0xe3, 0xee, 0x16, 0x0e}, make([]byte, 3*32)...) // selector + from,to,value
+		input = append(input, make([]byte, 32)...)                             // validAfter = 0
+		input = append(input, bytes.Repeat([]byte{0xff}, 32)...)               // validBefore = 2^256-1
+		input = append(input, make([]byte, 32)...)                             // nonce
+		_, vb, ok := DecodeAuthorizationWindow(input)
+		require.True(t, ok)
+		require.Equal(t, 256, vb.BitLen(), "2^256-1 sentinel preserved (would overflow uint64)")
+	})
 }
