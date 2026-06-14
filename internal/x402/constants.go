@@ -45,8 +45,8 @@ const (
 	// Verified keccak — see TestSelectorsMatchKeccak.
 	SighashTransferWithAuthV uint32 = 0xe3ee160e // classic (v,r,s)
 	SighashTransferWithAuthB uint32 = 0xcf092995 // bytes-overload (USDC v2.2)
-	SighashReceiveWithAuthV  uint32 = 0xef55bec6 // payee-pull, NOT x402
-	SighashReceiveWithAuthB  uint32 = 0x88b7ab63 // payee-pull, NOT x402
+	SighashReceiveWithAuthV  uint32 = 0xef55bec6 // payee-pull, self-settled x402 (settlement_kind='receive')
+	SighashReceiveWithAuthB  uint32 = 0x88b7ab63 // payee-pull, self-settled x402 (settlement_kind='receive')
 	SighashAggregate3        uint32 = 0x82ad56cb // Multicall3.aggregate3
 
 	// Empirical — appears in observed Base data; 4byte attributes it to
@@ -61,8 +61,9 @@ const (
 // AllowSighashes is NOT a keep-filter and is no longer used to build the
 // HyperSync query (the vestigial transaction hint was removed — selection is
 // log-only). The client keep-policy is topic-only (see KeepAuthorizationUsed):
-// every AuthorizationUsed-on-USDC log is a payment except a direct
-// receiveWithAuthorization. This list is retained as the documented set of
+// every AuthorizationUsed-on-USDC log with a parseable 4-byte selector is a
+// payment — no selector-based carve-outs remain (receiveWithAuthorization is
+// captured and flagged settlement_kind='receive'). This list is retained as the documented set of
 // known x402 outer selectors and as the disjointness anchor for
 // TestAllowDenyDisjoint against DenySighashes.
 var AllowSighashes = []uint32{

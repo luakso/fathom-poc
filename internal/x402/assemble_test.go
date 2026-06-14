@@ -121,6 +121,7 @@ func TestAssemble_KeepsReceiveWithAuthorizationFlagged(t *testing.T) {
 	require.Equal(t, "receive", out[0].SettlementKind)
 	require.True(t, out[0].SelfSettled, "facilitator == payee")
 	require.Equal(t, "0xbbbb000000000000000000000000000000000001", out[0].Payee)
+	require.Equal(t, "0xaaaa000000000000000000000000000000000001", out[0].Payer, "payer is the authorizer, distinct from the self-settling payee")
 }
 
 func TestAssemble_MulticallProducesMultipleRows(t *testing.T) {

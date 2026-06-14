@@ -16,8 +16,8 @@ import (
 //
 //	AuthLogs == Denied + Kept + Dropped
 //
-// always holds. Denied are EXPECTED drops (receiveWithAuthorization / no
-// selector — not x402 settlements). Dropped are ANOMALOUS drops: a candidate
+// always holds. Denied are EXPECTED drops (no selector — input shorter than 4
+// bytes, cannot be a real USDC settlement). Dropped are ANOMALOUS drops: a candidate
 // that passed the keep filter but produced no row (missing parent tx, no
 // companion Transfer, decode failure, payer mismatch, missing block). A batch
 // with candidates (AuthLogs > Denied) but Kept == 0 means companion pairing
