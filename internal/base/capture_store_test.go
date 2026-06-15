@@ -85,7 +85,8 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 		FROM payments WHERE chain = $1 AND tx_hash = $2 AND log_index = $3`,
 		string(x402.ChainBase), "0xcap", int32(1)).Scan(
 		&settlementKind, &selfSettled, &validAfter, &validBefore,
-		&inputCalldata, &blockHash, &txIndex, &tokenDecimals, &tokenSymbol, &payerAccountType))
+		&inputCalldata, &blockHash, &txIndex, &tokenDecimals, &tokenSymbol, &payerAccountType,
+	))
 
 	require.Equal(t, "receive", settlementKind)
 	require.True(t, selfSettled)
@@ -97,6 +98,30 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 	require.Equal(t, int16(6), tokenDecimals)
 	require.Equal(t, "USDC", tokenSymbol)
 	require.Nil(t, payerAccountType, "payer_account_type stays NULL until a later plan populates it")
+}
+
+// TestMigration_L1CaptureColumns asserts the 00012 migration added the L1-fee /
+// value / gas-limit capture columns to payments and left both read views intact
+// (recreated through the column add).
+func TestMigration_L1CaptureColumns(t *testing.T) {
+	ctx, store := setup(t)
+
+	wantCols := []string{"l1_fee", "l1_gas_used", "l1_gas_price", "tx_value", "gas_limit"}
+	for _, col := range wantCols {
+		var exists bool
+		require.NoError(t, store.Pool().QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'payments' AND column_name = $1
+			)`, col).Scan(&exists))
+		require.True(t, exists, "payments.%s must exist after migration 00012", col)
+	}
+
+	// Both p.*-based views survive the column add (recreated in the migration).
+	_, err := store.Pool().Exec(ctx, `SELECT facilitator_known FROM payment_x402_v1 WHERE false`)
+	require.NoError(t, err, "payment_x402_v1 must still be selectable")
+	_, err = store.Pool().Exec(ctx, `SELECT attribution FROM payment_classified_v1 WHERE false`)
+	require.NoError(t, err, "payment_classified_v1 must still be selectable")
 }
 
 // decimalOne is a tiny local helper for the value 1 (avoids importing shopspring
@@ -125,7 +150,7 @@ func TestStore_X402View_FacilitatorKnown(t *testing.T) {
 			AmountRaw: big.NewInt(1_000_000), AssetUSDAtTime: decimalOne(),
 			AuthNonce: []byte{0x01}, MethodSelector: []byte{0xe3, 0xee, 0x16, 0x0e},
 			CalledContract: strings.ToLower(x402.USDCProxyBase.Hex()),
-			TxType: 2, TxNonce: 7, GasUsed: 50_000,
+			TxType:         2, TxNonce: 7, GasUsed: 50_000,
 			EffectiveGasPrice: big.NewInt(1_000_000_000), GasCostWei: big.NewInt(50_000_000_000_000),
 			SettlementKind: "transfer", TokenDecimals: 6, TokenSymbol: "USDC",
 		}
