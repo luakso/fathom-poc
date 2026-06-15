@@ -34,6 +34,13 @@ type Transaction struct {
 	EffectiveGasPrice    *big.Int
 	MaxFeePerGas         *big.Int // nil on legacy/EIP-2930 txs (no EIP-1559 fee cap)
 	MaxPriorityFeePerGas *big.Int // nil on legacy/EIP-2930 txs
+	// Plan 2 capture fields. *big.Int fields are nil when HyperSync omits them
+	// (pre-Ecotone / system tx), mirroring the EIP-1559 fee caps.
+	Value      *big.Int // wei sent with the tx (~0 for x402 token transfers); nil if absent
+	GasLimit   uint64   // tx gas limit: pre-budgeted ceiling (GasUsed is actual consumption, so limit−used = over-provisioning); 0 if absent
+	L1Fee      *big.Int // OP-stack L1 data-availability fee (wei); nil pre-Ecotone/system tx
+	L1GasUsed  *big.Int // L1 gas units attributed to the tx; nil if absent
+	L1GasPrice *big.Int // L1 base fee used for the DA charge; nil if absent
 }
 
 // Block carries only the per-block context we actually use. BaseFeePerGas is a

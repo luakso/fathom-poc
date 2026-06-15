@@ -91,6 +91,41 @@ func ConvertTransaction(in HyperSyncTransaction) (x402.Transaction, error) {
 			return x402.Transaction{}, fmt.Errorf("tx.max_priority_fee_per_gas: %w", err)
 		}
 	}
+	// tx.value is present on most txs (0x0 for token transfers); l1_* are absent
+	// on pre-Ecotone / system txs — leave them nil (→ SQL NULL), same pattern as
+	// the EIP-1559 fee caps above. ParseHexInt("") returns 0, not nil, so guard
+	// each on the empty string.
+	var value, l1Fee, l1GasUsed, l1GasPrice *big.Int
+	if in.Value != "" {
+		value, err = ParseHexInt(in.Value)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.value: %w", err)
+		}
+	}
+	if in.L1Fee != "" {
+		l1Fee, err = ParseHexInt(in.L1Fee)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.l1_fee: %w", err)
+		}
+	}
+	if in.L1GasUsed != "" {
+		l1GasUsed, err = ParseHexInt(in.L1GasUsed)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.l1_gas_used: %w", err)
+		}
+	}
+	if in.L1GasPrice != "" {
+		l1GasPrice, err = ParseHexInt(in.L1GasPrice)
+		if err != nil {
+			return x402.Transaction{}, fmt.Errorf("tx.l1_gas_price: %w", err)
+		}
+	}
+	// gas is the tx gas LIMIT (distinct from gas_used). parseHexUint64("") == 0
+	// covers the theoretical absent case; real txs always carry it.
+	gasLimit, err := parseHexUint64(in.Gas)
+	if err != nil {
+		return x402.Transaction{}, fmt.Errorf("tx.gas: %w", err)
+	}
 	return x402.Transaction{
 		Hash:                 hash,
 		BlockNumber:          in.BlockNumber,
@@ -103,6 +138,11 @@ func ConvertTransaction(in HyperSyncTransaction) (x402.Transaction, error) {
 		EffectiveGasPrice:    gasPrice,
 		MaxFeePerGas:         maxFee,
 		MaxPriorityFeePerGas: maxPriorityFee,
+		Value:                value,
+		GasLimit:             gasLimit,
+		L1Fee:                l1Fee,
+		L1GasUsed:            l1GasUsed,
+		L1GasPrice:           l1GasPrice,
 	}, nil
 }
 

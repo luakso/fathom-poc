@@ -60,6 +60,14 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	require.Contains(t, txFields, "max_fee_per_gas")
 	require.Contains(t, txFields, "max_priority_fee_per_gas")
 
+	// Plan 2: the transaction selection must also request the OP-stack L1 fee
+	// fields, the tx value, and the gas LIMIT (distinct from gas_used).
+	require.Contains(t, txFields, "l1_fee")
+	require.Contains(t, txFields, "l1_gas_used")
+	require.Contains(t, txFields, "l1_gas_price")
+	require.Contains(t, txFields, "value")
+	require.Contains(t, txFields, "gas")
+
 	// join_mode must be JoinAll so HyperSync returns each matched log's parent
 	// tx AND that tx's sibling logs — including the companion Transfer pairing
 	// needs. The log filter alone returns only AuthorizationUsed logs.

@@ -199,6 +199,12 @@ type HyperSyncTransaction struct {
 	EffectiveGasPrice    string `json:"effective_gas_price"`
 	MaxFeePerGas         string `json:"max_fee_per_gas"`          // empty on legacy/EIP-2930 txs
 	MaxPriorityFeePerGas string `json:"max_priority_fee_per_gas"` // empty on legacy/EIP-2930 txs
+	// Plan 2 capture fields (all 0x-hex strings; empty when HyperSync omits them).
+	Value      string `json:"value"`        // wei sent with the tx (~0 for x402)
+	Gas        string `json:"gas"`          // tx gas LIMIT — distinct from gas_used
+	L1Fee      string `json:"l1_fee"`       // OP-stack L1 data fee; empty pre-Ecotone/system tx
+	L1GasUsed  string `json:"l1_gas_used"`  // L1 gas units; empty when absent
+	L1GasPrice string `json:"l1_gas_price"` // L1 base fee for the DA charge; empty when absent
 }
 
 // HyperSyncBlock holds wire-format block fields. timestamp and base_fee_per_gas
@@ -244,7 +250,7 @@ func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 		},
 		FieldSelection: HyperSyncFieldSelection{
 			Log:         []string{"address", "topic0", "topic1", "topic2", "topic3", "data", "block_number", "transaction_hash", "transaction_index", "log_index"},
-			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price", "max_fee_per_gas", "max_priority_fee_per_gas"},
+			Transaction: []string{"hash", "block_number", "from", "to", "input", "type", "nonce", "gas_used", "effective_gas_price", "max_fee_per_gas", "max_priority_fee_per_gas", "value", "gas", "l1_fee", "l1_gas_used", "l1_gas_price"},
 			Block:       []string{"number", "timestamp", "hash", "base_fee_per_gas"},
 		},
 	}
