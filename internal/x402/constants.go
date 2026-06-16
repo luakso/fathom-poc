@@ -35,6 +35,13 @@ var (
 	// TransferTopic is the standard ERC-20 Transfer event. Companion to
 	// AuthorizationUsed for amount + recipient pairing (see pairing.go).
 	TransferTopic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+
+	// AuthorizationCanceledTopic is emitted by USDC when an EIP-3009
+	// authorization nonce is canceled via cancelAuthorization — the payer
+	// abandoned a signed authorization before it was ever used. Same USDC
+	// proxy as AuthorizationUsed, different topic0. Both args indexed:
+	// topics[1] = authorizer, topics[2] = nonce, empty data.
+	AuthorizationCanceledTopic = common.HexToHash("0x1cdd46ff242716cdaa72d159d339a485b3438398348d68f09d7c8c0a59353d81")
 )
 
 // 4-byte function selectors (first 4 bytes of keccak256(signature)).

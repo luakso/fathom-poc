@@ -73,6 +73,11 @@ func TestEventTopicsMatchKeccak(t *testing.T) {
 			sig:  "Transfer(address,address,uint256)",
 			want: TransferTopic,
 		},
+		{
+			name: "AuthorizationCanceled",
+			sig:  "AuthorizationCanceled(address,bytes32)",
+			want: AuthorizationCanceledTopic,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
