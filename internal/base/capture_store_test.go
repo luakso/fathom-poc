@@ -128,6 +128,75 @@ func TestMigration_L1CaptureColumns(t *testing.T) {
 // at every call site).
 func decimalOne() decimal.Decimal { return decimal.NewFromInt(1) }
 
+// TestStore_L1CaptureFields_RoundTrip proves the Plan 2 capture columns (L1 fee
+// trio, tx_value, gas_limit) persist through the COPY → INSERT path, including a
+// row that leaves the nullable L1 fields nil (→ SQL NULL).
+func TestStore_L1CaptureFields_RoundTrip(t *testing.T) {
+	ctx, store := setup(t)
+
+	mk := func(txHash string) x402.Payment {
+		return x402.Payment{
+			Chain: x402.ChainBase, TxHash: txHash, LogIndex: 1,
+			BlockNumber: 100, BlockTimestamp: time.Unix(1_700_000_000, 0).UTC(),
+			Source: "base-collector", Protocol: "x402",
+			Facilitator: "0xfac", Payer: "0xpay", Payee: "0xrec",
+			Asset: "USDC", TokenAddress: strings.ToLower(x402.USDCProxyBase.Hex()),
+			AmountRaw: big.NewInt(1_000_000), AssetUSDAtTime: decimalOne(),
+			AuthNonce: []byte{0x01}, MethodSelector: []byte{0xe3, 0xee, 0x16, 0x0e},
+			CalledContract: strings.ToLower(x402.USDCProxyBase.Hex()),
+			TxType:         2, TxNonce: 7, GasUsed: 50_000,
+			EffectiveGasPrice: big.NewInt(1_000_000_000), GasCostWei: big.NewInt(50_000_000_000_000),
+			SettlementKind: "transfer", TokenDecimals: 6, TokenSymbol: "USDC",
+		}
+	}
+
+	withL1 := mk("0xl1set")
+	withL1.L1Fee = big.NewInt(12_345)
+	withL1.L1GasUsed = big.NewInt(1_600)
+	withL1.L1GasPrice = big.NewInt(7)
+	withL1.TxValue = big.NewInt(0)
+	withL1.GasLimit = 120_000
+
+	nilL1 := mk("0xl1nil") // L1Fee/L1GasUsed/L1GasPrice/TxValue nil; GasLimit 0
+
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{withL1, nilL1}, 100))
+
+	// Row with values: NUMERIC columns read back via ::text for an exact compare.
+	var (
+		l1Fee, l1GasUsed, l1GasPrice, txValue string
+		gasLimit                              int64
+	)
+	require.NoError(t, store.Pool().QueryRow(ctx, `
+		SELECT l1_fee::text, l1_gas_used::text, l1_gas_price::text, tx_value::text, gas_limit
+		FROM payments WHERE tx_hash = $1`, "0xl1set").Scan(
+		&l1Fee, &l1GasUsed, &l1GasPrice, &txValue, &gasLimit,
+	))
+	require.Equal(t, "12345", l1Fee)
+	require.Equal(t, "1600", l1GasUsed)
+	require.Equal(t, "7", l1GasPrice)
+	require.Equal(t, "0", txValue)
+	require.Equal(t, int64(120_000), gasLimit)
+
+	// Row with nil L1 fields stores SQL NULL for ALL four nullable numerics;
+	// gas_limit 0 stores 0 (not NULL). Each nullable column is asserted
+	// individually so a regression in only one is caught at the column level.
+	var (
+		l1FeeNil, l1GasUsedNil, l1GasPriceNil, txValueNil *string
+		gasLimitNil                                       *int64
+	)
+	require.NoError(t, store.Pool().QueryRow(ctx, `
+		SELECT l1_fee::text, l1_gas_used::text, l1_gas_price::text, tx_value::text, gas_limit
+		FROM payments WHERE tx_hash = $1`, "0xl1nil").Scan(
+		&l1FeeNil, &l1GasUsedNil, &l1GasPriceNil, &txValueNil, &gasLimitNil,
+	))
+	require.Nil(t, l1FeeNil, "nil L1Fee → SQL NULL")
+	require.Nil(t, l1GasUsedNil, "nil L1GasUsed → SQL NULL")
+	require.Nil(t, l1GasPriceNil, "nil L1GasPrice → SQL NULL")
+	require.Nil(t, txValueNil, "nil TxValue → SQL NULL")
+	require.NotNil(t, gasLimitNil)
+	require.Equal(t, int64(0), *gasLimitNil)
+}
+
 // TestStore_X402View_FacilitatorKnown proves the v2 read view labels a payment
 // known vs unknown by the facilitator allowlist. Seeds one allowlist address
 // directly to avoid coupling to the migration seed contents.

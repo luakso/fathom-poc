@@ -27,6 +27,11 @@ const stageTable = "payments_copy_stage"
 // copyColumns is the column order shared by the COPY into the staging table and
 // the INSERT … SELECT out of it. observed_at is intentionally absent so it
 // keeps its DEFAULT now() — matching the row-by-row path it replaces.
+//
+// LOCKSTEP: copyColumns, createStageTable, insertFromStage (its INSERT list AND
+// its SELECT list), and copyRow must all list the same columns in the same
+// order. Adding or removing a column means touching all four — a mismatch
+// silently writes values into the wrong columns.
 var copyColumns = []string{
 	"chain", "tx_hash", "log_index",
 	"block_number", "block_timestamp",
@@ -40,11 +45,13 @@ var copyColumns = []string{
 	"settlement_kind", "self_settled", "valid_after", "valid_before",
 	"input_calldata", "block_hash", "transaction_index",
 	"token_decimals", "token_symbol",
+	"l1_fee", "l1_gas_used", "l1_gas_price", "tx_value", "gas_limit",
 }
 
 // createStageTable types the NUMERIC columns (amount_raw, asset_usd_at_time,
 // effective_gas_price, gas_cost_wei, base_fee_per_gas, max_fee_per_gas,
-// max_priority_fee_per_gas) as TEXT. pgx's COPY uses the binary wire format and
+// max_priority_fee_per_gas, l1_fee, l1_gas_used, l1_gas_price, tx_value) as TEXT.
+// pgx's COPY uses the binary wire format and
 // there is no shopspring decimal codec registered on the pool, so decimals
 // cannot be binary-encoded into NUMERIC directly. Staging them as TEXT and
 // casting ::numeric on the INSERT … SELECT keeps full precision without a codec
@@ -86,7 +93,12 @@ CREATE TEMP TABLE ` + stageTable + ` (
     block_hash          text,
     transaction_index   integer,
     token_decimals      smallint,
-    token_symbol        text
+    token_symbol        text,
+    l1_fee              text,
+    l1_gas_used         text,
+    l1_gas_price        text,
+    tx_value            text,
+    gas_limit           bigint
 ) ON COMMIT DROP`
 
 // insertFromStage moves staged rows into payments with the same dedupe
@@ -106,6 +118,7 @@ INSERT INTO payments (
     max_fee_per_gas, max_priority_fee_per_gas,
     settlement_kind, self_settled, valid_after, valid_before,
     input_calldata, block_hash, transaction_index, token_decimals, token_symbol
+    , l1_fee, l1_gas_used, l1_gas_price, tx_value, gas_limit
 )
 SELECT
     chain, tx_hash, log_index,
@@ -120,6 +133,7 @@ SELECT
     max_fee_per_gas::numeric, max_priority_fee_per_gas::numeric,
     settlement_kind, self_settled, valid_after, valid_before,
     input_calldata, block_hash, transaction_index, token_decimals, token_symbol
+    , l1_fee::numeric, l1_gas_used::numeric, l1_gas_price::numeric, tx_value::numeric, gas_limit
 FROM ` + stageTable + `
 ON CONFLICT (chain, tx_hash, log_index) DO NOTHING`
 
@@ -249,7 +263,8 @@ func (s *Store) GetCursor(ctx context.Context) (uint64, error) {
 // copyColumns). The NUMERIC columns are emitted as text so COPY's binary
 // encoder never has to encode a shopspring decimal; Postgres casts them back to
 // NUMERIC on the INSERT … SELECT. The nullable big.Int columns
-// (base_fee_per_gas, max_fee_per_gas, max_priority_fee_per_gas) stay nil
+// (base_fee_per_gas, max_fee_per_gas, max_priority_fee_per_gas, l1_fee,
+// l1_gas_used, l1_gas_price, tx_value) stay nil
 // (→ SQL NULL) when the source carried no value. amount_usdc is intentionally
 // omitted — it is a GENERATED column (migration 00008) the DB derives from
 // amount_raw.
@@ -284,6 +299,8 @@ func copyRow(p *x402.Payment) []any {
 		p.SettlementKind, p.SelfSettled, nullableTime(p.ValidAfter), nullableTime(p.ValidBefore),
 		p.InputCalldata, p.BlockHash, int32(p.TransactionIndex), //nolint:gosec // tx index is bounded by block tx count; far below 2^31
 		int16(p.TokenDecimals), p.TokenSymbol,
+		nullableWei(p.L1Fee), nullableWei(p.L1GasUsed), nullableWei(p.L1GasPrice),
+		nullableWei(p.TxValue), int64(p.GasLimit), //nolint:gosec // gas limit << 2^63
 	}
 }
 
