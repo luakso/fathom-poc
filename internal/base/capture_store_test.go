@@ -66,7 +66,7 @@ func TestStore_CaptureFields_RoundTrip(t *testing.T) {
 		TokenDecimals: 6, TokenSymbol: "USDC",
 	}
 
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{p}, 100))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{p}, nil, 100))
 
 	var (
 		settlementKind, blockHash, tokenSymbol string
@@ -159,7 +159,7 @@ func TestStore_L1CaptureFields_RoundTrip(t *testing.T) {
 
 	nilL1 := mk("0xl1nil") // L1Fee/L1GasUsed/L1GasPrice/TxValue nil; GasLimit 0
 
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{withL1, nilL1}, 100))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{withL1, nilL1}, nil, 100))
 
 	// Row with values: NUMERIC columns read back via ::text for an exact compare.
 	var (
@@ -228,7 +228,7 @@ func TestStore_X402View_FacilitatorKnown(t *testing.T) {
 	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{
 		mk("0xknown", known, 1),
 		mk("0xunknown", "0xsomerandomfacilitator0000000000000000001", 1),
-	}, 100))
+	}, nil, 100))
 
 	knownLabel := func(txHash string) bool {
 		var fk bool

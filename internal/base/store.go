@@ -137,6 +137,34 @@ SELECT
 FROM ` + stageTable + `
 ON CONFLICT (chain, tx_hash, log_index) DO NOTHING`
 
+// insertCancellation persists one AuthorizationCanceled event. Cancellations are
+// rare (an abandonment signal), so a per-row Exec inside the batch transaction is
+// simpler than the COPY→stage machinery payments needs. Idempotent via the PK.
+const insertCancellation = `
+INSERT INTO authorization_cancellations
+    (chain, tx_hash, log_index, authorizer, nonce, block_number, block_time, transaction_from)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (chain, tx_hash, log_index) DO NOTHING`
+
+// insertCancellations writes every cancellation on the caller's transaction, so
+// they commit (or roll back) together with the payments batch and the cursor
+// advance — same atomicity guarantee as payments.
+func insertCancellations(ctx context.Context, tx pgx.Tx, cancellations []x402.Cancellation) error {
+	for i := range cancellations {
+		c := &cancellations[i]
+		if _, err := tx.Exec(
+			ctx, insertCancellation,
+			c.Chain, c.TxHash, int32(c.LogIndex), //nolint:gosec // log_index fits int32
+			c.Authorizer, c.Nonce,
+			int64(c.BlockNumber), //nolint:gosec // block_number fits int64 for ages
+			c.BlockTime, c.TransactionFrom,
+		); err != nil {
+			return fmt.Errorf("insert cancellation %s/%d: %w", c.TxHash, c.LogIndex, err)
+		}
+	}
+	return nil
+}
+
 // Store wraps a pgxpool.Pool with the operations base-collector needs.
 type Store struct {
 	pool *pgxpool.Pool
@@ -171,9 +199,12 @@ func (s *Store) AssertSchema(ctx context.Context) error {
 	return nil
 }
 
-// InsertBatch inserts every row in batch and advances the cursor to
-// maxBlock, all in one Postgres transaction. If any insert fails, the whole
-// transaction rolls back — neither the rows nor the cursor advance.
+// InsertBatch inserts every row in batch, writes every cancellation, and
+// advances the cursor to maxBlock, all in one Postgres transaction. If any
+// insert fails, the whole transaction rolls back — neither the rows, the
+// cancellations, nor the cursor advance. Cancellations are written on the same
+// transaction as the payments and cursor advance, so a crash can never advance
+// the cursor past un-stored cancellations.
 //
 // Idempotent: ON CONFLICT (chain, tx_hash, log_index) DO NOTHING absorbs
 // re-runs over the same range. The cursor advance is monotonic — a smaller
@@ -182,7 +213,7 @@ func (s *Store) AssertSchema(ctx context.Context) error {
 // maxBlock == 0 skips the cursor advance entirely. This is the §7
 // empty-batch guard: HyperSync can deliver a batch with no logs and
 // max_block = 0, and blindly writing it would reset progress to genesis.
-func (s *Store) InsertBatch(ctx context.Context, batch []x402.Payment, maxBlock uint64) error {
+func (s *Store) InsertBatch(ctx context.Context, batch []x402.Payment, cancellations []x402.Cancellation, maxBlock uint64) error {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -191,6 +222,12 @@ func (s *Store) InsertBatch(ctx context.Context, batch []x402.Payment, maxBlock 
 
 	if len(batch) > 0 {
 		if err := copyBatch(ctx, tx, batch); err != nil {
+			return err
+		}
+	}
+
+	if len(cancellations) > 0 {
+		if err := insertCancellations(ctx, tx, cancellations); err != nil {
 			return err
 		}
 	}

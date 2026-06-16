@@ -107,7 +107,7 @@ func TestClassification_AttributionLabels(t *testing.T) {
 		paymentAt(3, "0xcontested", facOther, usdcToken), // unknown payer, clean venue
 		paymentAt(4, "0xv2only", facV2Only, usdcToken),   // payer only allowlisted at v2
 	}
-	require.NoError(t, store.InsertBatch(ctx, batch, 100))
+	require.NoError(t, store.InsertBatch(ctx, batch, nil, 100))
 
 	got := map[string]string{}
 	rows, err := sqlDB.QueryContext(ctx, `SELECT tx_hash, attribution FROM payment_classified_v1`)
@@ -134,7 +134,7 @@ func TestClassification_ViewNeverDropsRows(t *testing.T) {
 		paymentAt(2, "0xtwo", facOther, denyV1),
 		paymentAt(3, "0xthree", facOther, usdcToken),
 	}
-	require.NoError(t, store.InsertBatch(ctx, batch, 100))
+	require.NoError(t, store.InsertBatch(ctx, batch, nil, 100))
 
 	var nView, nPay int
 	require.NoError(t, sqlDB.QueryRowContext(ctx, `SELECT count(*) FROM payment_classified_v1`).Scan(&nView))

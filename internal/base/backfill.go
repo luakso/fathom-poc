@@ -79,7 +79,7 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 			return nil
 		}
 
-		payments, stats, decodeErr := decodeBatch(batch)
+		payments, cancellations, stats, decodeErr := decodeBatch(batch)
 		if decodeErr != nil {
 			return fmt.Errorf("decode batch: %w", decodeErr)
 		}
@@ -114,8 +114,8 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 			)
 		}
 
-		if err := b.store.InsertBatch(ctx, payments, maxBlock); err != nil {
-			return fmt.Errorf("insert batch (rows=%d max_block=%d): %w", len(payments), maxBlock, err)
+		if err := b.store.InsertBatch(ctx, payments, cancellations, maxBlock); err != nil {
+			return fmt.Errorf("insert batch (rows=%d cancels=%d max_block=%d): %w", len(payments), len(cancellations), maxBlock, err)
 		}
 
 		// Anomalous drops below the all-lost threshold don't halt the run, but
@@ -134,6 +134,7 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 		slog.Info(
 			"backfill: batch committed",
 			"rows", len(payments),
+			"cancels", len(cancellations),
 			"kept", stats.Kept,
 			"denied", stats.Denied,
 			"dropped", stats.Dropped,
@@ -157,13 +158,13 @@ func allCandidatesLost(stats x402.AssembleStats) bool {
 // Store.InsertBatch. Per-row decode failures (bad hex, missing companion)
 // log a warn inside Assemble and are skipped — only structural failures
 // (whole-row convert errors) abort.
-func decodeBatch(batch HyperSyncBatch) ([]x402.Payment, x402.AssembleStats, error) {
+func decodeBatch(batch HyperSyncBatch) ([]x402.Payment, []x402.Cancellation, x402.AssembleStats, error) {
 	logs := make([]x402.Log, 0, len(batch.Data.Logs))
 	receiptByHash := map[common.Hash][]x402.Log{}
 	for i, hl := range batch.Data.Logs {
 		lg, err := ConvertLog(hl)
 		if err != nil {
-			return nil, x402.AssembleStats{}, fmt.Errorf("log[%d]: %w", i, err)
+			return nil, nil, x402.AssembleStats{}, fmt.Errorf("log[%d]: %w", i, err)
 		}
 		logs = append(logs, lg)
 		receiptByHash[lg.TxHash] = append(receiptByHash[lg.TxHash], lg)
@@ -173,7 +174,7 @@ func decodeBatch(batch HyperSyncBatch) ([]x402.Payment, x402.AssembleStats, erro
 	for i, ht := range batch.Data.Transactions {
 		tx, err := ConvertTransaction(ht)
 		if err != nil {
-			return nil, x402.AssembleStats{}, fmt.Errorf("tx[%d]: %w", i, err)
+			return nil, nil, x402.AssembleStats{}, fmt.Errorf("tx[%d]: %w", i, err)
 		}
 		txByHash[tx.Hash] = tx
 	}
@@ -182,11 +183,12 @@ func decodeBatch(batch HyperSyncBatch) ([]x402.Payment, x402.AssembleStats, erro
 	for i, hb := range batch.Data.Blocks {
 		blk, err := ConvertBlock(hb)
 		if err != nil {
-			return nil, x402.AssembleStats{}, fmt.Errorf("block[%d]: %w", i, err)
+			return nil, nil, x402.AssembleStats{}, fmt.Errorf("block[%d]: %w", i, err)
 		}
 		blockByNumber[blk.Number] = blk
 	}
 
 	payments, stats := x402.Assemble(logs, txByHash, receiptByHash, blockByNumber)
-	return payments, stats, nil
+	cancellations := x402.ExtractCancellations(logs, txByHash, blockByNumber)
+	return payments, cancellations, stats, nil
 }

@@ -85,7 +85,7 @@ func TestStore_InsertBatch_WritesAndAdvancesCursor(t *testing.T) {
 	ctx, store := setup(t)
 
 	batch := []x402.Payment{samplePayment(1), samplePayment(2)}
-	require.NoError(t, store.InsertBatch(ctx, batch, 100))
+	require.NoError(t, store.InsertBatch(ctx, batch, nil, 100))
 
 	cursor, err := store.GetCursor(ctx)
 	require.NoError(t, err)
@@ -96,8 +96,8 @@ func TestStore_InsertBatch_Idempotent(t *testing.T) {
 	ctx, store := setup(t)
 
 	batch := []x402.Payment{samplePayment(1)}
-	require.NoError(t, store.InsertBatch(ctx, batch, 100))
-	require.NoError(t, store.InsertBatch(ctx, batch, 100), "re-insert must not error")
+	require.NoError(t, store.InsertBatch(ctx, batch, nil, 100))
+	require.NoError(t, store.InsertBatch(ctx, batch, nil, 100), "re-insert must not error")
 
 	cursor, err := store.GetCursor(ctx)
 	require.NoError(t, err)
@@ -107,8 +107,8 @@ func TestStore_InsertBatch_Idempotent(t *testing.T) {
 func TestStore_InsertBatch_CursorMonotonic(t *testing.T) {
 	ctx, store := setup(t)
 
-	require.NoError(t, store.InsertBatch(ctx, nil, 200))
-	require.NoError(t, store.InsertBatch(ctx, nil, 150), "cursor must not regress")
+	require.NoError(t, store.InsertBatch(ctx, nil, nil, 200))
+	require.NoError(t, store.InsertBatch(ctx, nil, nil, 150), "cursor must not regress")
 
 	cursor, err := store.GetCursor(ctx)
 	require.NoError(t, err)
@@ -120,12 +120,12 @@ func TestStore_InsertBatch_RollsBackOnError(t *testing.T) {
 
 	// Same-batch duplicates are dropped by ON CONFLICT, so this succeeds.
 	dup := []x402.Payment{samplePayment(1), samplePayment(1)}
-	require.NoError(t, store.InsertBatch(ctx, dup, 999))
+	require.NoError(t, store.InsertBatch(ctx, dup, nil, 999))
 
 	// Now the rollback test: a row with NumericOverflow on amount_raw.
 	oversize := samplePayment(2)
 	oversize.AmountRaw = new(big.Int).Exp(big.NewInt(10), big.NewInt(80), nil) // 10^80, exceeds NUMERIC(78,0)
-	err := store.InsertBatch(ctx, []x402.Payment{oversize}, 5000)
+	err := store.InsertBatch(ctx, []x402.Payment{oversize}, nil, 5000)
 	require.Error(t, err)
 
 	cursor, err := store.GetCursor(ctx)
@@ -268,7 +268,7 @@ func TestStore_InsertBatch_ColumnsRoundTripExactly(t *testing.T) {
 	legacy.MaxPriorityFeePerGas = nil
 	legacy.PayeeServiceID = nil
 
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{full, legacy}, 100))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{full, legacy}, nil, 100))
 
 	got := readPayment(ctx, t, store, full.TxHash, full.LogIndex)
 	require.Equal(t, full.Chain, got.Chain)
@@ -321,7 +321,7 @@ func TestStore_AmountUSDC_IsGenerated(t *testing.T) {
 	p.AmountRaw = big.NewInt(2_500_000)    // 2.5 USDC
 	p.AmountUSDC = decimal.NewFromInt(999) // wrong on purpose — must be ignored
 
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{p}, 100))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{p}, nil, 100))
 
 	got := readPayment(ctx, t, store, p.TxHash, p.LogIndex)
 	require.Equal(t, "2.500000", got.AmountUSDC.StringFixed(6),
@@ -335,13 +335,13 @@ func TestStore_InsertBatch_MixedNewAndExisting(t *testing.T) {
 	ctx, store := setup(t)
 
 	existing := samplePayment(1)
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{existing}, 50))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{existing}, nil, 50))
 
 	changed := samplePayment(1) // same PK as existing, but mutated payload
 	changed.Facilitator = "0xCHANGED"
 	fresh := samplePayment(2)
 
-	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{changed, fresh}, 100))
+	require.NoError(t, store.InsertBatch(ctx, []x402.Payment{changed, fresh}, nil, 100))
 
 	require.Equal(t, int64(2), countPayments(ctx, t, store), "only the new row was added")
 

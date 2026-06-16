@@ -27,6 +27,7 @@ func TestRunStatus_ReportsCursorAndCounts(t *testing.T) {
 	require.NoError(t, store.InsertBatch(
 		ctx,
 		[]x402.Payment{p1, p2},
+		nil,
 		123,
 	))
 
