@@ -239,3 +239,56 @@ func TestStore_X402View_FacilitatorKnown(t *testing.T) {
 	require.True(t, knownLabel("0xknown"), "allowlisted facilitator → known")
 	require.False(t, knownLabel("0xunknown"), "unlisted facilitator → unknown (discovery frontier)")
 }
+
+// TestMigration_AuthorizationCancellations asserts 00013 created the table and
+// authorization_cancellation_v1 exposes facilitator_known.
+func TestMigration_AuthorizationCancellations(t *testing.T) {
+	ctx, store := setup(t)
+
+	var exists bool
+	require.NoError(t, store.Pool().QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'authorization_cancellations')`).Scan(&exists))
+	require.True(t, exists, "authorization_cancellations table must exist after migration 00013")
+
+	_, err := store.Pool().Exec(ctx, `SELECT facilitator_known FROM authorization_cancellation_v1 WHERE false`)
+	require.NoError(t, err, "authorization_cancellation_v1 must expose facilitator_known")
+}
+
+// TestStore_Cancellations_RoundTrip proves cancellations persist through
+// InsertBatch (in the same transaction as payments + cursor) and that re-insert
+// is idempotent.
+func TestStore_Cancellations_RoundTrip(t *testing.T) {
+	ctx, store := setup(t)
+
+	nonce := make([]byte, 32)
+	nonce[31] = 0xab
+	c := x402.Cancellation{
+		Chain: x402.ChainBase, TxHash: "0xcancel", LogIndex: 4,
+		Authorizer: "0xpayer", Nonce: nonce,
+		BlockNumber: 100, BlockTime: time.Unix(1_700_000_000, 0).UTC(),
+		TransactionFrom: "0xfac",
+	}
+
+	require.NoError(t, store.InsertBatch(ctx, nil, []x402.Cancellation{c}, 100))
+
+	var (
+		gotAuthorizer, gotFrom string
+		gotNonce               []byte
+		gotBlock               int64
+	)
+	require.NoError(t, store.Pool().QueryRow(ctx, `
+		SELECT authorizer, transaction_from, nonce, block_number
+		FROM authorization_cancellations WHERE tx_hash = $1 AND log_index = $2`,
+		"0xcancel", 4).Scan(&gotAuthorizer, &gotFrom, &gotNonce, &gotBlock))
+	require.Equal(t, "0xpayer", gotAuthorizer)
+	require.Equal(t, "0xfac", gotFrom)
+	require.Equal(t, nonce, gotNonce)
+	require.Equal(t, int64(100), gotBlock)
+
+	// Idempotent re-insert: no error, still exactly one row.
+	require.NoError(t, store.InsertBatch(ctx, nil, []x402.Cancellation{c}, 100))
+	var count int
+	require.NoError(t, store.Pool().QueryRow(ctx, `
+		SELECT count(*) FROM authorization_cancellations WHERE tx_hash = $1`, "0xcancel").Scan(&count))
+	require.Equal(t, 1, count, "re-insert must not duplicate")
+}
