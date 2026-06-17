@@ -95,3 +95,26 @@ apply-views:
             echo "applying $f"; \
             docker compose exec -T postgres psql "$DB_URL" -v ON_ERROR_STOP=1 -f - < "$f"; \
         done
+
+# --- Base collector (run from host against the exposed postgres port) ---
+# Maps .env's host-facing vars onto the koanf "__" config names the binary reads
+# (DB_URL_HOST -> DATABASE__URL, etc.), so you never hand-map them. NB: if your
+# network filters hypersync.xyz (TLS reset/timeout), connect a VPN first.
+
+# Dry-run HyperSync count for a block range — no DB writes. Example:
+#   just probe 46915000 46958200
+probe from to:
+    @set -a; . ./.env; set +a; \
+        DATABASE__URL="$DB_URL_HOST" \
+        BASE__HYPERSYNC_URL="${BASE_HYPERSYNC_URL:-https://base.hypersync.xyz}" \
+        BASE__HYPERSYNC_BEARER_TOKEN="${BASE_HYPERSYNC_BEARER_TOKEN:-}" \
+        go run ./cmd/base-collector probe --from-block {{from}} --to-block {{to}}
+
+# One-shot HyperSync backfill of a block range into payments + cancellations. Example:
+#   just backfill 46915000 46958200
+backfill from to:
+    @set -a; . ./.env; set +a; \
+        DATABASE__URL="$DB_URL_HOST" \
+        BASE__HYPERSYNC_URL="${BASE_HYPERSYNC_URL:-https://base.hypersync.xyz}" \
+        BASE__HYPERSYNC_BEARER_TOKEN="${BASE_HYPERSYNC_BEARER_TOKEN:-}" \
+        go run ./cmd/base-collector backfill --from-block {{from}} --to-block {{to}}
