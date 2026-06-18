@@ -181,8 +181,13 @@ type ConcentrationSection struct {
 // role is 'payee' or 'payer'. Windows absent from the tables come back empty.
 func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, error) {
 	page := EntityPage{Role: role, Windows: map[string]EntityWindow{}}
+	zeroConc := EntityConcentration{TotalVolume: "0", Top10Volume: "0", Top100Volume: "0"}
 	for w := range windowDays {
-		page.Windows[w] = EntityWindow{Leaderboard: []EntityRow{}, Buckets: []EntityBucket{}}
+		page.Windows[w] = EntityWindow{
+			Leaderboard:   []EntityRow{},
+			Buckets:       []EntityBucket{},
+			Concentration: zeroConc,
+		}
 	}
 
 	rrows, err := q.Query(ctx, `
@@ -226,7 +231,10 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 		if err := brows.Scan(&w, &b.Bucket, &b.EntityCount, &b.TxnSum, &b.VolumeSum); err != nil {
 			return EntityPage{}, fmt.Errorf("scan entity bucket: %w", err)
 		}
-		ew := page.Windows[w]
+		ew, ok := page.Windows[w]
+		if !ok {
+			return EntityPage{}, fmt.Errorf("entity buckets: unknown window %q", w)
+		}
 		ew.Buckets = append(ew.Buckets, b)
 		page.Windows[w] = ew
 	}
@@ -239,7 +247,10 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 		return EntityPage{}, err
 	}
 	for w, c := range conc {
-		ew := page.Windows[w]
+		ew, ok := page.Windows[w]
+		if !ok {
+			return EntityPage{}, fmt.Errorf("entity concentration: unknown window %q", w)
+		}
 		ew.Concentration = c
 		page.Windows[w] = ew
 	}
