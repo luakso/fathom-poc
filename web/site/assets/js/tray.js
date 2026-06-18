@@ -7,70 +7,70 @@ import { state, data, winLabel } from "./state.js";
 const pins = [];
 let selPin = 0;
 const PINNERS = {
-  overview(){ const w = data.windows[state.win], a = w.by_attribution;
-    return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(a.agentic.volume_usdc)+" agentic",
-      context:`of ${fmtMoney(w.volume_usdc)} observed (${pct(a.agentic.volume_usdc,w.volume_usdc)} of $, ${pct(a.agentic.txn_count,w.txn_count)} of tx)`,
-      denom:"all observed x402-surface USDC on Base · "+winLabel[state.win],
+  overview(){ const w = data.windows[state.win], a = w.by_membership;
+    return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
+      context:`${fmtCount(w.txn_count)} x402 payments · known-facilitator ${pct(a.known.volume_usdc,w.volume_usdc)} of $`,
+      denom:"x402 settlements on Base · "+winLabel[state.win],
       series:data.daily.map(d=>d[1]) }; },
   daily(){ const peak = data.daily.reduce((a,b)=> b[1]>a[1]?b:a);
     return { title:"DAILY TAPE", value:fmtInt(peak[1])+" tx/day peak",
       context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
-      denom:`all observed traffic, ${data.daily[0][0]} → ${data.meta.data_through_day}`,
+      denom:`x402 settlements, ${data.daily[0][0]} → ${data.meta.data_through_day}`,
       series:data.daily.map(d=> state.dMetric==="tx"?d[1]:d[2]) }; },
   monthly(){
     const complete = data.monthly.filter(m => m.complete);
-    if (complete.length < 2) return { title:"MONTHLY · AGENTIC", value:"insufficient complete months",
-      context:"need two complete months for MoM", denom:"agentic set only · complete months",
-      series: data.monthly.map(m => num(m.by_attribution.agentic.volume_usdc)) };
+    if (complete.length < 2) return { title:"MONTHLY", value:"insufficient complete months",
+      context:"need two complete months for MoM", denom:"x402 set · complete months",
+      series: data.monthly.map(m => num(m.volume_usdc)) };
     const prev = complete[complete.length-2], last = complete[complete.length-1];
-    const v = m => num(m.by_attribution.agentic.volume_usdc);
-    const t = m => m.by_attribution.agentic.txn_count;
+    const v = m => num(m.volume_usdc);
+    const t = m => m.txn_count;
     const dUsd = 100*(v(last)-v(prev))/v(prev);
     const dTx  = 100*(t(last)-t(prev))/t(prev);
     const name = new Date(last.month + "-01T00:00:00Z").toLocaleString("en-US",{month:"short", timeZone:"UTC"});
-    return { title:"MONTHLY · AGENTIC",
+    return { title:"MONTHLY",
       value:`${name} $: ${dUsd>0?"+":""}${dUsd.toFixed(0)}% MoM`,
-      context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while $ ${dUsd<0?"fell":"rose"} ${fmtMoney(v(prev))}→${fmtMoney(v(last))}${dUsd<0&&dTx>0?" — activity without value":""}`,
-      denom:"agentic set only · complete months",
-      series: data.monthly.map(m => num(m.by_attribution.agentic.volume_usdc)) };
+      context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while $ ${dUsd<0?"fell":"rose"} ${fmtMoney(v(prev))}→${fmtMoney(v(last))}`,
+      denom:"x402 set · complete months",
+      series: data.monthly.map(m => num(m.volume_usdc)) };
   },
-  split(){ const w = data.windows[state.win], a = w.by_attribution;
-    return { title:"ATTRIBUTION · "+state.win.toUpperCase(), value:pct(a.contamination.volume_usdc,w.volume_usdc)+" contamination",
-      context:`agentic ${fmtMoney(a.agentic.volume_usdc)} · contested ${fmtMoney(a.contested.volume_usdc)} · contamination ${fmtMoney(a.contamination.volume_usdc)}`,
-      denom:`allowlist methodology v${data.meta.methodology_version} · `+winLabel[state.win] }; },
+  split(){ const w = data.windows[state.win], a = w.by_membership;
+    return { title:"MEMBERSHIP · "+state.win.toUpperCase(), value:pct(a.unknown.volume_usdc,w.volume_usdc)+" unknown-facilitator",
+      context:`known ${fmtMoney(a.known.volume_usdc)} · unknown ${fmtMoney(a.unknown.volume_usdc)} (the discovery frontier)`,
+      denom:`facilitator allowlist v${data.meta.methodology_version} · `+winLabel[state.win] }; },
   shape(){ const t = data.typical[state.win];
-    if (!t.agentic.txn_count) return null;
-    const xMed = num(t.agentic.avg_usdc)/num(t.agentic.median_usdc);
-    return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.agentic.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.agentic.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · contamination median ${fmtAmt(t.contamination.median_usdc)}`,
-      denom:"agentic set · "+winLabel[state.win] }; },
+    if (!t.known.txn_count) return null;
+    const xMed = num(t.known.avg_usdc)/num(t.known.median_usdc);
+    return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.known.median_usdc)+" median",
+      context:`mean ${fmtAmt(t.known.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median`,
+      denom:"known-facilitator set · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;
     const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
     return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${p.txn_share_pct}% of agentic tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
-      denom:"agentic set only · "+winLabel[state.win] }; },
-  gas(){ const g = data.gas.windows[state.win].by_attribution.agentic;
+      context:`top amount = ${p.txn_share_pct}% of known-facilitator tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
+      denom:"known-facilitator set · "+winLabel[state.win] }; },
+  gas(){ const g = data.gas.windows[state.win].by_membership.known;
     if (!g.txn_count) return null;
     const p = 100*g.breakeven_txn_count/g.txn_count;
-    return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% gas>value",
-      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} agentic payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} gas per $1 settled`,
-      denom:"tx-deduped gas, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
-  velocity(){ const vw = data.velocity.windows.all.agentic;
-    const days = data.velocity.agentic_daily;
+    return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% cost>value",
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} known-facilitator payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
+      denom:"tx-deduped L1+L2 cost, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
+  velocity(){ const vw = data.velocity.windows.all.known;
+    const days = data.velocity.known_daily;
     if (!days.length) return null;
     const pi = peakIndex(days.map(d => d[1]));
     const med = medianOf(days.map(d => d[2]));
     return { title:"VELOCITY", value:fmtInt(vw.max_per_min)+"/min peak",
       context:`${days[pi][0]} · body ~${fmtInt(med)}/min p99 — bursts, not drip`,
-      denom:"agentic set · p99 over active minutes",
+      denom:"known-facilitator set · p99 over active minutes",
       series: days.map(d => d[1]) }; },
   claims(){ const c = data.claims[0];
     if (!c) return null;
     const ratio = num(c.claimed_value)/num(c.measured_value);
     return { title:"CLAIM LEDGER", value:"×"+ratio.toFixed(1)+" "+claimVerdict(ratio),
       context:`"${c.claim_text}" → measured ${fmtInt(c.measured_value)}`,
-      denom:"claim vs Fathom classified agentic count" }; },
+      denom:"claim vs Fathom measured count" }; },
 };
 export function addPin(key){
   const gen = PINNERS[key]; if (!gen) return;

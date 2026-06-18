@@ -90,20 +90,20 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	var minVersion *int16
 	if err := q.QueryRow(ctx, `
 		SELECT
-		    (SELECT max(day)::text FROM metrics_daily_v1),
+		    (SELECT max(day)::text FROM metrics_daily_v2),
 		    count(DISTINCT methodology_version),
 		    min(methodology_version)
 		FROM (
-		    SELECT methodology_version FROM metrics_daily_v1
-		    UNION ALL SELECT methodology_version FROM metrics_window_stats_v1
-		    UNION ALL SELECT methodology_version FROM metrics_price_points_v1
-		    UNION ALL SELECT methodology_version FROM metrics_gas_daily_v1
-		    UNION ALL SELECT methodology_version FROM metrics_velocity_daily_v1
+		    SELECT methodology_version FROM metrics_daily_v2
+		    UNION ALL SELECT methodology_version FROM metrics_window_stats_v2
+		    UNION ALL SELECT methodology_version FROM metrics_price_points_v2
+		    UNION ALL SELECT methodology_version FROM metrics_gas_daily_v2
+		    UNION ALL SELECT methodology_version FROM metrics_velocity_daily_v2
 		) versions`).Scan(&day, &versions, &minVersion); err != nil {
 		return "", 0, fmt.Errorf("cube stamp: %w", err)
 	}
 	if day == nil {
-		return "", 0, errors.New("metrics_daily_v1 is empty — run `publisher rollup` before emit; refusing to overwrite artifacts with zeros")
+		return "", 0, errors.New("metrics_daily_v2 is empty — run `publisher rollup` before emit; refusing to overwrite artifacts with zeros")
 	}
 	if versions != 1 {
 		return "", 0, fmt.Errorf("cube stamp: expected one methodology_version across metrics tables, found %d — rebuild the cube", versions)

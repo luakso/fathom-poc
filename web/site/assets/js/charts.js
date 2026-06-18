@@ -70,7 +70,7 @@ export function rDaily(){
 export function rMonthly(){
   const ms = data.monthly;
   const usd = state.mMetric === "usd";
-  const get = m => usd ? num(m.by_attribution.agentic.volume_usdc) : m.by_attribution.agentic.txn_count;
+  const get = m => usd ? num(m.volume_usdc) : m.txn_count;
   const max = Math.max(...ms.map(get)) || 1;
   $("#monthly").innerHTML = ms.map((m,i) => {
     const v = get(m), wpct = Math.max(1, 72*v/max);
@@ -80,7 +80,7 @@ export function rMonthly(){
       mom = `<span class="mom ${d<0?"dn":"up"}">${d>0?"+":""}${d.toFixed(0)}%</span>`;
     }
     if (!m.complete) mom = `<span class="mom na">◌ partial</span>`;
-    const other = usd ? fmtCount(m.by_attribution.agentic.txn_count)+" tx" : fmtMoney(m.by_attribution.agentic.volume_usdc);
+    const other = usd ? fmtCount(m.txn_count)+" tx" : fmtMoney(m.volume_usdc);
     return `<div class="mrow">
       <span class="lab">${m.month}</span>
       <span class="meter"><span class="bar ${m.complete?"":"partial"}" style="width:${wpct}%"></span>
@@ -91,10 +91,10 @@ export function rMonthly(){
 
 /* ———————— 8 VELOCITY ———————— */
 export function rVelocity(){
-  const days = data.velocity.agentic_daily;
+  const days = data.velocity.known_daily;
   const host = $("#velochart");
   if (!days.length){
-    host.innerHTML = `<div class="readout">no agentic velocity rows in this cube</div>`;
+    host.innerHTML = `<div class="readout">no known-facilitator velocity rows in this cube</div>`;
     $("#velostats").innerHTML = "";
     return;
   }
@@ -132,6 +132,6 @@ export function rVelocity(){
   $("#vhover").addEventListener("mouseleave", () => { $("#v-readout").textContent = "│ = day's max minute · ▪ = p99 of active minutes"; });
   const vw = data.velocity.windows;
   $("#velostats").innerHTML = ["7d","30d","all"].map(k =>
-    `<div class="kv"><span class="k">peak · ${k.toUpperCase()}</span><span class="v">${fmtInt(vw[k].agentic.max_per_min)}/min</span></div>`).join("") +
+    `<div class="kv"><span class="k">peak · ${k.toUpperCase()}</span><span class="v">${fmtInt(vw[k].known.max_per_min)}/min</span></div>`).join("") +
     `<div class="kv"><span class="k">median p99 (active)</span><span class="v">${fmtInt(medianOf(days.map(d => d[2])))}/min</span></div>`;
 }

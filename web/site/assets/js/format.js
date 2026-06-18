@@ -21,7 +21,7 @@ export const fmtAmt = s => { let t = String(s);
 export const pct = (a,b,dp=1) => (100*num(a)/num(b)).toFixed(dp) + "%";
 
 export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mid","<$1k"],["whale","≥$1k"]];
-export const ATTRS = [["agentic","c-ag"],["contested","c-ct"],["contamination","c-cm"]];
+export const ATTRS = [["known","c-ag"],["unknown","c-ct"]];
 
 // Shared verdict vocabulary — panel tags and pin/X-card text must agree, so
 // the thresholds live here, in one place, not in each renderer.

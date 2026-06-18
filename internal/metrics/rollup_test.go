@@ -82,10 +82,10 @@ func TestRebuild_Conservation(t *testing.T) {
 	var cubeTxns, viewTxns int64
 	var cubeVol, viewVol string
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT coalesce(sum(txn_count),0), coalesce(sum(volume_usdc),0)::text FROM metrics_daily_v1`).
+		`SELECT coalesce(sum(txn_count),0), coalesce(sum(volume_usdc),0)::text FROM metrics_daily_v2`).
 		Scan(&cubeTxns, &cubeVol))
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT count(*), coalesce(sum(amount_usdc),0)::text FROM payment_classified_v1`).
+		`SELECT count(*), coalesce(sum(amount_usdc),0)::text FROM payment_x402_v1`).
 		Scan(&viewTxns, &viewVol))
 	require.Equal(t, viewTxns, cubeTxns, "cube txn_count must equal view row count")
 	require.Equal(t, viewVol, cubeVol, "cube volume must equal view volume")
@@ -93,15 +93,34 @@ func TestRebuild_Conservation(t *testing.T) {
 	// Grain check: one agentic dust row on day 1.
 	var n int64
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT txn_count FROM metrics_daily_v1
-		  WHERE day='2026-06-01' AND attribution='agentic' AND amount_band='dust'`).Scan(&n))
+		`SELECT txn_count FROM metrics_daily_v2
+		  WHERE day='2026-06-01' AND membership='known' AND amount_band='dust'`).Scan(&n))
 	require.Equal(t, int64(1), n)
 
 	// The cube carries the view's methodology version, single-valued.
 	var version int16
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT DISTINCT methodology_version FROM metrics_daily_v1`).Scan(&version))
+		`SELECT DISTINCT methodology_version FROM metrics_daily_v2`).Scan(&version))
 	require.Equal(t, int16(1), version)
+}
+
+func TestRebuild_MembershipConservation(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1") // known
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"}, // known
+		{"0xc", 0, "2026-06-05T12:00:00Z", "0xfac2", "0xp3", "0xs2", "9.00"}, // unknown
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var known, unknown, all int64
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT txn_count FROM metrics_window_stats_v2 WHERE window_name='all' AND membership='known'`).Scan(&known))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT txn_count FROM metrics_window_stats_v2 WHERE window_name='all' AND membership='unknown'`).Scan(&unknown))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT txn_count FROM metrics_window_stats_v2 WHERE window_name='all' AND membership='all'`).Scan(&all))
+	require.Equal(t, all, known+unknown, "membership partition must reconcile to the independently-computed 'all' row")
+	require.Equal(t, int64(2), known)
+	require.Equal(t, int64(1), unknown)
 }
 
 func TestRebuild_Idempotent(t *testing.T) {
@@ -112,7 +131,7 @@ func TestRebuild_Idempotent(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t))) // second run must not double-count
 	var total int64
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT sum(txn_count) FROM metrics_daily_v1`).Scan(&total))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT sum(txn_count) FROM metrics_daily_v2`).Scan(&total))
 	require.Equal(t, int64(1), total)
 }
 
@@ -134,7 +153,7 @@ func TestRebuild_MissingPriceMonthFailsAndPreservesTables(t *testing.T) {
 	require.ErrorContains(t, err, "2026-06")
 
 	var n int64
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM metrics_daily_v1`).Scan(&n))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM metrics_daily_v2`).Scan(&n))
 	require.NotZero(t, n, "failed rebuild must leave the previous cube intact")
 }
 
@@ -154,8 +173,8 @@ func TestRebuild_WindowStatsMedians(t *testing.T) {
 	var median string
 	var txns int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v1
-		WHERE window_name='7d' AND attribution='agentic'`).Scan(&median, &txns))
+		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v2
+		WHERE window_name='7d' AND membership='known'`).Scan(&median, &txns))
 	require.Equal(t, "2.000000", median)
 	require.Equal(t, int64(3), txns)
 
@@ -163,16 +182,16 @@ func TestRebuild_WindowStatsMedians(t *testing.T) {
 	// it covers all four payments (even count: percentile_disc picks the lower
 	// middle = 2.00).
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v1
-		WHERE window_name='all' AND attribution='all'`).Scan(&median, &txns))
+		SELECT median_amount_usdc::text, txn_count FROM metrics_window_stats_v2
+		WHERE window_name='all' AND membership='all'`).Scan(&median, &txns))
 	require.Equal(t, "2.000000", median)
 	require.Equal(t, int64(4), txns)
 
 	// The contested whale exists in 'all' but not '30d'.
 	var contested30d int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT count(*) FROM metrics_window_stats_v1
-		WHERE window_name='30d' AND attribution='contested'`).Scan(&contested30d))
+		SELECT count(*) FROM metrics_window_stats_v2
+		WHERE window_name='30d' AND membership='unknown'`).Scan(&contested30d))
 	require.Zero(t, contested30d)
 }
 
@@ -194,14 +213,14 @@ func TestRebuild_PricePointsAgenticTopN(t *testing.T) {
 	var amount string
 	var txns, payees int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT amount_usdc::text, txn_count, payee_count FROM metrics_price_points_v1
+		SELECT amount_usdc::text, txn_count, payee_count FROM metrics_price_points_v2
 		WHERE window_name='all' AND rank=1`).Scan(&amount, &txns, &payees))
 	require.Equal(t, "0.100000", amount)
 	require.Equal(t, int64(3), txns)
 	require.Equal(t, int64(2), payees)
 
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT amount_usdc::text FROM metrics_price_points_v1
+		SELECT amount_usdc::text FROM metrics_price_points_v2
 		WHERE window_name='all' AND rank=2`).Scan(&amount))
 	require.Equal(t, "5.000000", amount)
 }
@@ -218,7 +237,7 @@ func TestRebuild_PricePointsTieBreakByAmount(t *testing.T) {
 
 	var amount string
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT amount_usdc::text FROM metrics_price_points_v1
+		SELECT amount_usdc::text FROM metrics_price_points_v2
 		WHERE window_name='all' AND rank=1`).Scan(&amount))
 	require.Equal(t, "0.100000", amount)
 }
@@ -237,13 +256,13 @@ func TestRebuild_WindowBoundaryInclusive(t *testing.T) {
 
 	var txns int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT txn_count FROM metrics_window_stats_v1
-		WHERE window_name='30d' AND attribution='agentic'`).Scan(&txns))
+		SELECT txn_count FROM metrics_window_stats_v2
+		WHERE window_name='30d' AND membership='known'`).Scan(&txns))
 	require.Equal(t, int64(2), txns, "30d must include the anchor-29 edge day and exclude anchor-30")
 
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT txn_count FROM metrics_window_stats_v1
-		WHERE window_name='all' AND attribution='agentic'`).Scan(&txns))
+		SELECT txn_count FROM metrics_window_stats_v2
+		WHERE window_name='all' AND membership='known'`).Scan(&txns))
 	require.Equal(t, int64(3), txns)
 }
 
@@ -258,12 +277,12 @@ func TestRebuild_PricePointsWindowed(t *testing.T) {
 
 	var txns int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT txn_count FROM metrics_price_points_v1
+		SELECT txn_count FROM metrics_price_points_v2
 		WHERE window_name='30d' AND rank=1`).Scan(&txns))
 	require.Equal(t, int64(1), txns)
 
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT txn_count FROM metrics_price_points_v1
+		SELECT txn_count FROM metrics_price_points_v2
 		WHERE window_name='all' AND rank=1`).Scan(&txns))
 	require.Equal(t, int64(2), txns)
 }
@@ -287,7 +306,7 @@ func TestRebuild_GasDedupesAndConserves(t *testing.T) {
 	// ::text comparison against "400" would fail on formatting, not math.
 	var conserved bool
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT sum(gas_cost_wei) = 400 FROM metrics_gas_daily_v1`).Scan(&conserved))
+		`SELECT sum(l2_gas_cost_wei + l1_fee_wei) = 400 FROM metrics_gas_daily_v2`).Scan(&conserved))
 	require.True(t, conserved, "apportioned wei must equal the per-tx sum (300 + 100)")
 
 	// Band split: the batch spreads 100 wei each into dust (0.005), micro
@@ -296,7 +315,7 @@ func TestRebuild_GasDedupesAndConserves(t *testing.T) {
 	var smallOK bool
 	var smallTxns int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT sum(gas_cost_wei) = 200, sum(txn_count) FROM metrics_gas_daily_v1
+		SELECT sum(l2_gas_cost_wei + l1_fee_wei) = 200, sum(txn_count) FROM metrics_gas_daily_v2
 		WHERE amount_band='small'`).Scan(&smallOK, &smallTxns))
 	require.True(t, smallOK)
 	require.Equal(t, int64(2), smallTxns)
@@ -304,9 +323,9 @@ func TestRebuild_GasDedupesAndConserves(t *testing.T) {
 	// Payment counts conserve against the cube.
 	var gasTxns, cubeTxns int64
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT sum(txn_count) FROM metrics_gas_daily_v1`).Scan(&gasTxns))
+		`SELECT sum(txn_count) FROM metrics_gas_daily_v2`).Scan(&gasTxns))
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT sum(txn_count) FROM metrics_daily_v1`).Scan(&cubeTxns))
+		`SELECT sum(txn_count) FROM metrics_daily_v2`).Scan(&cubeTxns))
 	require.Equal(t, cubeTxns, gasTxns)
 }
 
@@ -325,8 +344,8 @@ func TestRebuild_GasBreakeven(t *testing.T) {
 	var breakeven int64
 	var usd string
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT sum(breakeven_txn_count), sum(gas_cost_usd)::text
-		FROM metrics_gas_daily_v1`).Scan(&breakeven, &usd))
+		SELECT sum(breakeven_txn_count), sum(cost_usd)::text
+		FROM metrics_gas_daily_v2`).Scan(&breakeven, &usd))
 	require.Equal(t, int64(1), breakeven)
 	require.Equal(t, "4.00000000", usd) // 2 × ($2 per payment)
 }
@@ -345,7 +364,7 @@ func TestRebuild_GasApportionNonTerminating(t *testing.T) {
 
 	var withinDrift bool
 	require.NoError(t, db.QueryRowContext(ctx,
-		`SELECT abs(sum(gas_cost_wei) - 100) < 1e-6 FROM metrics_gas_daily_v1`).Scan(&withinDrift))
+		`SELECT abs(sum(l2_gas_cost_wei + l1_fee_wei) - 100) < 1e-6 FROM metrics_gas_daily_v2`).Scan(&withinDrift))
 	require.True(t, withinDrift, "apportioned sum must conserve tx gas to sub-wei precision")
 }
 
@@ -362,8 +381,8 @@ func TestRebuild_VelocityPerMinute(t *testing.T) {
 	var txns int64
 	var maxPM, p99PM int
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT txn_count, max_per_min, p99_per_min FROM metrics_velocity_daily_v1
-		WHERE day='2026-06-05' AND attribution='contested'`).Scan(&txns, &maxPM, &p99PM))
+		SELECT txn_count, max_per_min, p99_per_min FROM metrics_velocity_daily_v2
+		WHERE day='2026-06-05' AND membership='unknown'`).Scan(&txns, &maxPM, &p99PM))
 	require.Equal(t, int64(3), txns)
 	require.Equal(t, 2, maxPM)
 	require.Equal(t, 2, p99PM) // p99 over active minutes [2,1] picks 2
@@ -389,4 +408,58 @@ func TestAmountBand_Boundaries(t *testing.T) {
 		require.NoError(t, db.QueryRowContext(ctx, `SELECT amount_band($1::numeric)`, c.usd).Scan(&got))
 		require.Equal(t, c.want, got, "amount_band(%s)", c.usd)
 	}
+}
+
+func TestRebuild_GasFoldsL1Fee(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Single-payment tx: L2 = 100 wei, L1 = 300 wei. Total cost = 400 wei.
+	seedL1GasPayments(t, ctx, db, []seedL1GasRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "5.00", "100", "300"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// Compare numerically, not via ::text: numeric division (tx_l2 / n) carries
+	// trailing decimal zeros even for n=1, so "100.0000000000000000" != "100"
+	// would fail on formatting, not math — the same reason the conservation
+	// tests above compare with `= N` rather than ::text.
+	var l2OK, l1OK, total bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT l2_gas_cost_wei = 100, l1_fee_wei = 300, (l2_gas_cost_wei + l1_fee_wei) = 400
+		FROM metrics_gas_daily_v2 WHERE membership='known'`).Scan(&l2OK, &l1OK, &total))
+	require.True(t, l2OK, "L2 execution gas component must be 100 wei")
+	require.True(t, l1OK, "L1 data fee component must be 300 wei")
+	require.True(t, total, "total settlement cost must be l2 + l1 = 400 wei")
+}
+
+func TestRebuild_GasFoldsL1FeeAcrossBatch(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// One batch tx, 3 payments across 3 bands. tx L2=300, tx L1=300, each
+	// carried identically on every row (production shape). Apportioned 100/100
+	// per payment — exercises the n>1 dedup (max) + apportioning (sum(tx_l1/n)).
+	seedL1GasPayments(t, ctx, db, []seedL1GasRow{
+		{"0xbatch", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.005", "300", "300"},
+		{"0xbatch", 1, "2026-06-05T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.50", "300", "300"},
+		{"0xbatch", 2, "2026-06-05T10:00:00Z", "0xfac1", "0xp3", "0xs2", "50.00", "300", "300"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// L1 and L2 each conserve their per-tx total (300 each), independent of band.
+	var l2ok, l1ok, totalok bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT sum(l2_gas_cost_wei) = 300,
+		       sum(l1_fee_wei) = 300,
+		       sum(l2_gas_cost_wei + l1_fee_wei) = 600
+		FROM metrics_gas_daily_v2`).Scan(&l2ok, &l1ok, &totalok))
+	require.True(t, l2ok, "L2 component must conserve the per-tx L2 sum (300)")
+	require.True(t, l1ok, "L1 component must conserve the per-tx L1 sum (300)")
+	require.True(t, totalok, "total settlement cost must be L2+L1 = 600")
+
+	// Per-band L1 split: the 'small' band (50.00) gets exactly one payment's share.
+	var smallL1 bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT l1_fee_wei = 100 FROM metrics_gas_daily_v2
+		WHERE amount_band='small' AND membership='known'`).Scan(&smallL1))
+	require.True(t, smallL1, "small band gets one payment's L1 share (100)")
 }

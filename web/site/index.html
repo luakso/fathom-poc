@@ -65,7 +65,7 @@
 
       <!-- 2 DAILY TAPE -->
       <section class="panel span8" id="p2" style="animation-delay:.05s">
-        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all observed · <span id="d-range"></span></span></div>
+        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all x402 · <span id="d-range"></span></span></div>
         <div class="ptools">
           <button data-t="d-metric" data-v="tx" class="on">TX</button>
           <button data-t="d-metric" data-v="usd">USD</button>
@@ -77,24 +77,24 @@
         </div>
         <div class="readout" id="d-readout">hover the tape ▸ crosshair</div>
         <div class="chart-host" id="dailychart"></div>
-        <div class="denom">all observed traffic, before classification · active window shaded cyan · <span id="d-edge"></span> = data edge (partial day)</div>
+        <div class="denom">all x402 traffic · active window shaded cyan · <span id="d-edge"></span> = data edge (partial day)</div>
       </section>
 
       <!-- 3 MONTHLY -->
       <section class="panel span7" id="p3" style="animation-delay:.08s">
-        <div class="ptitle"><span class="no">3</span> MONTHLY · AGENTIC <span class="chip">complete months drive MoM</span></div>
+        <div class="ptitle"><span class="no">3</span> MONTHLY · X402 <span class="chip">complete months drive MoM</span></div>
         <div class="ptools">
           <button data-t="m-metric" data-v="usd" class="on">USD</button>
           <button data-t="m-metric" data-v="tx">TX</button>
           <button class="pin-it" data-pin="monthly">⊞ pin</button>
         </div>
         <div id="monthly"><!-- js --></div>
-        <div class="denom">agentic set only · ◌ = partial month (excluded from MoM)</div>
+        <div class="denom">x402 set · ◌ = partial month (excluded from MoM)</div>
       </section>
 
       <!-- 4 SPLIT -->
       <section class="panel span5" id="p4" style="animation-delay:.11s">
-        <div class="ptitle"><span class="no">4</span> ATTRIBUTION <span class="chip" id="sp-win"></span></div>
+        <div class="ptitle"><span class="no">4</span> MEMBERSHIP <span class="chip" id="sp-win"></span></div>
         <div class="ptools"><button class="pin-it" data-pin="split">⊞ pin</button></div>
         <table class="t" id="splittable"></table>
         <div class="note" style="margin-top:8px" id="sp-note"></div>
@@ -114,7 +114,7 @@
         <table class="t" id="typtable"></table>
         <div class="sep"></div>
         <div id="bands"></div>
-        <div class="denom">bands across all observed payments — the whale band ≈ the contamination · medians per window from their own scan</div>
+        <div class="denom">bands across all x402 payments — the whale band concentrates the dollars · medians per window from their own scan</div>
       </section>
 
       <!-- 6 PRICE POINTS -->
@@ -122,7 +122,7 @@
         <div class="ptitle"><span class="no">6</span> PRICE POINTS <span class="chip" id="pp-win"></span></div>
         <div class="ptools"><button class="pin-it" data-pin="price">⊞ pin</button></div>
         <table class="t" id="pptable"></table>
-        <div class="denom">agentic set only · share of window's agentic tx · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
+        <div class="denom">known-facilitator set · share of window's known tx · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
       </section>
 
       <!-- 7 GAS -->
@@ -130,7 +130,7 @@
         <div class="ptitle"><span class="no">7</span> GAS / BREAKEVEN <span class="chip" id="gas-win"></span></div>
         <div class="ptools"><button class="pin-it" data-pin="gas">⊞ pin</button></div>
         <div class="bignum c-cm glow" id="gas-pct">—</div>
-        <div class="note" style="margin:2px 0 8px">of agentic payments burned more gas than they moved</div>
+        <div class="note" style="margin:2px 0 8px">of known-facilitator payments cost more (L1+L2) than they moved</div>
         <div class="blockmeter" id="gas-meter"></div>
         <div class="sep"></div>
         <div id="gas-kv"></div>
@@ -141,12 +141,12 @@
 
       <!-- 8 VELOCITY -->
       <section class="panel span7" id="p8" style="animation-delay:.23s">
-        <div class="ptitle"><span class="no">8</span> VELOCITY <span class="chip">agentic · per-minute ceiling, daily</span></div>
+        <div class="ptitle"><span class="no">8</span> VELOCITY <span class="chip">known-facilitator · per-minute ceiling, daily</span></div>
         <div class="ptools"><button class="pin-it" data-pin="velocity">⊞ pin</button></div>
         <div class="readout" id="v-readout">│ = day's max minute · ▪ = p99 of active minutes</div>
         <div class="chart-host" id="velochart"></div>
         <div class="row2" id="velostats" style="margin-top:8px"></div>
-        <div class="denom">agentic set · p99 over active minutes only — idle minutes can't flatter the percentile</div>
+        <div class="denom">known-facilitator set · p99 over active minutes only — idle minutes can't flatter the percentile</div>
       </section>
 
       <!-- 9 CLAIMS -->
