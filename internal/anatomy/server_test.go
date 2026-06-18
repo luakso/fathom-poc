@@ -3,10 +3,12 @@ package anatomy_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -44,7 +46,7 @@ func newTestServer(d anatomy.DossierProvider, s anatomy.StatsProvider) http.Hand
 func TestServer_TxOK(t *testing.T) {
 	d := fakeDossier{g: anatomy.Graph{Chain: "base", TxHash: "0xabc"}}
 	srv := newTestServer(d, fakeStats{})
-	hash := "0x" + repeat("a", 64)
+	hash := "0x" + strings.Repeat("a", 64)
 	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
@@ -72,7 +74,7 @@ func TestServer_TxBadHash(t *testing.T) {
 
 func TestServer_TxNotFound(t *testing.T) {
 	srv := newTestServer(fakeDossier{err: anatomy.ErrNotFound}, fakeStats{})
-	hash := "0x" + repeat("a", 64)
+	hash := "0x" + strings.Repeat("a", 64)
 	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
@@ -97,10 +99,27 @@ func TestServer_ServesIndex(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "anatomy")
 }
 
-func repeat(s string, n int) string {
-	out := ""
-	for i := 0; i < n; i++ {
-		out += s
-	}
-	return out
+func TestServer_Tx500(t *testing.T) {
+	d := fakeDossier{err: errors.New("boom")}
+	srv := newTestServer(d, fakeStats{})
+	hash := "0x" + strings.Repeat("a", 64)
+	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+	var body map[string]string
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+	require.Equal(t, "internal error", body["error"])
+}
+
+func TestServer_SolanaTxOK(t *testing.T) {
+	d := fakeDossier{g: anatomy.Graph{Chain: "solana", TxHash: "5xkjABC"}}
+	srv := newTestServer(d, fakeStats{})
+	req := httptest.NewRequest(http.MethodGet, "/api/tx/solana/5xkjABCDEFGHIJKLMNOP", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	var g anatomy.Graph
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &g))
+	require.Equal(t, "solana", g.Chain)
 }

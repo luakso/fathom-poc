@@ -1,7 +1,6 @@
 package anatomy
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -41,10 +40,6 @@ func (h *handler) tx(w http.ResponseWriter, r *http.Request) {
 	}
 	if chain == "base" && !evmHashRe.MatchString(hash) {
 		writeErr(w, http.StatusBadRequest, "malformed tx hash")
-		return
-	}
-	if hash == "" {
-		writeErr(w, http.StatusBadRequest, "empty tx hash")
 		return
 	}
 	g, err := h.d.Dossier(r.Context(), chain, strings.ToLower(hash))
@@ -89,12 +84,13 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 }
 
 // spaFileServer serves assets, falling back to index.html for unknown paths so
-// the single-page app can client-route. Used via context for chain typing.
+// the single-page app can client-route. Real assets are served directly;
+// everything else rewrites to index.html so the SPA can client-route.
 func spaFileServer(assets fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(assets))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := fs.Stat(assets, strings.TrimPrefix(r.URL.Path, "/")); err != nil && r.URL.Path != "/" {
-			r = r.Clone(context.Background())
+			r = r.Clone(r.Context())
 			r.URL.Path = "/"
 		}
 		fileServer.ServeHTTP(w, r)
