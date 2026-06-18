@@ -1,8 +1,8 @@
 import { Handle, Position } from '@xyflow/react'
 
-export default function AddressNode({ data, onExpandStats }) {
-  const f = data.fields || {}
+export default function AddressNode({ data }) {
   const stats = data.stats // attached after expansion (Task 8)
+  const onExpandStats = data.onExpandStats
   return (
     <div className="node-card address">
       <div className="title">{short(data.label)}</div>

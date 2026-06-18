@@ -31,3 +31,14 @@ export function graphToFlow(graph) {
   }))
   return { nodes, edges }
 }
+
+// applyStats returns a new flow with stats merged into the node `addrId`'s data,
+// without mutating the input (immutable update).
+export function applyStats(flow, addrId, stats) {
+  return {
+    ...flow,
+    nodes: flow.nodes.map((n) =>
+      n.id === addrId ? { ...n, data: { ...n.data, stats } } : n,
+    ),
+  }
+}
