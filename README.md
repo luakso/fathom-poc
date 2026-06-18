@@ -96,6 +96,23 @@ amount_band`); `metrics_window_stats_v1`, `metrics_price_points_v1`,
 stats. Artifacts are stamped with `methodology_version` and the latest data day.
 See `docs/superpowers/specs/2026-06-11-economy-page-data-design.md`.
 
+## Anatomy (transaction dossier graph)
+
+A standalone internal web app: paste a transaction hash, get an interactive
+graph of that one transaction — principals, payment events, the on-chain call,
+and per-address stats — read from `payment_x402_v1`.
+
+```bash
+just anatomy-web        # build the React/Vite frontend into web/anatomy/dist
+just anatomy            # run the service (API + UI) on http://localhost:8090
+```
+
+Dev loop with hot reload: run `just anatomy` (API on :8090) and, in another
+terminal, `cd web/anatomy && npm run dev` (Vite on :5173, proxies /api).
+
+Local-only in v1. Identity / on-chain-RPC / internet enrichment are designed-in
+but ship as disabled stubs.
+
 ## Production deployment
 
 Production runs on a single Ubuntu VPS via `docker-compose.prod.yml` (GHCR images,
