@@ -101,7 +101,7 @@ func TestResolveClaims(t *testing.T) {
 	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{
 		"30d": {
 			Measure: metrics.Measure{TxnCount: 100, VolumeUSDC: "500.000000"},
-			ByAttribution: map[string]metrics.Measure{
+			ByMembership: map[string]metrics.Measure{
 				"agentic": {TxnCount: 90, VolumeUSDC: "50.000000"},
 			},
 		},

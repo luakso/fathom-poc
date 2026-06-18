@@ -32,7 +32,7 @@ func TestBuildEconomy_MonthlySeriesCompleteness(t *testing.T) {
 
 	require.Equal(t, "2026-02", feb.Month)
 	require.True(t, feb.Complete)
-	require.Equal(t, "2.000000", feb.ByAttribution["agentic"].VolumeUSDC)
+	require.Equal(t, "2.000000", feb.ByMembership["known"].VolumeUSDC)
 
 	require.Equal(t, "2026-03", mar.Month)
 	require.False(t, mar.Complete, "data_through_day is Mar 1 — month is cut at the right edge")
@@ -52,8 +52,8 @@ func TestBuildEconomy_TypicalPricePointsGasVelocity(t *testing.T) {
 	econ, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-05T00:00:00Z"))
 	require.NoError(t, err)
 
-	// typical_payment: avg = 12/3 = 4, median = 2 (agentic and overall equal here).
-	tp := econ.TypicalPayment["7d"]["agentic"]
+	// typical_payment: avg = 12/3 = 4, median = 2 (known and overall equal here).
+	tp := econ.TypicalPayment["7d"]["known"]
 	require.Equal(t, "4.000000", tp.AvgUSDC)
 	require.Equal(t, "2.000000", tp.MedianUSDC)
 	require.Equal(t, int64(3), tp.TxnCount)
@@ -68,17 +68,19 @@ func TestBuildEconomy_TypicalPricePointsGasVelocity(t *testing.T) {
 	require.Equal(t, "33.33", pp[0].TxnSharePct)
 
 	// gas: 3 payments × $2 = $6 over $12 moved → 50 cents per dollar.
-	g := econ.Gas.Windows["all"].ByAttribution["agentic"]
+	g := econ.Gas.Windows["all"].ByMembership["known"]
 	require.Equal(t, int64(3), g.TxnCount)
 	require.Equal(t, "6.00", g.GasUSD)
 	require.Equal(t, "0.003000", g.GasETH)
+	require.Equal(t, "0.003000", g.GasETHL2, "no L1 fee seeded → total is all L2")
+	require.Equal(t, "0.000000", g.GasETHL1)
 	require.NotNil(t, g.GasCentsPerDollar)
 	require.Equal(t, "50.0000", *g.GasCentsPerDollar)
 	require.Equal(t, int64(1), g.BreakevenTxnCount) // the $1.00 payment lost to $2 gas
 	require.NotEmpty(t, econ.Gas.Method)
 
 	// velocity: two payments share minute 10:00.
-	require.Equal(t, int64(2), econ.Velocity.Windows["7d"]["agentic"].MaxPerMin)
+	require.Equal(t, int64(2), econ.Velocity.Windows["7d"]["known"].MaxPerMin)
 	require.Len(t, econ.Velocity.DailySeries, 1)
 	require.Equal(t, int64(2), econ.Velocity.DailySeries[0].MaxPerMin)
 }

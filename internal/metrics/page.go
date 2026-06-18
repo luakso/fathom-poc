@@ -33,11 +33,11 @@ type Measure struct {
 }
 
 // WindowEconomy is the economy roll-up for one window, plus its split by
-// attribution and by amount band.
+// membership and by amount band.
 type WindowEconomy struct {
 	Measure
-	ByAttribution map[string]Measure `json:"by_attribution"`
-	ByBand        map[string]Measure `json:"by_band"`
+	ByMembership map[string]Measure `json:"by_membership"`
+	ByBand       map[string]Measure `json:"by_band"`
 }
 
 // DailyPoint is one day on the economy time-series chart.
@@ -71,14 +71,14 @@ func lowerBound(asOf time.Time, window string) string {
 	return asOf.AddDate(0, 0, -(d - 1)).Format(dayFormat)
 }
 
-// cubeSlice is one (day, attribution, amount_band) cell of the cube, bounded
+// cubeSlice is one (day, membership, amount_band) cell of the cube, bounded
 // above by asOf. Every window, breakdown, and series point is a sum of these.
 type cubeSlice struct {
-	day         string // YYYY-MM-DD
-	attribution string
-	band        string
-	txns        int64
-	volume      decimal.Decimal
+	day        string // YYYY-MM-DD
+	membership string
+	band       string
+	txns       int64
+	volume     decimal.Decimal
 }
 
 // accum is a Measure under construction: integer count plus exact decimal sum,
@@ -102,7 +102,7 @@ func (a accum) measure() Measure {
 // Emit passes the cube's own data_through_day, so windows always end at the
 // data's edge regardless of when the artifacts are regenerated.
 //
-// One query reads the day × attribution × amount_band slices; windows,
+// One query reads the day × membership × amount_band slices; windows,
 // breakdowns, and the daily series are Go-side sums over them. shopspring
 // decimals keep the math exact — the cube's NUMERIC(38,6) text round-trips
 // losslessly.
@@ -142,10 +142,10 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 // readCubeSlices fetches the cube cells up to and including asOf's day, in day order.
 func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice, error) {
 	rows, err := q.Query(ctx, `
-		SELECT day::text, attribution, amount_band, sum(txn_count), sum(volume_usdc)::text
-		FROM metrics_daily_v1
+		SELECT day::text, membership, amount_band, sum(txn_count), sum(volume_usdc)::text
+		FROM metrics_daily_v2
 		WHERE day <= $1::date
-		GROUP BY day, attribution, amount_band
+		GROUP BY day, membership, amount_band
 		ORDER BY day`, asOf.Format(dayFormat))
 	if err != nil {
 		return nil, fmt.Errorf("economy cube read: %w", err)
@@ -156,7 +156,7 @@ func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice
 	for rows.Next() {
 		var s cubeSlice
 		var vol string
-		if err := rows.Scan(&s.day, &s.attribution, &s.band, &s.txns, &vol); err != nil {
+		if err := rows.Scan(&s.day, &s.membership, &s.band, &s.txns, &vol); err != nil {
 			return nil, fmt.Errorf("scan cube slice: %w", err)
 		}
 		if s.volume, err = decimal.NewFromString(vol); err != nil {
@@ -171,23 +171,23 @@ func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice
 }
 
 // windowEconomy sums the slices at or after lb ("" = no lower bound) into one
-// window's totals and its by-attribution / by-band splits.
+// window's totals and its by-membership / by-band splits.
 func windowEconomy(slices []cubeSlice, lb string) WindowEconomy {
 	var total accum
-	byAttr := map[string]accum{}
+	byMember := map[string]accum{}
 	byBand := map[string]accum{}
 	for _, s := range slices {
 		if lb != "" && s.day < lb {
 			continue
 		}
 		total = total.add(s)
-		byAttr[s.attribution] = byAttr[s.attribution].add(s)
+		byMember[s.membership] = byMember[s.membership].add(s)
 		byBand[s.band] = byBand[s.band].add(s)
 	}
 
-	we := WindowEconomy{Measure: total.measure(), ByAttribution: map[string]Measure{}, ByBand: map[string]Measure{}}
-	for k, a := range byAttr {
-		we.ByAttribution[k] = a.measure()
+	we := WindowEconomy{Measure: total.measure(), ByMembership: map[string]Measure{}, ByBand: map[string]Measure{}}
+	for k, a := range byMember {
+		we.ByMembership[k] = a.measure()
 	}
 	for k, a := range byBand {
 		we.ByBand[k] = a.measure()
@@ -218,10 +218,11 @@ func dailySeries(slices []cubeSlice) []DailyPoint {
 	return series
 }
 
-// FacilitatorRow is one facilitator's 'all'-window totals.
+// FacilitatorRow is one facilitator's all-window totals. facilitator_known is a
+// deterministic property of the address (allowlist membership), not a per-row vote.
 type FacilitatorRow struct {
-	Facilitator string `json:"facilitator"`
-	Attribution string `json:"attribution"`
+	Facilitator      string `json:"facilitator"`
+	FacilitatorKnown bool   `json:"facilitator_known"`
 	Measure
 }
 
@@ -232,23 +233,18 @@ type FacilitatorsPage struct {
 
 // BuildFacilitators ranks facilitators by all-time volume. The ranking is
 // all-window for Phase 1a; windowed rankings can add an asOf parameter when
-// they exist. The attribution tie-break (`, attribution`) keeps the label
-// deterministic when a facilitator has equal volume under two attributions.
+// they exist. facilitator_known is a deterministic allowlist property —
+// bool_or over the membership column is true iff any of the facilitator's
+// cube cells are 'known'.
 func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error) {
 	rows, err := q.Query(ctx, `
 		SELECT facilitator,
-		       (array_agg(attribution ORDER BY att_volume DESC, attribution))[1] AS attribution,
-		       sum(att_txn_count),
-		       sum(att_volume)::text
-		FROM (
-		    SELECT facilitator, attribution,
-		           sum(volume_usdc) AS att_volume,
-		           sum(txn_count)   AS att_txn_count
-		    FROM metrics_daily_v1
-		    GROUP BY facilitator, attribution
-		) sub
+		       bool_or(membership = 'known') AS facilitator_known,
+		       sum(txn_count),
+		       sum(volume_usdc)::text
+		FROM metrics_daily_v2
 		GROUP BY facilitator
-		ORDER BY sum(att_volume) DESC
+		ORDER BY sum(volume_usdc) DESC
 		LIMIT 100`)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)
@@ -258,7 +254,7 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 	page := FacilitatorsPage{Rows: []FacilitatorRow{}}
 	for rows.Next() {
 		var r FacilitatorRow
-		if err := rows.Scan(&r.Facilitator, &r.Attribution, &r.TxnCount, &r.VolumeUSDC); err != nil {
+		if err := rows.Scan(&r.Facilitator, &r.FacilitatorKnown, &r.TxnCount, &r.VolumeUSDC); err != nil {
 			return FacilitatorsPage{}, fmt.Errorf("scan facilitator row: %w", err)
 		}
 		page.Rows = append(page.Rows, r)
