@@ -111,7 +111,7 @@ func usageText() string {
 	return `usage: publisher <subcommand> [flags]
 
 subcommands:
-  rollup --eth-prices FILE   recompute all metrics tables from payment_classified_v1
+  rollup --eth-prices FILE   recompute all metrics tables from payment_x402_v1
                              (default FILE=data/eth-usd-monthly.json)
   emit   --out DIR --claims FILE
                              write dashboard JSON artifacts

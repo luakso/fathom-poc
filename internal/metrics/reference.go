@@ -64,8 +64,8 @@ func LoadETHPrices(path string) (ETHPrices, error) {
 
 // Claim is one entry of the curated claim ledger (E6): a public figure to be
 // compared against a measured number. measured_metric names which measured
-// number, as "<subject>_<kind>_<window>" (e.g. agentic_txns_all): subject ∈
-// {total, agentic, contested, contamination}, kind ∈ {txns, volume},
+// number, as "<subject>_<kind>_<window>" (e.g. known_txns_all): subject ∈
+// {total, known, unknown}, kind ∈ {txns, volume},
 // window ∈ {7d, 30d, all}.
 type Claim struct {
 	ID             string `json:"id"`
@@ -119,7 +119,7 @@ func parseMetric(s string) (subject, kind, window string, err error) {
 	}
 	subject, kind, window = parts[0], parts[1], parts[2]
 	switch subject {
-	case "total", "agentic", "contested", "contamination":
+	case "total", "known", "unknown":
 	default:
 		return "", "", "", fmt.Errorf("measured_metric %q: unknown subject %q", s, subject)
 	}

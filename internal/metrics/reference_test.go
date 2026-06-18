@@ -71,23 +71,23 @@ func TestLoadClaims_Valid(t *testing.T) {
 		"id": "c1", "source": "Report", "source_url": "",
 		"claim_date": "2026 (Q2 report)", "claim_text": "169M+ payments",
 		"claimed_value": "169000000", "claimed_unit": "transactions",
-		"measured_metric": "agentic_txns_all", "note": ""
+		"measured_metric": "known_txns_all", "note": ""
 	}]`)
 	claims, err := metrics.LoadClaims(p)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
-	require.Equal(t, "agentic_txns_all", claims[0].MeasuredMetric)
+	require.Equal(t, "known_txns_all", claims[0].MeasuredMetric)
 }
 
 func TestLoadClaims_Rejects(t *testing.T) {
 	cases := []struct{ name, body, wantErr string }{
-		{"unknown subject", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"bogus_txns_all"}]`, "bogus"},
-		{"unknown kind", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_count_all"}]`, "count"},
-		{"unknown window", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_90d"}]`, "90d"},
-		{"missing id", `[{"id":"","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"}]`, "id"},
-		{"duplicate id", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"},{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"}]`, "duplicate"},
-		{"short metric", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns"}]`, "subject_kind_window"},
-		{"missing source", `[{"id":"c","source":"","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"}]`, "required"},
+		{"unknown subject", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"}]`, "agentic"},
+		{"unknown kind", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_count_all"}]`, "count"},
+		{"unknown window", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_90d"}]`, "90d"},
+		{"missing id", `[{"id":"","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all"}]`, "id"},
+		{"duplicate id", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all"},{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all"}]`, "duplicate"},
+		{"short metric", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns"}]`, "subject_kind_window"},
+		{"missing source", `[{"id":"c","source":"","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all"}]`, "required"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -102,14 +102,14 @@ func TestResolveClaims(t *testing.T) {
 		"30d": {
 			Measure: metrics.Measure{TxnCount: 100, VolumeUSDC: "500.000000"},
 			ByMembership: map[string]metrics.Measure{
-				"agentic": {TxnCount: 90, VolumeUSDC: "50.000000"},
+				"known": {TxnCount: 90, VolumeUSDC: "50.000000"},
 			},
 		},
 	}}
 	claims := []metrics.Claim{
 		{ID: "a", Source: "s", ClaimText: "t", ClaimedValue: "3700000", MeasuredMetric: "total_txns_30d"},
-		{ID: "b", Source: "s", ClaimText: "t", ClaimedValue: "1000000", MeasuredMetric: "agentic_volume_30d"},
-		{ID: "c", Source: "s", ClaimText: "t", ClaimedValue: "5", MeasuredMetric: "contested_volume_30d"},
+		{ID: "b", Source: "s", ClaimText: "t", ClaimedValue: "1000000", MeasuredMetric: "known_volume_30d"},
+		{ID: "c", Source: "s", ClaimText: "t", ClaimedValue: "5", MeasuredMetric: "unknown_volume_30d"},
 	}
 	got, err := metrics.ResolveClaims(page, claims)
 	require.NoError(t, err)
