@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -188,4 +189,43 @@ func TestEmit_EntityArtifactsAndConcentration(t *testing.T) {
 	require.NoError(t, json.Unmarshal(eb, &econ))
 	require.Equal(t, int64(2), econ.Data.Concentration.Windows["all"]["payee"].TotalEntities)
 	require.Contains(t, econ.Data.Concentration.Windows["all"], "payer")
+}
+
+func TestRebuildEntities_Top10CutoffStrictSubset(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	rows := make([]seedRow, 0, 12)
+	// S01=12.00 .. S12=1.00, one payment each, distinct payers.
+	names := []string{"S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12"}
+	for i, n := range names {
+		amt := 12 - i // 12,11,...,1
+		rows = append(rows, seedRow{
+			txHash:      "0x" + n,
+			logIndex:    0,
+			ts:          "2026-06-05T10:00:00Z",
+			facilitator: "0xfac1",
+			payer:       "0xp" + n,
+			payee:       "0x" + n,
+			amountUSDC:  fmtAmt2(amt),
+		})
+	}
+	seedPayments(t, ctx, db, rows)
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var totalEntities, totalTxns int64
+	var totalVol, top10Vol, top100Vol string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT total_entities, total_txns, total_volume::text, top10_volume::text, top100_volume::text
+		FROM entity_concentration_v1 WHERE window_name='all' AND role='payee'`).
+		Scan(&totalEntities, &totalTxns, &totalVol, &top10Vol, &top100Vol))
+	require.Equal(t, int64(12), totalEntities)
+	require.Equal(t, int64(12), totalTxns)
+	require.Equal(t, "78.000000", totalVol)
+	require.Equal(t, "75.000000", top10Vol)  // sum of the 10 largest (12..3), strict subset of total
+	require.Equal(t, "78.000000", top100Vol) // only 12 entities → top100 == total
+}
+
+// fmtAmt2 renders an int dollar amount as a 2dp decimal string for seedRow.
+func fmtAmt2(n int) string {
+	return strconv.Itoa(n) + ".00"
 }
