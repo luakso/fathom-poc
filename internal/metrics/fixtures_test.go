@@ -121,3 +121,39 @@ func seedGasPayments(t *testing.T, ctx context.Context, db *sql.DB, rows []seedG
 		require.NoError(t, err)
 	}
 }
+
+// seedL1GasRow seeds a payment with explicit tx-level L2 gas AND L1 data fee,
+// both carried identically on every row of a batch (mirrors production capture).
+type seedL1GasRow struct {
+	txHash      string
+	logIndex    int
+	ts          string
+	facilitator string
+	payer       string
+	payee       string
+	amountUSDC  string
+	gasCostWei  string // tx-level L2 execution gas
+	l1FeeWei    string // tx-level L1 data fee
+}
+
+func seedL1GasPayments(t *testing.T, ctx context.Context, db *sql.DB, rows []seedL1GasRow) {
+	t.Helper()
+	for _, r := range rows {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO payments (
+				chain, tx_hash, log_index, block_number, block_timestamp,
+				source, protocol, facilitator, payer, payee,
+				asset, token_address, amount_raw, asset_usd_at_time,
+				auth_nonce, method_selector, called_contract, tx_type, tx_nonce,
+				gas_used, effective_gas_price, gas_cost_wei, l1_fee
+			) VALUES (
+				'base', $1, $2, 1, $3::timestamptz,
+				'test', 'x402', $4, $5, $6,
+				'USDC', '0xusdc', ($7::numeric * 1000000)::numeric(78,0), 1,
+				'\x00', '\x12345678', '0xvenue', 2, 0,
+				21000, 1, $8::numeric, $9::numeric
+			)`,
+			r.txHash, r.logIndex, r.ts, r.facilitator, r.payer, r.payee, r.amountUSDC, r.gasCostWei, r.l1FeeWei)
+		require.NoError(t, err)
+	}
+}

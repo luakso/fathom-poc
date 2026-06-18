@@ -10,24 +10,24 @@ import (
 )
 
 // rebuildCubeSQL recomputes the cube in one pass. day is the UTC calendar day.
-// attribution comes from the classification view; amount_band from the
-// migration's IMMUTABLE function. TRUNCATE + INSERT makes the operation
+// membership comes from the x402 view's facilitator_known flag; amount_band from
+// the migration's IMMUTABLE function. TRUNCATE + INSERT makes the operation
 // idempotent and safe to re-run after any backfill.
 const rebuildCubeSQL = `
-TRUNCATE metrics_daily_v1;
-INSERT INTO metrics_daily_v1
-    (day, chain, facilitator, attribution, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
+TRUNCATE metrics_daily_v2;
+INSERT INTO metrics_daily_v2
+    (day, chain, facilitator, membership, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
 SELECT
     (block_timestamp AT TIME ZONE 'UTC')::date AS day,
     chain,
     facilitator,
-    attribution,
+    CASE WHEN facilitator_known THEN 'known' ELSE 'unknown' END AS membership,
     amount_band(amount_usdc) AS amount_band,
     methodology_version,
     count(*)                  AS txn_count,
     sum(amount_usdc)          AS volume_usdc,
     max(amount_usdc)          AS max_amount_usdc
-FROM payment_classified_v1
+FROM payment_x402_v1
 GROUP BY 1, 2, 3, 4, 5, 6`
 
 // tempFileLimit caps spill-to-disk for the percentile/CROSS JOIN statements in
@@ -50,41 +50,42 @@ SELECT string_agg(m, ', ' ORDER BY m) FROM (
 // same anchor emit uses, so rollup and emit always agree on what '7d' means.
 const windowsValues = `(VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_name, days)`
 
-// economyWindowStatsSQL: medians per (window, attribution) + the synthetic
-// 'all' attribution via GROUPING SETS. Medians are not mergeable from a cube,
+// economyWindowStatsSQL: medians per (window, membership) + the synthetic
+// 'all' membership via GROUPING SETS. Medians are not mergeable from a cube,
 // so they are computed here, once, at scan time. min(methodology_version) is
 // safe only because the v1 view is frozen single-version; emit independently
 // asserts exactly one version across all metrics tables.
 const economyWindowStatsSQL = `
-TRUNCATE metrics_window_stats_v1;
+TRUNCATE metrics_window_stats_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_classified_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
 )
-INSERT INTO metrics_window_stats_v1
-    (window_name, attribution, methodology_version, txn_count, median_amount_usdc)
+INSERT INTO metrics_window_stats_v2
+    (window_name, membership, methodology_version, txn_count, median_amount_usdc)
 SELECT
     w.window_name,
-    COALESCE(p.attribution, 'all'),
+    COALESCE(CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END, 'all'),
     min(p.methodology_version),
     count(*),
     percentile_disc(0.5) WITHIN GROUP (ORDER BY p.amount_usdc)
-FROM payment_classified_v1 p
+FROM payment_x402_v1 p
 CROSS JOIN ` + windowsValues + `
 CROSS JOIN anchor a
 WHERE w.days = 0
    OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
-GROUP BY w.window_name, GROUPING SETS ((p.attribution), ())`
+GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END), ())`
 
-// economyPricePointsSQL: top 50 exact agentic amounts per window, ranked by
-// txn count (ties broken by amount for determinism). payee_count separates
-// menu from market. See economyWindowStatsSQL for the min(methodology_version)
-// note: safe only because the v1 view is frozen single-version.
+// economyPricePointsSQL: top 50 exact known-facilitator amounts per window,
+// ranked by txn count (ties broken by amount for determinism). payee_count
+// separates menu from market. See economyWindowStatsSQL for the
+// min(methodology_version) note: safe only because the v1 view is frozen
+// single-version.
 const economyPricePointsSQL = `
-TRUNCATE metrics_price_points_v1;
+TRUNCATE metrics_price_points_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_classified_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
 )
-INSERT INTO metrics_price_points_v1
+INSERT INTO metrics_price_points_v2
     (window_name, rank, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version)
 SELECT window_name, rk, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version
 FROM (
@@ -99,47 +100,53 @@ FROM (
         sum(p.amount_usdc)       AS volume_usdc,
         count(DISTINCT p.payee)  AS payee_count,
         min(p.methodology_version) AS methodology_version
-    FROM payment_classified_v1 p
+    FROM payment_x402_v1 p
     CROSS JOIN ` + windowsValues + `
     CROSS JOIN anchor a
-    WHERE p.attribution = 'agentic'
+    WHERE p.facilitator_known
       AND (w.days = 0
            OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1))
     GROUP BY w.window_name, p.amount_usdc
 ) ranked
 WHERE rk <= 50`
 
-// economyGasDailySQL: gas at (day, attribution, band) grain. gas_cost_wei in
-// payments is TX-level, duplicated onto every row of a batch — so it is
-// deduped per (chain, tx_hash) (max() over identical values) and apportioned
-// tx_gas/n equally across the tx's payments. The apportioned sum conserves
-// the per-tx sum to ~16 significant figures (numeric division; sub-wei drift,
-// far below the 6dp ETH any artifact reports). USD uses the staged monthly
-// reference price; breakeven counts payments whose apportioned gas in USD
-// exceeds the amount they moved. Attribution is tx-level by construction, so
-// apportioning never crosses attribution.
+// economyGasDailySQL: settlement cost at (day, membership, band) grain. Both
+// gas_cost_wei (L2 execution) and l1_fee (L1 data fee) in payments are TX-level,
+// duplicated onto every row of a batch — so each is deduped per (chain, tx_hash)
+// (max() over identical values; l1_fee is NULLABLE so COALESCE to 0) and
+// apportioned tx_cost/n equally across the tx's payments. The two components are
+// stored separately (l2_gas_cost_wei, l1_fee_wei); cost_usd and breakeven use the
+// TOTAL (l2 + l1). The apportioned sum conserves the per-tx sum to ~16 significant
+// figures (numeric division; sub-wei drift, far below the 6dp ETH any artifact
+// reports). USD uses the staged monthly reference price; breakeven counts payments
+// whose apportioned total cost in USD exceeds the amount they moved. Membership is
+// tx-level by construction, so apportioning never crosses membership.
 const economyGasDailySQL = `
-TRUNCATE metrics_gas_daily_v1;
+TRUNCATE metrics_gas_daily_v2;
 WITH tx AS (
-    SELECT chain, tx_hash, count(*) AS n, max(gas_cost_wei) AS tx_gas
-    FROM payment_classified_v1
+    SELECT chain, tx_hash,
+           count(*) AS n,
+           max(gas_cost_wei)        AS tx_l2,
+           max(COALESCE(l1_fee, 0)) AS tx_l1
+    FROM payment_x402_v1
     GROUP BY chain, tx_hash
 )
-INSERT INTO metrics_gas_daily_v1
-    (day, attribution, amount_band, methodology_version,
-     txn_count, gas_cost_wei, gas_cost_usd, breakeven_txn_count, volume_usdc)
+INSERT INTO metrics_gas_daily_v2
+    (day, membership, amount_band, methodology_version,
+     txn_count, l2_gas_cost_wei, l1_fee_wei, cost_usd, breakeven_txn_count, volume_usdc)
 SELECT
     (p.block_timestamp AT TIME ZONE 'UTC')::date AS day,
-    p.attribution,
+    CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END AS membership,
     amount_band(p.amount_usdc) AS amount_band,
     min(p.methodology_version),
     count(*),
-    sum(t.tx_gas / t.n),
-    sum(t.tx_gas / t.n * pr.usd / '1000000000000000000'::numeric),
+    sum(t.tx_l2 / t.n),
+    sum(t.tx_l1 / t.n),
+    sum((t.tx_l2 + t.tx_l1) / t.n * pr.usd / '1000000000000000000'::numeric),
     count(*) FILTER (
-        WHERE t.tx_gas / t.n * pr.usd / '1000000000000000000'::numeric > p.amount_usdc),
+        WHERE (t.tx_l2 + t.tx_l1) / t.n * pr.usd / '1000000000000000000'::numeric > p.amount_usdc),
     sum(p.amount_usdc)
-FROM payment_classified_v1 p
+FROM payment_x402_v1 p
 JOIN tx t USING (chain, tx_hash)
 JOIN eth_price_monthly pr
   ON pr.month = to_char(p.block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
@@ -148,23 +155,23 @@ GROUP BY 1, 2, 3`
 // economyVelocityDailySQL: per-minute counts reduced to per-day stats.
 // p99 is over the day's ACTIVE minutes (idle minutes would zero it).
 const economyVelocityDailySQL = `
-TRUNCATE metrics_velocity_daily_v1;
-INSERT INTO metrics_velocity_daily_v1
-    (day, attribution, methodology_version, txn_count, max_per_min, p99_per_min)
+TRUNCATE metrics_velocity_daily_v2;
+INSERT INTO metrics_velocity_daily_v2
+    (day, membership, methodology_version, txn_count, max_per_min, p99_per_min)
 SELECT
-    day, attribution, min(mv), sum(c), max(c),
+    day, membership, min(mv), sum(c), max(c),
     percentile_disc(0.99) WITHIN GROUP (ORDER BY c)
 FROM (
     SELECT
         (block_timestamp AT TIME ZONE 'UTC')::date AS day,
-        attribution,
+        CASE WHEN facilitator_known THEN 'known' ELSE 'unknown' END AS membership,
         date_trunc('minute', block_timestamp AT TIME ZONE 'UTC') AS minute,
         min(methodology_version) AS mv,
         count(*) AS c
-    FROM payment_classified_v1
+    FROM payment_x402_v1
     GROUP BY 1, 2, 3
 ) per_min
-GROUP BY day, attribution`
+GROUP BY day, membership`
 
 // rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
@@ -180,7 +187,7 @@ var rebuildStatements = []struct {
 	{"velocity_daily", economyVelocityDailySQL},
 }
 
-// Rebuild fully recomputes every metrics table from payment_classified_v1 in a
+// Rebuild fully recomputes every metrics table from payment_x402_v1 in a
 // single transaction. prices is the curated monthly ETH/USD reference (already
 // validated by LoadETHPrices); it is staged into a temp table so the gas SQL
 // can join it, and coverage is checked against payments BEFORE any TRUNCATE.
