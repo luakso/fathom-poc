@@ -12,11 +12,11 @@ import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 const GATE_KEY = "fathom.smallScreenOk";
 function maybeGate(view){
   if (window.innerWidth >= 980 || localStorage.getItem(GATE_KEY) === "1") return;
-  const w = view.windows.all, a = w.by_attribution;
+  const w = view.windows.all, a = w.by_membership;
   $("#gate-nums").innerHTML = `
     <div>${(w.txn_count/1e6).toFixed(1)}M<small>PAYMENTS</small></div>
-    <div>$${(parseFloat(w.volume_usdc)/1e6).toFixed(0)}M<small>OBSERVED</small></div>
-    <div>$${(parseFloat(a.agentic.volume_usdc)/1e6).toFixed(1)}M<small>AGENTIC</small></div>`;
+    <div>$${(parseFloat(w.volume_usdc)/1e6).toFixed(0)}M<small>VOLUME</small></div>
+    <div>$${(parseFloat(a.known.volume_usdc)/1e6).toFixed(1)}M<small>KNOWN</small></div>`;
   $("#gate").classList.add("open");
   $("#gate-continue").addEventListener("click", () => {
     localStorage.setItem(GATE_KEY, "1");
