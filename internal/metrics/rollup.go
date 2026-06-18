@@ -224,6 +224,9 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 			return fmt.Errorf("rebuild %s: %w", stmt.name, err)
 		}
 	}
+	if err := RebuildEntities(ctx, tx); err != nil {
+		return fmt.Errorf("rebuild entities: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit rebuild: %w", err)
 	}
