@@ -412,3 +412,35 @@ func TestRebuild_GasFoldsL1Fee(t *testing.T) {
 	require.True(t, l1OK, "L1 data fee component must be 300 wei")
 	require.True(t, total, "total settlement cost must be l2 + l1 = 400 wei")
 }
+
+func TestRebuild_GasFoldsL1FeeAcrossBatch(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// One batch tx, 3 payments across 3 bands. tx L2=300, tx L1=300, each
+	// carried identically on every row (production shape). Apportioned 100/100
+	// per payment — exercises the n>1 dedup (max) + apportioning (sum(tx_l1/n)).
+	seedL1GasPayments(t, ctx, db, []seedL1GasRow{
+		{"0xbatch", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.005", "300", "300"},
+		{"0xbatch", 1, "2026-06-05T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.50", "300", "300"},
+		{"0xbatch", 2, "2026-06-05T10:00:00Z", "0xfac1", "0xp3", "0xs2", "50.00", "300", "300"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// L1 and L2 each conserve their per-tx total (300 each), independent of band.
+	var l2ok, l1ok, totalok bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT sum(l2_gas_cost_wei) = 300,
+		       sum(l1_fee_wei) = 300,
+		       sum(l2_gas_cost_wei + l1_fee_wei) = 600
+		FROM metrics_gas_daily_v2`).Scan(&l2ok, &l1ok, &totalok))
+	require.True(t, l2ok, "L2 component must conserve the per-tx L2 sum (300)")
+	require.True(t, l1ok, "L1 component must conserve the per-tx L1 sum (300)")
+	require.True(t, totalok, "total settlement cost must be L2+L1 = 600")
+
+	// Per-band L1 split: the 'small' band (50.00) gets exactly one payment's share.
+	var smallL1 bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT l1_fee_wei = 100 FROM metrics_gas_daily_v2
+		WHERE amount_band='small' AND membership='known'`).Scan(&smallL1))
+	require.True(t, smallL1, "small band gets one payment's L1 share (100)")
+}
