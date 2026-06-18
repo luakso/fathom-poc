@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PgDossier builds dossier graphs from the payment_x402_v1 view.
 type PgDossier struct{ pool *pgxpool.Pool }
+
+var _ DossierProvider = (*PgDossier)(nil)
 
 // NewPgDossier returns a PgDossier reading from pool.
 func NewPgDossier(pool *pgxpool.Pool) *PgDossier { return &PgDossier{pool: pool} }
@@ -94,7 +97,7 @@ func buildGraph(chain, txHash string, rs []dossierRow) Graph {
 	addAddr := func(addr string, role Role) string {
 		id := "addr:" + addr
 		if i, ok := addrIdx[addr]; ok {
-			if !hasRole(g.Nodes[i].Roles, role) {
+			if !slices.Contains(g.Nodes[i].Roles, role) {
 				g.Nodes[i].Roles = append(g.Nodes[i].Roles, role)
 			}
 			return id
@@ -150,13 +153,4 @@ func buildGraph(chain, txHash string, rs []dossierRow) Graph {
 		addEdge(Edge{ID: "e:settles:" + evtID, Source: facID, Target: evtID, Kind: "settles"})
 	}
 	return g
-}
-
-func hasRole(roles []Role, r Role) bool {
-	for _, x := range roles {
-		if x == r {
-			return true
-		}
-	}
-	return false
 }

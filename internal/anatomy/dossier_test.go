@@ -90,7 +90,21 @@ func TestDossier_SinglePayment(t *testing.T) {
 	require.Equal(t, 1, kinds[anatomy.NodeTransaction])
 	require.Equal(t, 1, kinds[anatomy.NodeEvent])
 	require.Equal(t, 3, kinds[anatomy.NodeAddress], "payer, payee, facilitator")
-	require.NotEmpty(t, g.Edges)
+	require.Len(t, g.Edges, 3)
+
+	var payerNode *anatomy.Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "addr:0xpayer" {
+			payerNode = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, payerNode)
+	require.Equal(t, []anatomy.ProviderRef{
+		{Kind: "stats", Available: true},
+		{Kind: "identity", Available: false},
+		{Kind: "onchain", Available: false},
+		{Kind: "internet", Available: false},
+	}, payerNode.Providers)
 }
 
 func TestDossier_NotFound(t *testing.T) {
