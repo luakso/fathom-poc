@@ -20,8 +20,9 @@ var entityRoles = []struct{ role, entityCol, counterpartyCol string }{
 // AFTER the cube statements, so all artifacts share one snapshot. Per role it
 // materializes a per-(window,entity) aggregate into a temp table (one scan), then
 // derives the leaderboard union, the bucket histogram, and the concentration
-// summary from it. Exact distinct counts (no HLL); the tx's temp_file_limit guard
-// covers the entity-grain spill.
+// summary from it. Exact distinct counts (no HLL). The tx's temp_file_limit caps
+// the count(DISTINCT) and window-sort spill (the dominant cost); entity_agg itself
+// is small (~437k entities x <=3 windows).
 func RebuildEntities(ctx context.Context, tx pgx.Tx) error {
 	for _, t := range []string{"entity_rank_v1", "entity_buckets_v1", "entity_concentration_v1"} {
 		if _, err := tx.Exec(ctx, "TRUNCATE "+t); err != nil {
@@ -40,6 +41,11 @@ func RebuildEntities(ctx context.Context, tx pgx.Tx) error {
 // the three derived projections. entity_agg is dropped at the end so the next role
 // recreates it; the surrounding tx already sets temp_file_limit.
 func rebuildEntityRole(ctx context.Context, tx pgx.Tx, role, entityCol, counterpartyCol string) error {
+	if _, err := tx.Exec(ctx, "DROP TABLE IF EXISTS entity_agg"); err != nil {
+		return fmt.Errorf("drop stale entity_agg: %w", err)
+	}
+
+	// NB first_seen/last_seen are within-window (only 'all' is lifetime).
 	aggSQL := fmt.Sprintf(`
 CREATE TEMP TABLE entity_agg AS
 SELECT
