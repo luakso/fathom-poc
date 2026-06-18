@@ -244,7 +244,7 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 		       sum(volume_usdc)::text
 		FROM metrics_daily_v2
 		GROUP BY facilitator
-		ORDER BY sum(volume_usdc) DESC
+		ORDER BY sum(volume_usdc) DESC, facilitator
 		LIMIT 100`)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)

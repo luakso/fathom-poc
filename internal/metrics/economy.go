@@ -89,7 +89,7 @@ type ClaimResult struct {
 
 // gasMethodNotes documents how the gas numbers were computed; emitted verbatim.
 var gasMethodNotes = map[string]string{
-	"dedupe":      "gas_cost_wei is tx-level; each transaction's gas is counted once and apportioned equally across its payments",
+	"dedupe":      "both the L2 execution gas and the L1 data fee are tx-level; each is counted once per transaction and apportioned equally across its payments",
 	"price":       "monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)",
 	"breakeven":   "payments whose apportioned gas in USD exceeds the amount moved",
 	"granularity": "rolled up from (day, membership, amount_band)",
