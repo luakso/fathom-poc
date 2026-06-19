@@ -269,3 +269,22 @@ canvas#xcard{width:100%;display:block}
 .banner{display:none;position:fixed;top:42px;left:0;right:0;z-index:940;background:var(--contested-dim);color:var(--ink);
   font-size:11px;padding:5px 14px;letter-spacing:.04em;border-bottom:1px solid var(--contested)}
 .banner.open{display:block}
+
+/* ————— entity pages: nav, fingerprint, scatter, legend ————— */
+.nav{display:flex;gap:2px;margin-left:14px}
+.nav a{font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;padding:5px 9px;border:1px solid var(--line);border-radius:3px}
+.nav a:hover{color:var(--ink);border-color:var(--line-2)}
+.nav a.on{color:var(--bg);background:var(--agentic);border-color:var(--agentic)}
+
+.fp{font-weight:700}
+.pin-row{background:transparent;border:1px solid var(--line);color:var(--dim);
+  cursor:pointer;border-radius:3px;padding:0 5px;font:inherit}
+.pin-row:hover{color:var(--agentic);border-color:var(--agentic)}
+
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.legend .lk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+.legend .lk i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.legend .lk b{color:var(--ink);font-weight:700}
+
+/* scatter reuses .chart-host / .ch / .gl / .ax from the shared sheet */
