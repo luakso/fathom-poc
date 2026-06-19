@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FATHOM::PAYERS — workbench</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="%23070b09"/><path d="M16 5v16M16 21l-5-6M16 21l5-6" stroke="%233dd68c" stroke-width="2.6" fill="none"/><path d="M7 26h18" stroke="%238fa098" stroke-width="2.4"/></svg>'>
+<link rel="stylesheet" href="assets/workbench.css">
+</head>
+<body>
+<div class="screen" id="gate"><div class="box">
+  <h1>▼ <b>FATHOM</b>::payers</h1>
+  <p>this workbench wants a bigger terminal — it's a dense, desktop-first instrument.</p>
+  <div class="nums" id="gate-nums"></div>
+  <p>rotate, widen, or:</p><button id="gate-continue">continue anyway</button>
+</div></div>
+<div class="screen" id="fatal"><div class="box">
+  <h1>▼ <b>FATHOM</b>::payers</h1>
+  <p>could not load <span style="color:var(--ink)">payers.json</span> — the page renders nothing it cannot verify.</p>
+  <div class="err" id="fatal-msg"></div><button id="fatal-retry">retry</button>
+</div></div>
+<div class="banner" id="banner" aria-live="polite"></div>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg width="16" height="20" viewBox="0 0 16 20"><path d="M8 1v12M8 13l-4.5-5M8 13l4.5-5" stroke="var(--agentic)" stroke-width="2" fill="none"/><path d="M1 17.5h14" stroke="var(--dim)" stroke-width="2"/></svg>
+      FATHOM<span class="path">::<b>payers</b> ▸ workbench</span>
+    </div>
+    <nav class="nav"><a href="index.html">economy</a><a href="payees.html">payees</a><a href="payers.html" class="on">payers</a></nav>
+    <div class="spacer"></div>
+    <div class="winsel" id="winsel"><button data-win="7d">7D</button><button data-win="30d">30D</button><button data-win="all" class="on">ALL</button></div>
+    <span class="stamp">DATA→<b id="st-through">—</b> · METH <b id="st-meth">—</b></span>
+    <button class="pinbtn" id="traytoggle" title="report tray [r]">⊞ REPORT <span class="cnt" id="pincount">0</span></button>
+    <button class="helpbtn" id="helptoggle" title="help [?]">?</button>
+  </div>
+  <div class="main" id="main"><div class="grid">
+
+    <section class="panel span4" id="p1"><div class="ptitle"><span class="no">1</span> OVERVIEW <span class="chip" id="ov-win"></span></div>
+      <div class="ptools"><button class="pin-it" data-pin="overview">⊞ pin</button></div>
+      <div class="row2" id="ov-stats"></div><div class="sep"></div><div class="denom" id="ov-denom"></div></section>
+
+    <section class="panel span8" id="p2"><div class="ptitle"><span class="no">2</span> ACTIVITY BUCKETS <span class="chip">wallets by lifetime txn count</span></div>
+      <div class="ptools">
+        <button data-t="b-metric" data-v="count" class="on">WALLETS</button>
+        <button data-t="b-metric" data-v="txns">TX</button>
+        <button data-t="b-metric" data-v="usd">USD</button>
+        <button class="pin-it" data-pin="buckets">⊞ pin</button>
+      </div>
+      <div id="buckets"></div>
+      <div class="denom">one-shot testers (1 tx) vs power agents (100k+) · from buckets[]</div></section>
+
+    <section class="panel span12" id="p3"><div class="ptitle"><span class="no">3</span> LEADERBOARD <span class="chip" id="lb-win"></span></div>
+      <div class="ptools"><button class="pin-it" data-pin="leader">⊞ pin</button></div>
+      <div class="note" id="skew" style="margin-bottom:8px"></div>
+      <table class="t" id="lbtable"></table>
+      <div class="denom">top 100 payers by current sort · click a header to re-sort · ⊞ pins a single agent</div></section>
+
+    <section class="panel span6" id="p4"><div class="ptitle"><span class="no">4</span> CONCENTRATION <span class="chip" id="cn-win"></span></div>
+      <div class="ptools"><button class="pin-it" data-pin="conc">⊞ pin</button></div>
+      <div id="conc-kv"></div>
+      <div class="denom">top-10 / top-100 payers' share of $ and txns · cross-checked vs economy.json</div></section>
+
+    <section class="panel span6" id="p5"><div class="ptitle"><span class="no">5</span> FINGERPRINT <span class="chip">distinct payees × amount diversity · bubble = $</span></div>
+      <div class="ptools"><button class="pin-it" data-pin="fingerprint">⊞ pin</button></div>
+      <div class="chart-host" id="scatter"></div><div class="legend" id="fp-legend"></div>
+      <div class="denom">demand-side shape — classified client-side from leaderboard fields</div></section>
+
+    <section class="panel span12" id="p10"><div class="ptitle"><span class="no">~</span> VERIFY LOG <span class="chip">runs in your browser</span></div>
+      <div class="shell" id="shell"></div></section>
+
+  </div></div>
+  <div class="statusbar">
+    <span><span class="key">w</span> window</span><span><span class="key">m</span> metric</span><span><span class="key">r</span> report</span><span><span class="key">?</span> help</span>
+    <span class="spacer"></span><span class="cons" id="st-cons">conservation —</span><span id="st-gen">—</span><span class="cursor"></span>
+  </div>
+</div>
+<aside class="tray" id="tray" aria-label="Report tray">
+  <div class="tray-head"><h2>⊞ REPORT TRAY</h2><button id="trayclose">esc</button></div>
+  <div class="tray-body">
+    <h3>Pinned findings</h3><div id="pinlist"></div>
+    <h3>Thread composer <span style="color:var(--faint);font-weight:400">— built from pins, edit freely</span></h3>
+    <textarea id="thread" spellcheck="false"></textarea>
+    <div class="traybtns"><button id="copythread">COPY</button><button id="regen">REGEN FROM PINS</button><span class="count" id="charcount">0 chars</span></div>
+    <h3>X card <span style="color:var(--faint);font-weight:400">— 1200×675, for the selected pin</span></h3>
+    <div class="cardwrap"><canvas id="xcard" width="1200" height="675"></canvas></div>
+    <div class="traybtns"><button id="cardprev">◀</button><button id="cardnext">▶</button><button id="carddl">DOWNLOAD PNG</button></div>
+  </div>
+</aside>
+<div class="overlay" id="help"><div class="helpbox">
+  <h2>FATHOM PAYERS — KEYS</h2>
+  <div class="hk"><b>w</b><span>cycle window 7D → 30D → ALL</span><b>m</b><span>buckets: wallets / tx / usd</span><b>r</b><span>open / close report tray</span><b>esc</b><span>close tray / help</span><b>?</b><span>this help</span></div>
+  <div class="foot">workflow: explore → pin findings → compose thread → download X card. every number from dist/payers.json · denominators stated.</div>
+</div></div>
+<script type="module" src="assets/js/payers/app.js"></script>
+</body>
+</html>
