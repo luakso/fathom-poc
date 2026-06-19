@@ -18,7 +18,7 @@ export const fmtAmt = s => { let t = String(s);
   const f = parseFloat(t);
   if (f >= 0.01) return "$" + f.toFixed(f >= 1 ? 2 : Math.min(4, (t.split(".")[1]||"").length || 2));
   return "$" + t; };
-export const pct = (a,b,dp=1) => (100*num(a)/num(b)).toFixed(dp) + "%";
+export const pct = (a,b,dp=1) => num(b) ? (100*num(a)/num(b)).toFixed(dp) + "%" : "—";
 
 export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mid","<$1k"],["whale","≥$1k"]];
 export const ATTRS = [["known","c-ag"],["unknown","c-ct"]];

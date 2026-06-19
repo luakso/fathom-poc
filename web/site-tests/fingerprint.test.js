@@ -38,3 +38,28 @@ describe("classify", () => {
     expect(classify({ txn_count: 0, distinct_counterparties: 0, distinct_amounts: 0, volume_usdc: "0" })).toBe("tail");
   });
 });
+
+// Inclusive-boundary coverage: the rules use <=/>=, so pin the exact edges so an
+// off-by-one regression in a threshold is caught.
+describe("classify thresholds (inclusive edges)", () => {
+  const row = o => ({ txn_count: 0, distinct_counterparties: 0, distinct_amounts: 0, volume_usdc: "0", ...o });
+  it("OTC at exactly OTC_MAX_TXNS and avg == OTC_MIN_AVG", () => {
+    expect(classify(row({ txn_count: FP.OTC_MAX_TXNS, volume_usdc: String(FP.OTC_MIN_AVG * FP.OTC_MAX_TXNS) }))).toBe("otc");
+  });
+  it("not OTC one txn over OTC_MAX_TXNS (falls through)", () => {
+    const t = FP.OTC_MAX_TXNS + 1;
+    expect(classify(row({ txn_count: t, volume_usdc: String(FP.OTC_MIN_AVG * t) }))).not.toBe("otc");
+  });
+  it("sink at exactly avg == DUST_MAX_AVG and txns == MECH_MIN_TXNS", () => {
+    expect(classify(row({ txn_count: FP.MECH_MIN_TXNS, distinct_amounts: 5, volume_usdc: String(FP.DUST_MAX_AVG * FP.MECH_MIN_TXNS) }))).toBe("sink");
+  });
+  it("fleet at exactly FLEET_MAX_AMOUNTS and MECH_MIN_TXNS, above dust", () => {
+    expect(classify(row({ txn_count: FP.MECH_MIN_TXNS, distinct_amounts: FP.FLEET_MAX_AMOUNTS, volume_usdc: "1000000" }))).toBe("fleet");
+  });
+  it("service at exactly SERVICE_MIN_CPARTIES and SERVICE_MIN_AMOUNTS", () => {
+    expect(classify(row({ txn_count: 500, distinct_counterparties: FP.SERVICE_MIN_CPARTIES, distinct_amounts: FP.SERVICE_MIN_AMOUNTS, volume_usdc: "5000" }))).toBe("service");
+  });
+  it("tail just below the service counterparty edge", () => {
+    expect(classify(row({ txn_count: 500, distinct_counterparties: FP.SERVICE_MIN_CPARTIES - 1, distinct_amounts: FP.SERVICE_MIN_AMOUNTS, volume_usdc: "5000" }))).toBe("tail");
+  });
+});
