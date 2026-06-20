@@ -128,3 +128,77 @@ func TestDossier_DedupAddressRoles(t *testing.T) {
 	require.NotNil(t, same)
 	require.ElementsMatch(t, []anatomy.Role{anatomy.RolePayer, anatomy.RoleFacilitator}, same.Roles)
 }
+
+// seedPaymentFull inserts one row with all TX-level columns the enriched dossier
+// reads. l1_fee/gas_limit/etc. are set so the panel fields and total-fee math are
+// exercised. amount_usdc is GENERATED from amount_raw.
+func seedPaymentFull(t *testing.T, ctx context.Context, db *sql.DB, txHash string, logIdx int, payer, facilitator, payee, amt, selectorHex string) {
+	t.Helper()
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO payments (
+			chain, tx_hash, log_index, block_number, block_timestamp, source, protocol,
+			facilitator, payer, payee, asset, token_address, amount_raw,
+			asset_usd_at_time, auth_nonce, method_selector, called_contract, tx_type,
+			tx_nonce, gas_used, effective_gas_price, gas_cost_wei,
+			gas_limit, base_fee_per_gas, max_fee_per_gas, max_priority_fee_per_gas,
+			l1_fee, l1_gas_used, l1_gas_price, tx_value, transaction_index, block_hash,
+			input_calldata, token_symbol, token_decimals, valid_after, valid_before
+		) VALUES (
+			'base', $1, $2, 100, '2026-06-01T10:00:00Z', 'test', 'x402',
+			$3, $4, $5, 'USDC', '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+			($6::numeric * 1000000)::numeric(78,0),
+			1.0, '\x01', decode($7,'hex'), '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', 2,
+			7, 85720, 1000000, 8572000000000,
+			95307, 5000000, 30000000, 5000000,
+			2617501899, 3307, 123539468, 0, 51, '0xblockhash',
+			'\xdeadbeef', 'USDC', 6, NULL, '2026-06-01T11:00:00Z'
+		)`, txHash, logIdx, facilitator, payer, payee, amt, selectorHex)
+	require.NoError(t, err)
+}
+
+func fieldsOf(g anatomy.Graph) map[string]string {
+	for _, n := range g.Nodes {
+		if n.Kind == anatomy.NodeTransaction {
+			return n.Fields
+		}
+	}
+	return nil
+}
+
+func TestDossier_TxFieldsEnriched(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedPaymentFull(t, ctx, db, "0xtxE", 0, "0xpayer", "0xfac", "0xpayee", "0.002", "e3ee160e")
+
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxE")
+	require.NoError(t, err)
+	f := fieldsOf(g)
+	require.NotNil(t, f)
+
+	require.Equal(t, "0.002000", f["paid"])             // SUM(amount_usdc)
+	require.Equal(t, "8574617501899", f["totalFeeWei"]) // gas_cost_wei + l1_fee
+	require.Equal(t, "transferWithAuthorization", f["method"])
+	require.Equal(t, "v,r,s", f["methodKind"])
+	require.Equal(t, "0xe3ee160e", f["methodId"])
+	require.Equal(t, "USDC · Circle", f["contractLabel"])
+	require.Equal(t, "success", f["status"])
+	require.Equal(t, "1", f["eventCount"])
+	require.Equal(t, "95307", f["gasLimit"])
+	require.Equal(t, "https://basescan.org/tx/0xtxE", f["explorerUrl"])
+	require.Equal(t, "true", f["decodable"]) // single 3009 call
+	require.Equal(t, "0xpayer", f["dpFrom"])
+	require.Equal(t, "0xpayee", f["dpTo"])
+}
+
+func TestDossier_MultiEventNotDecodable(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedPaymentFull(t, ctx, db, "0xtxM", 0, "0xp1", "0xfac", "0xq1", "1.00", "82ad56cb")
+	seedPaymentFull(t, ctx, db, "0xtxM", 1, "0xp2", "0xfac", "0xq2", "2.00", "82ad56cb")
+
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxM")
+	require.NoError(t, err)
+	f := fieldsOf(g)
+	require.Equal(t, "3.000000", f["paid"]) // 1 + 2
+	require.Equal(t, "2", f["eventCount"])
+	require.Equal(t, "aggregate3", f["method"])
+	require.Equal(t, "false", f["decodable"])
+}

@@ -21,31 +21,57 @@ type dossierRow struct {
 	logIndex         int
 	blockNumber      int64
 	blockTimestamp   string
+	blockHash        *string
 	txType           int16
 	txNonce          int64
+	txIndex          *string
 	calledContract   string
 	methodSelector   []byte
 	gasUsed          int64
+	gasLimit         *string
+	effGasPrice      string
 	gasCostWei       string
+	baseFee          *string
+	maxFee           *string
+	maxPriorityFee   *string
+	l1Fee            *string
+	l1GasUsed        *string
+	l1GasPrice       *string
+	txValue          *string
+	inputCalldata    []byte
 	authNonce        []byte
 	amountUSDC       string
+	validAfter       *string
+	validBefore      *string
 	asset            string
 	tokenSymbol      *string
+	tokenDecimals    *string
 	settlementKind   string
 	selfSettled      bool
 	facilitatorKnown bool
 	facilitator      string
 	payer            string
 	payee            string
+	// window aggregates (identical on every row of the tx)
+	paidTotal   string
+	totalFeeWei string
 }
 
 // Dossier implements DossierProvider.
 func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT log_index, block_number, block_timestamp::text, tx_type, tx_nonce,
-		       called_contract, method_selector, gas_used, gas_cost_wei::text,
-		       auth_nonce, amount_usdc::text, asset, token_symbol, settlement_kind,
-		       self_settled, facilitator_known, facilitator, payer, payee
+		SELECT log_index, block_number, block_timestamp::text, block_hash,
+		       tx_type, tx_nonce, transaction_index::text,
+		       called_contract, method_selector, gas_used, gas_limit::text,
+		       effective_gas_price::text, gas_cost_wei::text,
+		       base_fee_per_gas::text, max_fee_per_gas::text, max_priority_fee_per_gas::text,
+		       l1_fee::text, l1_gas_used::text, l1_gas_price::text, tx_value::text,
+		       input_calldata, auth_nonce, amount_usdc::text,
+		       valid_after::text, valid_before::text,
+		       asset, token_symbol, token_decimals::text, settlement_kind,
+		       self_settled, facilitator_known, facilitator, payer, payee,
+		       (SUM(amount_usdc) OVER ())::text AS paid_total,
+		       (gas_cost_wei + COALESCE(l1_fee,0))::text AS total_fee_wei
 		FROM payment_x402_v1
 		WHERE chain = $1 AND tx_hash = $2
 		ORDER BY log_index`, chain, txHash)
@@ -57,10 +83,17 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 	var rs []dossierRow
 	for rows.Next() {
 		var r dossierRow
-		if err := rows.Scan(&r.logIndex, &r.blockNumber, &r.blockTimestamp, &r.txType,
-			&r.txNonce, &r.calledContract, &r.methodSelector, &r.gasUsed, &r.gasCostWei,
-			&r.authNonce, &r.amountUSDC, &r.asset, &r.tokenSymbol, &r.settlementKind,
-			&r.selfSettled, &r.facilitatorKnown, &r.facilitator, &r.payer, &r.payee); err != nil {
+		if err := rows.Scan(&r.logIndex, &r.blockNumber, &r.blockTimestamp, &r.blockHash,
+			&r.txType, &r.txNonce, &r.txIndex,
+			&r.calledContract, &r.methodSelector, &r.gasUsed, &r.gasLimit,
+			&r.effGasPrice, &r.gasCostWei,
+			&r.baseFee, &r.maxFee, &r.maxPriorityFee,
+			&r.l1Fee, &r.l1GasUsed, &r.l1GasPrice, &r.txValue,
+			&r.inputCalldata, &r.authNonce, &r.amountUSDC,
+			&r.validAfter, &r.validBefore,
+			&r.asset, &r.tokenSymbol, &r.tokenDecimals, &r.settlementKind,
+			&r.selfSettled, &r.facilitatorKnown, &r.facilitator, &r.payer, &r.payee,
+			&r.paidTotal, &r.totalFeeWei); err != nil {
 			return Graph{}, fmt.Errorf("scan dossier row: %w", err)
 		}
 		rs = append(rs, r)
@@ -74,22 +107,68 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 	return buildGraph(chain, txHash, rs), nil
 }
 
+// deref returns the pointed-to string, or "" if nil.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 func buildGraph(chain, txHash string, rs []dossierRow) Graph {
 	g := Graph{Chain: chain, TxHash: txHash}
 	first := rs[0]
 	txID := "tx:" + txHash
+
+	name, kind, _ := MethodName(first.methodSelector)
+	is3009 := name == "transferWithAuthorization"
+	decodable := is3009 && len(rs) == 1
+
+	fields := map[string]string{
+		"paid":              first.paidTotal,
+		"totalFeeWei":       first.totalFeeWei,
+		"method":            name,
+		"methodKind":        kind,
+		"methodId":          "0x" + hex.EncodeToString(first.methodSelector),
+		"block":             fmt.Sprintf("%d", first.blockNumber),
+		"timestamp":         first.blockTimestamp,
+		"blockHash":         deref(first.blockHash),
+		"from":              first.facilitator,
+		"calledContract":    first.calledContract,
+		"contractLabel":     ContractLabel(chain, first.calledContract),
+		"txValue":           deref(first.txValue),
+		"gasUsed":           fmt.Sprintf("%d", first.gasUsed),
+		"gasLimit":          deref(first.gasLimit),
+		"effectiveGasPrice": first.effGasPrice,
+		"baseFee":           deref(first.baseFee),
+		"maxFee":            deref(first.maxFee),
+		"maxPriorityFee":    deref(first.maxPriorityFee),
+		"gasCostWei":        first.gasCostWei,
+		"l1Fee":             deref(first.l1Fee),
+		"l1GasUsed":         deref(first.l1GasUsed),
+		"l1GasPrice":        deref(first.l1GasPrice),
+		"txType":            fmt.Sprintf("%d", first.txType),
+		"txNonce":           fmt.Sprintf("%d", first.txNonce),
+		"transactionIndex":  deref(first.txIndex),
+		"tokenSymbol":       deref(first.tokenSymbol),
+		"tokenDecimals":     deref(first.tokenDecimals),
+		"eventCount":        fmt.Sprintf("%d", len(rs)),
+		"inputCalldata":     "0x" + hex.EncodeToString(first.inputCalldata),
+		"status":            StatusSuccess,
+		"explorerUrl":       ExplorerTxURL(chain, txHash),
+		"decodable":         fmt.Sprintf("%t", decodable),
+	}
+	if decodable {
+		fields["dpFrom"] = first.payer
+		fields["dpTo"] = first.payee
+		fields["dpValue"] = first.amountUSDC
+		fields["dpValidAfter"] = deref(first.validAfter)
+		fields["dpValidBefore"] = deref(first.validBefore)
+		fields["dpNonce"] = "0x" + hex.EncodeToString(first.authNonce)
+	}
+
 	g.Nodes = append(g.Nodes, Node{
-		ID: txID, Kind: NodeTransaction, Label: txHash,
-		Fields: map[string]string{
-			"block":          fmt.Sprintf("%d", first.blockNumber),
-			"timestamp":      first.blockTimestamp,
-			"txType":         fmt.Sprintf("%d", first.txType),
-			"txNonce":        fmt.Sprintf("%d", first.txNonce),
-			"calledContract": first.calledContract,
-			"methodSelector": "0x" + hex.EncodeToString(first.methodSelector),
-			"gasUsed":        fmt.Sprintf("%d", first.gasUsed),
-			"gasCostWei":     first.gasCostWei,
-		},
+		ID: txID, Kind: NodeTransaction, Label: txHash, Fields: fields,
 	})
 
 	addrIdx := map[string]int{} // address -> index in g.Nodes
