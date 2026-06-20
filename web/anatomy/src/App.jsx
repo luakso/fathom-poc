@@ -17,6 +17,7 @@ export default function App() {
 
   const trace = useCallback(async () => {
     setErr('')
+    setSelectedTx(null)
     try {
       const graph = await fetchTx(chain, hash.trim())
       setFlow(graphToFlow(graph))

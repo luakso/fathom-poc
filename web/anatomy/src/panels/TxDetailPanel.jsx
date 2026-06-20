@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { buildTxView } from '../txview.js'
+import { short } from '../format.js'
 
 export default function TxDetailPanel({ node, onClose }) {
   const [showRaw, setShowRaw] = useState(false)
@@ -8,7 +9,10 @@ export default function TxDetailPanel({ node, onClose }) {
   return (
     <aside className="tx-panel">
       <header className="tx-panel-top">
-        <span>Transaction details</span>
+        <span className="tx-panel-title">Transaction details</span>
+        <button className="tx-panel-copy" title="copy tx hash" onClick={() => navigator.clipboard?.writeText(node.label)}>
+          {short(node.label)} ⧉
+        </button>
         <button className="tx-panel-x" onClick={onClose}>✕</button>
       </header>
       <div className="tx-panel-body">

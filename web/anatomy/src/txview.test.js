@@ -35,6 +35,7 @@ describe('buildTxView', () => {
     const v = buildTxView(base, now)
     const overview = v.sections.find((s) => s.title === 'Overview')
     expect(overview.rows.find((r) => r.k === 'interacted with').v).toBe('USDC · Circle')
+    expect(overview.rows.find((r) => r.k === 'block hash').v).toBe('0xblockhash')
     const gas = v.sections.find((s) => s.title === 'Gas & Fees')
     expect(gas.rows.find((r) => r.k === 'gas limit / used').v).toBe('95,307 / 85,720 (89.9%)')
   })
@@ -58,6 +59,8 @@ describe('buildTxView', () => {
     expect(gas.rows.find((r) => r.k === 'L1 fee').v).toBe('—')
     const attrs = v.sections.find((s) => s.title === 'Attributes')
     expect(attrs.rows.find((r) => r.k === 'position in block').v).toBe('—')
+    const ov = v.sections.find((s) => s.title === 'Overview')
+    expect(ov.rows.find((r) => r.k === 'block hash').v).toBe('—')
   })
 
   it('passes through the basescan url', () => {

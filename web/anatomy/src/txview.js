@@ -30,6 +30,7 @@ export function buildTxView(f, nowMs) {
       { k: 'status', v: f.status === 'success' ? 'Success' : dash(f.status), note: 'inferred — only settled payments are indexed' },
       { k: 'paid (total)', v: f.paid ? `${f.paid} ${sym}` : '—' },
       { k: 'block', v: groupDigits(f.block) },
+      { k: 'block hash', v: dash(f.blockHash) },
       { k: 'timestamp', v: dash(f.timestamp) },
       { k: 'from (gas payer)', v: dash(f.from) },
       { k: 'interacted with', v: f.contractLabel || dash(f.calledContract) },

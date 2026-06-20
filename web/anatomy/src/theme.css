@@ -33,3 +33,5 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .tx-panel-toggle { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 4px 0; }
 .tx-raw { background: #0c120e; border: 1px solid var(--line); border-radius: 4px; padding: 6px; color: var(--ink); white-space: pre-wrap; word-break: break-all; font-size: 10px; }
 .tx-link { color: #5db3ff; }
+.tx-panel-top .tx-panel-title { flex: 1; }
+.tx-panel-copy { background: none; border: 0; color: var(--dim); cursor: pointer; font: inherit; font-size: 10px; margin-right: 8px; }
