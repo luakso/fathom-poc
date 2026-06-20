@@ -14,12 +14,16 @@ export default function AddressNode({ data }) {
           <div className="kv"><span>counterpts</span><span>{stats.distinctCounterparties}</span></div>
         </>
       )}
-      {!stats && (data.providers || []).map((p) =>
-        p.available ? (
-          <button key={p.kind} className="role-badge" onClick={() => onExpandStats?.(data.id)}>+ {p.kind}</button>
-        ) : (
-          <span key={p.kind} className="provider-stub">{p.kind} (soon)</span>
-        ),
+      {!stats && (
+        <div className="providers">
+          {(data.providers || []).map((p) =>
+            p.available ? (
+              <button key={p.kind} className="role-badge" onClick={() => onExpandStats?.(data.id)}>+ {p.kind}</button>
+            ) : (
+              <span key={p.kind} className="provider-stub">{p.kind} (soon)</span>
+            ),
+          )}
+        </div>
       )}
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
