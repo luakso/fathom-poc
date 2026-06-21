@@ -24,6 +24,13 @@ func TestRebuildReliability_WindowStats(t *testing.T) {
 		{"0xc", 0, "2026-06-10T13:00:00Z", "0xfac1", "0xp3", "0xs1", "3.00", "", ""},
 		// unknown: not-yet-valid (settled BEFORE valid_after)
 		{"0xd", 0, "2026-06-10T09:00:00Z", "0xfac2", "0xp4", "0xs2", "4.00", "2026-06-10T09:30:00Z", "2026-06-10T11:00:00Z"},
+		// known: 30s latency → 10_60s bucket
+		{"0xe", 0, "2026-06-10T10:00:30Z", "0xfac1", "0xp5", "0xs1", "1.50", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"},
+		// known: 120s latency → 1_10m bucket
+		{"0xf", 0, "2026-06-10T10:02:00Z", "0xfac1", "0xp6", "0xs1", "1.75", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"},
+	})
+	seedCancellations(t, ctx, db, []seedCancelRow{
+		{"0xcx", 0, "0xp9", "2026-06-10T10:30:00Z", "0xfac1"}, // submitter allowlisted → known
 	})
 
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
@@ -33,8 +40,8 @@ func TestRebuildReliability_WindowStats(t *testing.T) {
 		SELECT settlement_count, windowed_count, expired_count, not_yet_valid_count
 		FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='all'`).
 		Scan(&settle, &windowed, &expired, &notYet))
-	require.Equal(t, int64(4), settle, "all four payments are settlements")
-	require.Equal(t, int64(3), windowed, "three carry a full auth window (0xc is window-less)")
+	require.Equal(t, int64(6), settle, "all six payments are settlements")
+	require.Equal(t, int64(5), windowed, "five carry a full auth window (0xc is window-less)")
 	require.Equal(t, int64(1), expired, "0xb settled after valid_before")
 	require.Equal(t, int64(1), notYet, "0xd settled before valid_after")
 
@@ -42,17 +49,32 @@ func TestRebuildReliability_WindowStats(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT settlement_count FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='known'`).Scan(&knownS))
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT settlement_count FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='unknown'`).Scan(&unknownS))
 	require.Equal(t, settle, knownS+unknownS, "membership must reconcile to 'all'")
-	require.Equal(t, int64(3), knownS)
+	require.Equal(t, int64(5), knownS)
 	require.Equal(t, int64(1), unknownS)
 
-	var sub1, b110s, gt10m int64
+	var sub1, b110s, b1060s, b110m, gt10m int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT lat_bucket_sub1s, lat_bucket_1_10s, lat_bucket_gt10m
+		SELECT lat_bucket_sub1s, lat_bucket_1_10s, lat_bucket_10_60s, lat_bucket_1_10m, lat_bucket_gt10m
 		FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='known'`).
-		Scan(&sub1, &b110s, &gt10m))
+		Scan(&sub1, &b110s, &b1060s, &b110m, &gt10m))
 	require.Equal(t, int64(0), sub1)
-	require.Equal(t, int64(1), b110s)
-	require.Equal(t, int64(1), gt10m)
+	require.Equal(t, int64(1), b110s, "0xa: 5s → 1_10s")
+	require.Equal(t, int64(1), b1060s, "0xe: 30s → 10_60s")
+	require.Equal(t, int64(1), b110m, "0xf: 120s → 1_10m")
+	require.Equal(t, int64(1), gt10m, "0xb: 7200s → gt10m")
+
+	// latency p50 for known: percentile_cont(0.5) over {5, 30, 120, 7200} sorted =
+	// interpolate between indices 1 and 2 → 30 + 0.5*(120-30) = 75.0
+	var p50 float64
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT latency_p50_s FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='known'`).Scan(&p50))
+	require.InDelta(t, 75.0, p50, 1e-6, "p50 of {5s, 30s, 120s, 7200s} via percentile_cont")
+
+	// cancellation_count reconciles across the GROUPING SETS membership rows.
+	var cancKnown, cancAll int64
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT cancellation_count FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='known'`).Scan(&cancKnown))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT cancellation_count FROM metrics_reliability_window_v2 WHERE window_name='all' AND membership='all'`).Scan(&cancAll))
+	require.Equal(t, int64(1), cancKnown, "the 0xfac1-submitted cancellation is known")
+	require.Equal(t, int64(1), cancAll, "and shows in the 'all' row")
 }
 
 func TestRebuildReliability_Daily(t *testing.T) {

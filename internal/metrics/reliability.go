@@ -115,7 +115,7 @@ WHERE t.day = c.day AND t.chain = c.chain AND t.membership = c.membership;`
 // RebuildReliability recomputes the reliability rollup tables from
 // payment_x402_v1 + authorization_cancellation_v1. Called by Rebuild inside its
 // REPEATABLE READ transaction after RebuildEntities, so it shares the snapshot
-// and temp_file_limit. Each statement string is its own TRUNCATE + INSERT.
+// and temp_file_limit. Each statement string is its own TRUNCATE + INSERT + UPDATE.
 func RebuildReliability(ctx context.Context, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, reliabilityWindowSQL); err != nil {
 		return fmt.Errorf("reliability window rollup: %w", err)
