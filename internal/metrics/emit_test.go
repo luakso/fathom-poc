@@ -211,3 +211,51 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(idx), `href="payees.html"`)
 }
+
+func TestEmit_WritesReliability(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedWindowedPayments(t, ctx, db, []seedWindowedRow{
+		{"0xa", 0, "2026-06-10T10:00:05Z", "0xfac1", "0xp1", "0xs1", "1.00", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"},
+		{"0xb", 0, "2026-06-10T12:00:00Z", "0xfac2", "0xp2", "0xs1", "2.00", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"},
+	})
+	seedCancellations(t, ctx, db, []seedCancelRow{
+		{"0xc1", 0, "0xp2", "2026-06-10T12:00:00Z", "0xrelayer"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "reliability.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		MethodologyVersion int    `json:"methodology_version"`
+		DataThroughDay     string `json:"data_through_day"`
+		Data               struct {
+			Windows map[string]struct {
+				SettlementCount int64   `json:"settlement_count"`
+				WindowedShare   float64 `json:"windowed_share"`
+				ByMembership    map[string]struct {
+					SettlementCount int64 `json:"settlement_count"`
+				} `json:"by_membership"`
+			} `json:"windows"`
+			Daily                   []map[string]any `json:"daily"`
+			CancellationAttribution struct {
+				ByPayer []map[string]any `json:"by_payer"`
+			} `json:"cancellation_attribution"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+
+	require.Equal(t, 1, doc.MethodologyVersion)
+	require.Equal(t, "2026-06-10", doc.DataThroughDay)
+
+	all := doc.Data.Windows["all"]
+	require.Equal(t, int64(2), all.SettlementCount)
+	require.Equal(t, all.SettlementCount,
+		all.ByMembership["known"].SettlementCount+all.ByMembership["unknown"].SettlementCount)
+	require.NotEmpty(t, doc.Data.Daily)
+	require.Len(t, doc.Data.CancellationAttribution.ByPayer, 1)
+}
