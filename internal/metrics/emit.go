@@ -93,6 +93,13 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 	if err := writeArtifact(outDir, "payers.json", version, through, payers); err != nil {
 		return err
 	}
+	reliability, err := BuildReliability(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("build reliability: %w", err)
+	}
+	if err := writeArtifact(outDir, "reliability.json", version, through, reliability); err != nil {
+		return err
+	}
 	if err := writeSite(outDir); err != nil {
 		return fmt.Errorf("write site: %w", err)
 	}
@@ -119,6 +126,8 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 		    UNION ALL SELECT methodology_version FROM entity_rank_v1
 		    UNION ALL SELECT methodology_version FROM entity_buckets_v1
 		    UNION ALL SELECT methodology_version FROM entity_concentration_v1
+		    UNION ALL SELECT methodology_version FROM metrics_reliability_window_v2
+		    UNION ALL SELECT methodology_version FROM metrics_reliability_daily_v2
 		) versions`).Scan(&day, &versions, &minVersion); err != nil {
 		return "", 0, fmt.Errorf("cube stamp: %w", err)
 	}

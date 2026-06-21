@@ -157,3 +157,71 @@ func seedL1GasPayments(t *testing.T, ctx context.Context, db *sql.DB, rows []see
 		require.NoError(t, err)
 	}
 }
+
+// seedWindowedRow is a payment carrying an explicit EIP-3009 auth window, used by
+// the reliability rollup tests. validAfter/validBefore are ISO timestamps or ""
+// (→ NULL, the window-less batch case). Other columns mirror seedPayments.
+type seedWindowedRow struct {
+	txHash      string
+	logIndex    int
+	ts          string // block_timestamp
+	facilitator string
+	payer       string
+	payee       string
+	amountUSDC  string
+	validAfter  string // "" → NULL
+	validBefore string // "" → NULL
+}
+
+func seedWindowedPayments(t *testing.T, ctx context.Context, db *sql.DB, rows []seedWindowedRow) {
+	t.Helper()
+	for _, r := range rows {
+		var va, vb any
+		if r.validAfter != "" {
+			va = r.validAfter
+		}
+		if r.validBefore != "" {
+			vb = r.validBefore
+		}
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO payments (
+				chain, tx_hash, log_index, block_number, block_timestamp,
+				source, protocol, facilitator, payer, payee,
+				asset, token_address, amount_raw, asset_usd_at_time,
+				auth_nonce, method_selector, called_contract, tx_type, tx_nonce,
+				gas_used, effective_gas_price, gas_cost_wei,
+				valid_after, valid_before
+			) VALUES (
+				'base', $1, $2, 1, $3::timestamptz,
+				'test', 'x402', $4, $5, $6,
+				'USDC', '0xusdc', ($7::numeric * 1000000)::numeric(78,0), 1,
+				'\x00', '\x12345678', '0xvenue', 2, 0,
+				0, 0, 0,
+				$8::timestamptz, $9::timestamptz
+			)`,
+			r.txHash, r.logIndex, r.ts, r.facilitator, r.payer, r.payee, r.amountUSDC, va, vb)
+		require.NoError(t, err)
+	}
+}
+
+// seedCancelRow is one AuthorizationCanceled event for the reliability tests.
+type seedCancelRow struct {
+	txHash          string
+	logIndex        int
+	authorizer      string // the payer who signed then canceled
+	blockTime       string // ISO timestamp
+	transactionFrom string // cancel submitter (allowlisted → facilitator_known)
+}
+
+func seedCancellations(t *testing.T, ctx context.Context, db *sql.DB, rows []seedCancelRow) {
+	t.Helper()
+	for _, r := range rows {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO authorization_cancellations (
+				chain, tx_hash, log_index, authorizer, nonce,
+				block_number, block_time, transaction_from
+			) VALUES ('base', $1, $2, $3, '\x00', 1, $4::timestamptz, $5)`,
+			r.txHash, r.logIndex, r.authorizer, r.blockTime, r.transactionFrom)
+		require.NoError(t, err)
+	}
+}
