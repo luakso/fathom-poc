@@ -53,8 +53,9 @@ type dossierRow struct {
 	payer            string
 	payee            string
 	// window aggregates (identical on every row of the tx)
-	paidTotal   string
-	totalFeeWei string
+	paidTotal        string
+	totalFeeWei      string
+	facilitatorLabel *string
 }
 
 // Dossier implements DossierProvider.
@@ -71,9 +72,13 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 		       asset, token_symbol, token_decimals::text, settlement_kind,
 		       self_settled, facilitator_known, facilitator, payer, payee,
 		       (SUM(amount_usdc) OVER ())::text AS paid_total,
-		       (gas_cost_wei + COALESCE(l1_fee,0))::text AS total_fee_wei
-		FROM payment_x402_v1
-		WHERE chain = $1 AND tx_hash = $2
+		       (gas_cost_wei + COALESCE(l1_fee,0))::text AS total_fee_wei,
+		       (SELECT min(fa.label) FROM facilitator_allowlist fa
+		          WHERE fa.chain = v.chain AND fa.address = v.facilitator
+		            AND fa.since_version <= 1 AND (fa.until_version IS NULL OR fa.until_version > 1)
+		       ) AS facilitator_label
+		FROM payment_x402_v1 v
+		WHERE v.chain = $1 AND v.tx_hash = $2
 		ORDER BY log_index`, chain, txHash)
 	if err != nil {
 		return Graph{}, fmt.Errorf("query dossier: %w", err)
@@ -93,7 +98,7 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 			&r.validAfter, &r.validBefore,
 			&r.asset, &r.tokenSymbol, &r.tokenDecimals, &r.settlementKind,
 			&r.selfSettled, &r.facilitatorKnown, &r.facilitator, &r.payer, &r.payee,
-			&r.paidTotal, &r.totalFeeWei); err != nil {
+			&r.paidTotal, &r.totalFeeWei, &r.facilitatorLabel); err != nil {
 			return Graph{}, fmt.Errorf("scan dossier row: %w", err)
 		}
 		rs = append(rs, r)
@@ -223,6 +228,17 @@ func buildGraph(chain, txHash string, rs []dossierRow) Graph {
 		payerID := addAddr(r.payer, RolePayer)
 		payeeID := addAddr(r.payee, RolePayee)
 		facID := addAddr(r.facilitator, RoleFacilitator)
+
+		fn := &g.Nodes[addrIdx[r.facilitator]]
+		fn.Fields["facilitatorKnown"] = fmt.Sprintf("%t", r.facilitatorKnown)
+		if r.facilitatorLabel != nil {
+			fn.Fields["entityLabel"] = *r.facilitatorLabel
+		}
+		if r.selfSettled {
+			fn.Fields["selfSettled"] = "true"
+		} else if _, ok := fn.Fields["selfSettled"]; !ok {
+			fn.Fields["selfSettled"] = "false"
+		}
 
 		addEdge(Edge{ID: "e:emits:" + evtID, Source: txID, Target: evtID, Kind: "emits"})
 		addEdge(Edge{
