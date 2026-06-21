@@ -36,6 +36,12 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .node-card .kv.lead span:last-child { color: #5eead4; font-weight: 700; }
 .node-card .chip { background: var(--line); color: var(--ink); border-radius: 3px; padding: 0 4px; font-style: normal; font-size: 10px; }
 .node-card .hint { color: var(--dim); opacity: 0.6; font-size: 10px; margin-top: 4px; }
+.node-card .entity { color: var(--ink); font-size: 11px; font-weight: 700; margin-bottom: 5px; word-break: break-all; }
+.node-card .id-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.id-badge { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-size: 10px; }
+.id-badge.known { color: var(--accent); border-color: var(--accent); }
+.id-badge.unknown { color: #e0b341; border-color: #e0b341; }
+.id-badge.self { color: #ff9d6b; border-color: #ff9d6b; }
 .tx-panel { position: absolute; top: 0; right: 0; width: 360px; height: 100%; background: #0b110b; border-left: 1px solid var(--line); overflow-y: auto; z-index: 5; font-size: 11px; }
 .tx-panel-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 13px; border-bottom: 1px solid var(--line); color: var(--accent); font-weight: 700; }
 .tx-panel-x { background: none; border: 0; color: var(--dim); cursor: pointer; font: inherit; }
