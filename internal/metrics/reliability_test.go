@@ -77,6 +77,35 @@ func TestRebuildReliability_WindowStats(t *testing.T) {
 	require.Equal(t, int64(1), cancAll, "and shows in the 'all' row")
 }
 
+func TestBuildReliability_Shape(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedWindowedPayments(t, ctx, db, []seedWindowedRow{
+		{"0xa", 0, "2026-06-10T10:00:05Z", "0xfac1", "0xp1", "0xs1", "1.00", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"},
+		{"0xb", 0, "2026-06-10T12:00:00Z", "0xfac2", "0xp2", "0xs1", "2.00", "2026-06-10T10:00:00Z", "2026-06-10T11:00:00Z"}, // expired, unknown
+	})
+	seedCancellations(t, ctx, db, []seedCancelRow{
+		{"0xc1", 0, "0xp2", "2026-06-10T12:00:00Z", "0xrelayer"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	page, err := metrics.BuildReliability(ctx, pool)
+	require.NoError(t, err)
+
+	all := page.Windows["all"]
+	require.Equal(t, int64(2), all.SettlementCount)
+	require.Equal(t, int64(2), all.WindowedCount)
+	require.Equal(t, int64(1), all.ExpiredCount)
+	require.InDelta(t, 1.0, all.WindowedShare, 1e-9, "2 of 2 carry windows")
+	require.Contains(t, all.ByMembership, "known")
+	require.Contains(t, all.ByMembership, "unknown")
+
+	require.NotEmpty(t, page.Daily)
+	require.Len(t, page.CancellationAttribution.ByPayer, 1)
+	require.Equal(t, "0xp2", page.CancellationAttribution.ByPayer[0].Address)
+	require.Equal(t, int64(1), page.CancellationAttribution.ByPayer[0].Count)
+}
+
 func TestRebuildReliability_Daily(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")
