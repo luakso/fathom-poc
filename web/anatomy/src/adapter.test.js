@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { graphToFlow, NODE_SIZE } from './adapter.js'
+import { graphToFlow, NODE_SIZE, EDGE_COLOR } from './adapter.js'
 
 const sample = {
   chain: 'base',
@@ -82,6 +82,22 @@ describe('graphToFlow layout (role lanes)', () => {
     const p2 = nodes.find((n) => n.id === 'addr:p2')
     expect(p1.position.x).toBe(p2.position.x)
     expect(p1.position.y).not.toBe(p2.position.y)
+  })
+
+  it('colors edges by relationship kind', () => {
+    const g = {
+      chain: 'base', txHash: '0xe',
+      nodes: [{ id: 'tx:0xe', kind: 'transaction', label: '0xe', fields: {} }],
+      edges: [
+        { id: 'em', source: 'a', target: 'b', kind: 'emits' },
+        { id: 'pa', source: 'a', target: 'b', kind: 'pays' },
+        { id: 'se', source: 'a', target: 'b', kind: 'settles' },
+      ],
+    }
+    const { edges } = graphToFlow(g)
+    expect(edges.find((e) => e.id === 'em').style.stroke).toBe(EDGE_COLOR.emits)
+    expect(edges.find((e) => e.id === 'pa').style.stroke).toBe(EDGE_COLOR.pays)
+    expect(edges.find((e) => e.id === 'se').style.stroke).toBe(EDGE_COLOR.settles)
   })
 
   it('produces no overlapping node boxes', () => {

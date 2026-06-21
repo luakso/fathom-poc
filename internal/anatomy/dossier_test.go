@@ -202,3 +202,71 @@ func TestDossier_MultiEventNotDecodable(t *testing.T) {
 	require.Equal(t, "aggregate3", f["method"])
 	require.Equal(t, "false", f["decodable"])
 }
+
+func TestDossier_FacilitatorIdentity(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	// 0x67b9ce70… is the "Coinbase" facilitator in the migration-seeded allowlist.
+	const coinbase = "0x67b9ce703d9ce658d7c4ac3c289cea112fe662af"
+	seedPaymentFull(t, ctx, db, "0xtxID", 0, "0xpayer", coinbase, "0xpayee", "0.002", "e3ee160e")
+
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxID")
+	require.NoError(t, err)
+
+	var fac *anatomy.Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "addr:"+coinbase {
+			fac = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, fac, "facilitator node present")
+	require.Equal(t, "Coinbase", fac.Fields["entityLabel"])
+	require.Equal(t, "true", fac.Fields["facilitatorKnown"])
+	require.Equal(t, "false", fac.Fields["selfSettled"])
+}
+
+func TestDossier_UnknownFacilitatorNoLabel(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedPaymentFull(t, ctx, db, "0xtxU", 0, "0xpayer", "0xnotallowlisted", "0xpayee", "1.00", "e3ee160e")
+
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxU")
+	require.NoError(t, err)
+	var fac *anatomy.Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "addr:0xnotallowlisted" {
+			fac = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, fac)
+	require.Equal(t, "", fac.Fields["entityLabel"])
+	require.Equal(t, "false", fac.Fields["facilitatorKnown"])
+	require.Equal(t, "false", fac.Fields["selfSettled"])
+}
+
+func TestDossier_SelfSettledFlag(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	// Direct insert so self_settled is true (seedPaymentFull defaults it false).
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO payments (
+			chain, tx_hash, log_index, block_number, block_timestamp, source, protocol,
+			facilitator, payer, payee, asset, token_address, amount_raw,
+			asset_usd_at_time, auth_nonce, method_selector, called_contract, tx_type,
+			tx_nonce, gas_used, effective_gas_price, gas_cost_wei, self_settled
+		) VALUES (
+			'base','0xtxS',0,100,'2026-06-01T10:00:00Z','test','x402',
+			'0xselffac','0xselffac','0xpayee','USDC','0xtoken',1000000,
+			1.0,'\x01','\xe3ee160e','0xcontract',2,
+			7,50000,1000000,50000000, true
+		)`)
+	require.NoError(t, err)
+
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxS")
+	require.NoError(t, err)
+	var fac *anatomy.Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "addr:0xselffac" {
+			fac = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, fac)
+	require.Equal(t, "true", fac.Fields["selfSettled"])
+}

@@ -6,6 +6,7 @@ import { graphToFlow, applyStats } from './adapter.js'
 import TransactionNode from './nodes/TransactionNode.jsx'
 import EventNode from './nodes/EventNode.jsx'
 import AddressNode from './nodes/AddressNode.jsx'
+import Legend from './nodes/Legend.jsx'
 import TxDetailPanel from './panels/TxDetailPanel.jsx'
 
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
           <Background />
           <Controls />
         </ReactFlow>
+        {flow.nodes.length > 0 && <Legend />}
         {selectedTx && <TxDetailPanel node={selectedTx} onClose={() => setSelectedTx(null)} />}
       </div>
     </div>
