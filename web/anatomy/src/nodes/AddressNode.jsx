@@ -1,12 +1,24 @@
 import { Handle, Position } from '@xyflow/react'
+import { primaryRole, roleColor } from '../roles.js'
+import { short } from '../format.js'
+import Identicon from './Identicon.jsx'
 
 export default function AddressNode({ data }) {
-  const stats = data.stats // attached after expansion (Task 8)
+  const stats = data.stats // attached after expansion
   const onExpandStats = data.onExpandStats
+  const roles = data.roles || []
+  const accent = roleColor(primaryRole(roles))
   return (
-    <div className="node-card address">
-      <div className="title">{short(data.label)}</div>
-      <div>{(data.roles || []).map((r) => <span key={r} className="role-badge">{r}</span>)}</div>
+    <div className="node-card address" style={{ borderColor: accent }}>
+      <div className="addr-head">
+        <Identicon address={data.label} size={22} />
+        <span className="title" style={{ color: accent }}>{short(data.label)}</span>
+      </div>
+      <div className="roles">
+        {roles.map((r) => (
+          <span key={r} className="role-badge" style={{ borderColor: roleColor(r), color: roleColor(r) }}>{r}</span>
+        ))}
+      </div>
       {stats && (
         <>
           <div className="kv"><span>payments</span><span>{stats.paymentCount}</span></div>
@@ -18,9 +30,9 @@ export default function AddressNode({ data }) {
         <div className="providers">
           {(data.providers || []).map((p) =>
             p.available ? (
-              <button key={p.kind} className="role-badge" onClick={() => onExpandStats?.(data.id)}>+ {p.kind}</button>
+              <button key={p.kind} className="stat-btn" style={{ borderColor: accent, color: accent }} onClick={() => onExpandStats?.(data.id)}>+ {p.kind}</button>
             ) : (
-              <span key={p.kind} className="provider-stub">{p.kind} (soon)</span>
+              <span key={p.kind} className="provider-stub">{p.kind}</span>
             ),
           )}
         </div>
@@ -29,9 +41,4 @@ export default function AddressNode({ data }) {
       <Handle type="source" position={Position.Bottom} />
     </div>
   )
-}
-
-function short(s) {
-  if (!s) return ''
-  return s.length > 12 ? `${s.slice(0, 7)}…${s.slice(-4)}` : s
 }

@@ -15,14 +15,23 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 .node-card.transaction { border-color: var(--accent); width: 260px; }
 .node-card.event { width: 200px; }
 .node-card.address { width: 220px; }
-.node-card.address .title { word-break: break-all; }
-.node-card .providers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.node-card.address { border-left-width: 3px; }
+.node-card .addr-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.node-card .addr-head .title { margin-bottom: 0; word-break: break-all; }
+.node-card .roles { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.node-card .providers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); }
 .node-card .title { color: var(--accent); font-weight: 700; margin-bottom: 4px; }
 .node-card .kv { color: var(--dim); display: flex; justify-content: space-between; gap: 10px; }
 .node-card .kv span:last-child { text-align: right; word-break: break-all; }
-.role-badge { display: inline-block; background: var(--line); color: var(--ink); border-radius: 3px; padding: 0 5px; margin-right: 4px; font-size: 10px; }
-.provider-stub { color: var(--dim); opacity: 0.5; font-size: 10px; }
+.role-badge { display: inline-block; background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 3px; padding: 0 5px; font-size: 10px; text-transform: lowercase; }
+.stat-btn { background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; font: inherit; font-size: 10px; cursor: pointer; }
+.provider-stub { color: var(--dim); opacity: 0.45; font-size: 10px; }
 .banner-err { color: #ff6b6b; padding: 8px 10px; }
+.legend { position: absolute; left: 10px; top: 10px; z-index: 4; display: flex; flex-direction: column; gap: 6px; background: rgba(10,15,12,0.85); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 10px; color: var(--dim); }
+.legend-group { display: flex; gap: 12px; }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-line { width: 16px; height: 2px; border-radius: 1px; display: inline-block; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .node-card.clickable { cursor: pointer; }
 .node-card .kv.lead span:last-child { color: #5eead4; font-weight: 700; }
 .node-card .chip { background: var(--line); color: var(--ink); border-radius: 3px; padding: 0 4px; font-style: normal; font-size: 10px; }

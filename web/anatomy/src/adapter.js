@@ -17,6 +17,13 @@ export const NODE_SIZE = {
   address: { w: 220, h: 110 },
 }
 
+// Edge stroke color by relationship kind (also drives the legend).
+export const EDGE_COLOR = {
+  emits: '#5a6b62', // neutral — tx → event
+  pays: '#3dd68c', // green — payer → payee (money)
+  settles: '#e0b341', // amber — facilitator → event
+}
+
 // Lane x-centers. Order encodes the left→right reading.
 const LANE_X = { facilitator: -860, payer: -440, center: 0, payee: 440 }
 const ROW = 170 // vertical pitch between stacked nodes
@@ -71,13 +78,21 @@ export function graphToFlow(graph) {
     position: pos[n.id] || { x: 0, y: 0 },
     data: n,
   }))
-  const edges = graph.edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label || e.kind,
-    animated: false,
-  }))
+  const edges = graph.edges.map((e) => {
+    const color = EDGE_COLOR[e.kind] || EDGE_COLOR.emits
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: e.label || e.kind,
+      animated: false,
+      style: { stroke: color, strokeWidth: 1.5 },
+      labelStyle: { fill: '#cfe8da', fontSize: 10 },
+      labelBgStyle: { fill: '#0c120e', fillOpacity: 0.9 },
+      labelBgPadding: [4, 2],
+      labelBgBorderRadius: 3,
+    }
+  })
   return { nodes, edges }
 }
 
