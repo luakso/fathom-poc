@@ -110,3 +110,24 @@ func TestRebuildMechanics_SelectorMix(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT sum(txn_count) FROM metrics_mechanics_selector_v2 WHERE window_name='all' AND membership='all'`).Scan(&txnSum))
 	require.Equal(t, int64(4), txnSum, "selector mix conserves to settlements in the all-membership slice")
 }
+
+func TestBuildMechanics_Shape(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedMechanicsPayments(t, ctx, db, []seedMechRow{
+		{"0xa", 0, "2026-06-10T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\xa1`, 400, "2026-06-10T09:00:00Z", "2026-06-10T10:00:00Z"},
+		{"0xb", 0, "2026-06-10T10:00:00Z", "0xfac2", "0xp2", "0xs1", "2.00", 0, "", "", "21000", "21000", "0", `\x11111111`, "transfer", `\xa2`, 400, "", ""},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	page, err := metrics.BuildMechanics(ctx, pool)
+	require.NoError(t, err)
+	all := page.Windows["all"]
+	require.Equal(t, int64(2), all.SettlementCount)
+	require.Equal(t, int64(1), all.Fee.TxType["0"])
+	require.Equal(t, int64(1), all.Fee.TxType["2"])
+	require.NotEmpty(t, all.SelectorMix)
+	require.Equal(t, int64(2), all.BlockDensity.MaxPerBlock, "both in block 400")
+	require.GreaterOrEqual(t, all.Cost.BreakevenTxnCount, int64(0)) // cost block populated from gas cube
+	require.Contains(t, all.ByMembership, "known")
+}
