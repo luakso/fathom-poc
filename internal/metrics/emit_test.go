@@ -198,6 +198,7 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	for _, page := range []struct{ html, script string }{
 		{"payees.html", "assets/js/payees/app.js"},
 		{"payers.html", "assets/js/payers/app.js"},
+		{"reliability.html", "assets/js/reliability/app.js"},
 	} {
 		b, err := os.ReadFile(filepath.Join(dir, page.html))
 		require.NoError(t, err, "%s must be emitted", page.html)
@@ -210,6 +211,7 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	idx, err := os.ReadFile(filepath.Join(dir, "index.html"))
 	require.NoError(t, err)
 	require.Contains(t, string(idx), `href="payees.html"`)
+	require.Contains(t, string(idx), `href="reliability.html"`)
 }
 
 func TestEmit_WritesReliability(t *testing.T) {
