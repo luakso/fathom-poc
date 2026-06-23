@@ -8,11 +8,12 @@ import (
 )
 
 // mechanicsWindowSQL: per-(window, membership) per-payment-grain mechanics stats.
-// One scan of payment_x402_v1 over the windows CROSS JOIN. Percentiles use
-// percentile_cont (interpolated), FILTERed to the relevant non-null subset; M12
-// dup counts use count(*) - count(DISTINCT composite). 'all' membership via
-// GROUPING SETS. This is the heaviest rollup statement (many ordered-set
-// aggregates + two count(DISTINCT)); the tx's temp_file_limit covers spill.
+// One scan of payment_x402_v1 over the windows CROSS JOIN. PERF: the three quantiles
+// of each column are computed with the ARRAY form of percentile_cont in a single
+// sort (4 sorts total, not 12), inside the `agg` CTE; the outer INSERT just indexes
+// the arrays. M12 hygiene (the two composite count(DISTINCT)) is computed ONCE over
+// the full table in a trailing UPDATE (global QA canary), NOT entangled in the
+// per-membership x windows CROSS JOIN. 'all' membership via GROUPING SETS.
 const mechanicsWindowSQL = `
 TRUNCATE metrics_mechanics_window_v2;
 WITH anchor AS (
@@ -23,8 +24,7 @@ base AS (
         w.window_name,
         CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END AS membership,
         p.methodology_version, p.tx_type,
-        p.max_fee_per_gas, p.max_priority_fee_per_gas,
-        p.tx_value, p.payer, p.auth_nonce, p.block_number,
+        p.max_fee_per_gas, p.max_priority_fee_per_gas, p.tx_value,
         CASE WHEN p.valid_after IS NOT NULL AND p.valid_before IS NOT NULL
              THEN EXTRACT(EPOCH FROM (p.valid_before - p.valid_after)) END AS width_s,
         CASE WHEN p.gas_limit IS NOT NULL AND p.gas_limit > 0
@@ -34,6 +34,22 @@ base AS (
     CROSS JOIN anchor a
     WHERE w.days = 0
        OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+),
+agg AS (
+    SELECT
+        window_name, membership, min(methodology_version) AS mv, count(*) AS settle,
+        count(*) FILTER (WHERE tx_type = 0) AS t0,
+        count(*) FILTER (WHERE tx_type = 1) AS t1,
+        count(*) FILTER (WHERE tx_type = 2) AS t2,
+        count(*) FILTER (WHERE width_s IS NOT NULL) AS width_count,
+        count(*) FILTER (WHERE overprov_ratio IS NOT NULL) AS overprov_count,
+        count(*) FILTER (WHERE tx_value > 0) AS txv_nonzero,
+        percentile_cont(ARRAY[0.5,0.9,0.99]) WITHIN GROUP (ORDER BY max_fee_per_gas) FILTER (WHERE max_fee_per_gas IS NOT NULL) AS mf,
+        percentile_cont(ARRAY[0.5,0.9,0.99]) WITHIN GROUP (ORDER BY max_priority_fee_per_gas) FILTER (WHERE max_priority_fee_per_gas IS NOT NULL) AS mp,
+        percentile_cont(ARRAY[0.5,0.9,0.99]) WITHIN GROUP (ORDER BY width_s) FILTER (WHERE width_s >= 0) AS wd,
+        percentile_cont(ARRAY[0.5,0.9,0.99]) WITHIN GROUP (ORDER BY overprov_ratio) FILTER (WHERE overprov_ratio IS NOT NULL) AS op
+    FROM base
+    GROUP BY window_name, GROUPING SETS ((membership), ())
 )
 INSERT INTO metrics_mechanics_window_v2
     (window_name, membership, methodology_version, settlement_count,
@@ -42,29 +58,29 @@ INSERT INTO metrics_mechanics_window_v2
      max_priority_p50, max_priority_p90, max_priority_p99,
      width_count, width_p50_s, width_p90_s, width_p99_s,
      overprov_count, overprov_ratio_p50, overprov_ratio_p90, overprov_ratio_p99,
-     tx_value_nonzero_count, dup_auth_nonce_count, same_block_replay_count)
+     tx_value_nonzero_count)
 SELECT
-    window_name, COALESCE(membership, 'all'), min(methodology_version), count(*),
-    count(*) FILTER (WHERE tx_type = 0), count(*) FILTER (WHERE tx_type = 1), count(*) FILTER (WHERE tx_type = 2),
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY max_fee_per_gas) FILTER (WHERE max_fee_per_gas IS NOT NULL),
-    percentile_cont(0.9)  WITHIN GROUP (ORDER BY max_fee_per_gas) FILTER (WHERE max_fee_per_gas IS NOT NULL),
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY max_fee_per_gas) FILTER (WHERE max_fee_per_gas IS NOT NULL),
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY max_priority_fee_per_gas) FILTER (WHERE max_priority_fee_per_gas IS NOT NULL),
-    percentile_cont(0.9)  WITHIN GROUP (ORDER BY max_priority_fee_per_gas) FILTER (WHERE max_priority_fee_per_gas IS NOT NULL),
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY max_priority_fee_per_gas) FILTER (WHERE max_priority_fee_per_gas IS NOT NULL),
-    count(*) FILTER (WHERE width_s IS NOT NULL),
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY width_s) FILTER (WHERE width_s >= 0),
-    percentile_cont(0.9)  WITHIN GROUP (ORDER BY width_s) FILTER (WHERE width_s >= 0),
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY width_s) FILTER (WHERE width_s >= 0),
-    count(*) FILTER (WHERE overprov_ratio IS NOT NULL),
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY overprov_ratio) FILTER (WHERE overprov_ratio IS NOT NULL),
-    percentile_cont(0.9)  WITHIN GROUP (ORDER BY overprov_ratio) FILTER (WHERE overprov_ratio IS NOT NULL),
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY overprov_ratio) FILTER (WHERE overprov_ratio IS NOT NULL),
-    count(*) FILTER (WHERE tx_value > 0),
-    count(*) - count(DISTINCT (payer, auth_nonce)),
-    count(*) - count(DISTINCT (payer, auth_nonce, block_number))
-FROM base
-GROUP BY window_name, GROUPING SETS ((membership), ());`
+    window_name, COALESCE(membership, 'all'), mv, settle,
+    t0, t1, t2,
+    mf[1], mf[2], mf[3],
+    mp[1], mp[2], mp[3],
+    width_count, wd[1], wd[2], wd[3],
+    overprov_count, op[1], op[2], op[3],
+    txv_nonzero
+FROM agg;
+
+-- M12 data hygiene: a GLOBAL QA canary computed once over the full table (one
+-- scan, two composite count(DISTINCT)) and written to the all/all row only. Kept
+-- out of the heavy per-membership x windows scan above.
+UPDATE metrics_mechanics_window_v2 t
+SET dup_auth_nonce_count = h.dup, same_block_replay_count = h.replay
+FROM (
+    SELECT
+        count(*) - count(DISTINCT (payer, auth_nonce))               AS dup,
+        count(*) - count(DISTINCT (payer, auth_nonce, block_number)) AS replay
+    FROM payment_x402_v1
+) h
+WHERE t.window_name = 'all' AND t.membership = 'all';`
 
 // mechanicsBatchSQL: M3 payments-per-tx histogram + per-window max (denormalized).
 const mechanicsBatchSQL = `
