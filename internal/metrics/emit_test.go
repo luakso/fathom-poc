@@ -199,6 +199,7 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 		{"payees.html", "assets/js/payees/app.js"},
 		{"payers.html", "assets/js/payers/app.js"},
 		{"reliability.html", "assets/js/reliability/app.js"},
+		{"mechanics.html", "assets/js/mechanics/app.js"},
 	} {
 		b, err := os.ReadFile(filepath.Join(dir, page.html))
 		require.NoError(t, err, "%s must be emitted", page.html)
@@ -212,6 +213,7 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(idx), `href="payees.html"`)
 	require.Contains(t, string(idx), `href="reliability.html"`)
+	require.Contains(t, string(idx), `href="mechanics.html"`)
 }
 
 func TestEmit_WritesReliability(t *testing.T) {
