@@ -54,10 +54,10 @@ function rFee() {
 }
 
 function rBatch() {
-  const a = win(), b = a.batch;
+  const a = win(), b = a.batch, hist = b.histogram || [];
   $("#batch-win").textContent = "· " + WIN_LABEL[state.win];
-  const tot = b.histogram.reduce((s, x) => s + x.payment_count, 0) || 1;
-  $("#batch-hist").innerHTML = b.histogram.map(x => `
+  const tot = hist.reduce((s, x) => s + x.payment_count, 0) || 1;
+  $("#batch-hist").innerHTML = hist.map(x => `
     <div class="kv"><span class="k">${x.bucket} payments/tx</span>
       <span class="v" style="display:flex;align-items:center;gap:8px">
         <span style="display:inline-block;height:8px;width:${Math.round(160 * x.payment_count / tot)}px;background:var(--agentic);border-radius:2px"></span>
@@ -89,11 +89,13 @@ function rPhysics() {
 }
 
 function rQA() {
-  const a = win();
+  // hygiene is a GLOBAL canary — the rollup writes dup/replay only to the all/all
+  // row, so always read it from the 'all' window. tx_value_nonzero is per-window.
+  const a = win(), hy = view.windows.all.hygiene;
   $("#qa-kv").innerHTML = `
     <div class="kv"><span class="k">tx_value &gt; 0 (should be ~0)</span><span class="v">${fmtInt(a.tx_value_nonzero)}</span></div>
-    <div class="kv"><span class="k">duplicate auth_nonce</span><span class="v">${fmtInt(a.hygiene.dup_auth_nonce)}</span></div>
-    <div class="kv"><span class="k">same-block replays</span><span class="v">${fmtInt(a.hygiene.same_block_replay)}</span></div>`;
+    <div class="kv"><span class="k">duplicate auth_nonce <span style="color:var(--faint)">(global)</span></span><span class="v">${fmtInt(hy.dup_auth_nonce)}</span></div>
+    <div class="kv"><span class="k">same-block replays <span style="color:var(--faint)">(global)</span></span><span class="v">${fmtInt(hy.same_block_replay)}</span></div>`;
 }
 
 function rShell() {
@@ -121,7 +123,7 @@ const PIN = {
   batch() { const b = win().batch; return { title: "BATCH MECHANICS · " + state.win.toUpperCase(), value: (b.pct_batched * 100).toFixed(1) + "% batched", context: `${(b.pct_batched * 100).toFixed(1)}% of payments share a tx (Multicall3 etc.); largest batch ${fmtInt(b.max_batch_size)}`, denom: "payments per tx · " + WIN_LABEL[state.win] }; },
   wrapper() { const r = (win().selector_mix || [])[0]; if (!r) return null; const lbl = selectorLabel(r.selector_hex) || ("0x" + r.selector_hex); return { title: "TOP WRAPPER · " + lbl, value: fmtCount(r.txn_count) + " settlements", context: `${lbl} (0x${r.selector_hex}, ${r.settlement_kind}) is the most-used settlement path`, denom: "top selector · " + WIN_LABEL[state.win] }; },
   physics() { const a = win(); return { title: "RAILS PHYSICS · " + state.win.toUpperCase(), value: "headroom p50 " + ratio(a.over_provisioning.ratio_p50), context: `gas used/limit p50 ${ratio(a.over_provisioning.ratio_p50)}; auth-window p50 ${secs(a.auth_window_width.p50_s)}; ${fmtInt(a.block_density.max_per_block)} payments in the busiest block`, denom: "rails physics · " + WIN_LABEL[state.win] }; },
-  qa() { const a = win(); return { title: "QA CANARIES · " + state.win.toUpperCase(), value: fmtInt(a.hygiene.dup_auth_nonce + a.hygiene.same_block_replay) + " anomalies", context: `${fmtInt(a.tx_value_nonzero)} tx carry ETH value, ${fmtInt(a.hygiene.dup_auth_nonce)} dup nonces, ${fmtInt(a.hygiene.same_block_replay)} same-block replays`, denom: "data-quality canaries · global" }; },
+  qa() { const a = win(), hy = view.windows.all.hygiene; return { title: "QA CANARIES · " + state.win.toUpperCase(), value: fmtInt(hy.dup_auth_nonce + hy.same_block_replay) + " anomalies", context: `${fmtInt(a.tx_value_nonzero)} tx carry ETH value, ${fmtInt(hy.dup_auth_nonce)} dup nonces (global), ${fmtInt(hy.same_block_replay)} same-block replays (global)`, denom: "data-quality canaries · hygiene is global" }; },
 };
 
 function renderAll() { rEconomics(); rFee(); rBatch(); rWrapper(); rPhysics(); rQA(); rShell(); }
