@@ -169,7 +169,7 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 	// (catches a deleted font or JS module that index.html doesn't reference
 	// directly — ES-module imports and @font-face urls are invisible to the
 	// index.html regex above).
-	err = fs.WalkDir(os.DirFS("../../web/site"), ".", func(path string, d fs.DirEntry, werr error) error {
+	err = fs.WalkDir(os.DirFS("../../web/sonar/app"), ".", func(path string, d fs.DirEntry, werr error) error {
 		require.NoError(t, werr)
 		if d.IsDir() {
 			return nil

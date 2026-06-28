@@ -8,13 +8,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/lukostrobl/fathom/web"
+	sonarweb "github.com/lukostrobl/fathom/web/sonar"
 )
 
 // artifact is the envelope every emitted file shares: data plus provenance
@@ -108,7 +107,7 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 	if err := writeArtifact(outDir, "mechanics.json", version, through, mechanics); err != nil {
 		return err
 	}
-	if err := writeSite(outDir); err != nil {
+	if err := writeSonar(outDir); err != nil {
 		return fmt.Errorf("write site: %w", err)
 	}
 	return nil
@@ -187,28 +186,28 @@ func writeFileAtomic(outDir, name string, b []byte) error {
 	return nil
 }
 
-// writeSite copies the embedded dashboard into outDir. It runs AFTER the JSON
-// artifacts so a mid-failure never leaves a page pointing at missing data.
-// Files under assets/ that the embed no longer ships are pruned, so renames
-// and deletes converge instead of accumulating stale modules in the served
-// directory. Only assets/ is pruned: the outDir root also holds the JSON
-// artifacts, which are not the site's to manage.
-func writeSite(outDir string) error {
+// writeSonar copies the embedded Sonar dashboard into outDir. It runs AFTER
+// the JSON artifacts so a mid-failure never leaves a page pointing at missing
+// data. Files under assets/ that the embed no longer ships are pruned, so
+// renames and deletes converge instead of accumulating stale modules in the
+// served directory. Only assets/ is pruned: the outDir root also holds the
+// JSON artifacts, which are not the dashboard's to manage.
+func writeSonar(outDir string) error {
 	shipped := map[string]bool{}
-	err := fs.WalkDir(web.Site, "site", func(path string, d fs.DirEntry, err error) error {
+	assets := sonarweb.Assets()
+	err := fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("walk embedded site: %w", err)
+			return fmt.Errorf("walk embedded sonar: %w", err)
 		}
 		if d.IsDir() {
 			return nil
 		}
-		b, err := web.Site.ReadFile(path)
+		b, err := fs.ReadFile(assets, path)
 		if err != nil {
 			return fmt.Errorf("read embedded %s: %w", path, err)
 		}
-		rel := strings.TrimPrefix(path, "site/")
-		shipped[rel] = true
-		return writeFileAtomic(outDir, rel, b)
+		shipped[path] = true
+		return writeFileAtomic(outDir, path, b)
 	})
 	if err != nil {
 		return err

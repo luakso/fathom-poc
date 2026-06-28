@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWriteSite_PrunesStaleAssets(t *testing.T) {
+func TestWriteSonar_PrunesStaleAssets(t *testing.T) {
 	dir := t.TempDir()
 
 	// Artifacts at the root are not the site's to manage.
@@ -22,7 +22,7 @@ func TestWriteSite_PrunesStaleAssets(t *testing.T) {
 	orphan := filepath.Join(dir, "assets", "workbench.css.tmp")
 	require.NoError(t, os.WriteFile(orphan, []byte("partial"), 0o644))
 
-	require.NoError(t, writeSite(dir))
+	require.NoError(t, writeSonar(dir))
 
 	require.NoFileExists(t, stale, "renamed-away module must be pruned from the served tree")
 	require.NoFileExists(t, orphan, "orphaned temp file must be pruned from the served tree")
@@ -31,8 +31,8 @@ func TestWriteSite_PrunesStaleAssets(t *testing.T) {
 	require.FileExists(t, filepath.Join(dir, "assets", "js", "app.js"))
 }
 
-func TestWriteSite_FirstEmitHasNothingToPrune(t *testing.T) {
+func TestWriteSonar_FirstEmitHasNothingToPrune(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, writeSite(dir))
+	require.NoError(t, writeSonar(dir))
 	require.FileExists(t, filepath.Join(dir, "index.html"))
 }
