@@ -99,10 +99,32 @@ jobs:
             -t fathom-init-db:ci \
             .
 
+  web:
+    name: Web (build + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Anatomy - install
+        working-directory: web/anatomy
+        run: bun install --frozen-lockfile
+      - name: Anatomy - build
+        working-directory: web/anatomy
+        run: bun run build
+      - name: Anatomy - test
+        working-directory: web/anatomy
+        run: bun run test
+      - name: Sonar dashboard - install
+        working-directory: web/sonar/tests
+        run: bun install --frozen-lockfile
+      - name: Sonar dashboard - test
+        working-directory: web/sonar/tests
+        run: bun run test
+
   release:
     name: Push image (${{ matrix.image }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, test, vuln, build-binaries, build-init-db]
+    needs: [lint, test, vuln, build-binaries, build-init-db, web]
     runs-on: ubuntu-latest
     permissions:
       contents: read
