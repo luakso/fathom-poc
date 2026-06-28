@@ -29,17 +29,25 @@ func TestRebuildMechanics_Window(t *testing.T) {
 
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	var settle, t0, t2, txvNonzero, dup, widthCount int64
+	var settle, t0, t2, txvNonzero, widthCount int64
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT settlement_count, tx_type_0_count, tx_type_2_count, tx_value_nonzero_count, dup_auth_nonce_count, width_count
+		SELECT settlement_count, tx_type_0_count, tx_type_2_count, tx_value_nonzero_count, width_count
 		FROM metrics_mechanics_window_v2 WHERE window_name='all' AND membership='all'`).
-		Scan(&settle, &t0, &t2, &txvNonzero, &dup, &widthCount))
+		Scan(&settle, &t0, &t2, &txvNonzero, &widthCount))
 	require.Equal(t, int64(4), settle)
 	require.Equal(t, int64(1), t0, "one type-0 (0xb)")
 	require.Equal(t, int64(3), t2, "three type-2")
 	require.Equal(t, int64(1), txvNonzero, "0xb carries tx_value>0")
-	require.Equal(t, int64(1), dup, "0xd duplicates (0xp1,\\xaa)")
 	require.Equal(t, int64(3), widthCount, "three carry both auth bounds (0xb has none)")
+
+	// M12 hygiene is scoped to verified payments and written to the 'known' row.
+	// 0xa and 0xd share (payer=0xp1, auth_nonce=\xaa) - both known - so dup=1.
+	var dup int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT dup_auth_nonce_count
+		FROM metrics_mechanics_window_v2 WHERE window_name='all' AND membership='known'`).
+		Scan(&dup))
+	require.Equal(t, int64(1), dup, "0xd duplicates (0xp1,\\xaa) among verified payments")
 
 	// over-provisioning ratio p50: known rows with gas_limit are 0xa,0xd (0.5,0.5) and 0xb (1.0) → median 0.5
 	var ratioP50 float64
@@ -59,12 +67,15 @@ func TestRebuildMechanics_Window(t *testing.T) {
 func TestRebuildMechanics_BatchAndBlock(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")
-	// tx 0xbatch has 3 payments (batch size 3); tx 0xsingle has 1. Two payments share block 200.
+	// tx 0xbatch has 3 known payments (batch size 3); tx 0xsingle has 1 known payment.
+	// tx 0xunk has 1 unknown payment (0xfac2 not allowlisted) in block 202 — must be excluded
+	// by the verified filter so batch/block counts reflect known-only payments.
 	seedMechanicsPayments(t, ctx, db, []seedMechRow{
 		{"0xbatch", 0, "2026-06-10T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\x01`, 200, "", ""},
 		{"0xbatch", 1, "2026-06-10T10:00:00Z", "0xfac1", "0xp2", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\x02`, 200, "", ""},
 		{"0xbatch", 2, "2026-06-10T10:00:00Z", "0xfac1", "0xp3", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\x03`, 200, "", ""},
 		{"0xsingle", 0, "2026-06-10T11:00:00Z", "0xfac1", "0xp4", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\x04`, 201, "", ""},
+		{"0xunk", 0, "2026-06-10T12:00:00Z", "0xfac2", "0xp5", "0xs1", "1.00", 2, "1000", "100", "21000", "42000", "0", `\x11111111`, "transfer", `\x05`, 202, "", ""},
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
@@ -130,7 +141,7 @@ func TestBuildMechanics_Shape(t *testing.T) {
 	require.Equal(t, int64(1), all.Fee.TxType["0"])
 	require.Equal(t, int64(1), all.Fee.TxType["2"])
 	require.NotEmpty(t, all.SelectorMix)
-	require.Equal(t, int64(2), all.BlockDensity.MaxPerBlock, "both in block 400")
+	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock, "verified only: one known payment in block 400")
 	require.GreaterOrEqual(t, all.Cost.BreakevenTxnCount, int64(0)) // cost block populated from gas cube
 	require.Contains(t, all.ByMembership, "known")
 }
@@ -169,7 +180,7 @@ func TestEmit_WritesMechanics(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &doc))
 	all := doc.Data.Windows["all"]
 	require.Equal(t, int64(2), all.SettlementCount)
-	require.Equal(t, int64(2), all.BlockDensity.MaxPerBlock)
+	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock) // verified only: one known per block
 	require.NotEmpty(t, all.SelectorMix)
 	require.Equal(t, all.SettlementCount,
 		all.ByMembership["known"].SettlementCount+all.ByMembership["unknown"].SettlementCount)

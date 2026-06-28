@@ -79,8 +79,9 @@ FROM (
         count(*) - count(DISTINCT (payer, auth_nonce))               AS dup,
         count(*) - count(DISTINCT (payer, auth_nonce, block_number)) AS replay
     FROM payment_x402_v1
+    WHERE facilitator_known
 ) h
-WHERE t.window_name = 'all' AND t.membership = 'all';`
+WHERE t.window_name = 'all' AND t.membership = 'known';`
 
 // mechanicsBatchSQL: M3 payments-per-tx histogram + per-window max (denormalized).
 const mechanicsBatchSQL = `
@@ -93,7 +94,7 @@ txn AS (
     FROM payment_x402_v1 p
     CROSS JOIN ` + windowsValues + `
     CROSS JOIN anchor a
-    WHERE w.days = 0 OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+    WHERE p.facilitator_known AND (w.days = 0 OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1))
     GROUP BY w.window_name, p.tx_hash
 ),
 maxes AS (SELECT window_name, max(n) AS max_n FROM txn GROUP BY window_name)
@@ -116,7 +117,7 @@ blk AS (
     FROM payment_x402_v1 p
     CROSS JOIN ` + windowsValues + `
     CROSS JOIN anchor a
-    WHERE w.days = 0 OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+    WHERE p.facilitator_known AND (w.days = 0 OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1))
     GROUP BY w.window_name, p.block_number
 )
 INSERT INTO metrics_mechanics_block_v2

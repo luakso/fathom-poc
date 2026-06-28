@@ -55,13 +55,12 @@ func TestRebuildEntities_KnownVolumeSplit(t *testing.T) {
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	var vol, known string
+	var vol string
 	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT volume_usdc::text, known_volume_usdc::text
+		SELECT volume_usdc::text
 		FROM entity_rank_v1 WHERE window_name='all' AND role='payee' AND address='0xS1'`).
-		Scan(&vol, &known))
-	require.Equal(t, "140.000000", vol)
-	require.Equal(t, "100.000000", known)
+		Scan(&vol))
+	require.Equal(t, "100.000000", vol, "entity volume counts only verified (facilitator_known) payments")
 }
 
 func TestRebuildEntities_BucketsAndConcentrationConserve(t *testing.T) {

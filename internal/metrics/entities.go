@@ -62,8 +62,9 @@ SELECT
 FROM payment_x402_v1 p
 CROSS JOIN %[3]s
 CROSS JOIN (SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1) anchor
-WHERE w.days = 0
-   OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= anchor.d - (w.days - 1)
+WHERE p.facilitator_known
+  AND (w.days = 0
+   OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= anchor.d - (w.days - 1))
 GROUP BY w.window_name, p.%[1]s`, entityCol, counterpartyCol, windowsValues)
 
 	if _, err := tx.Exec(ctx, aggSQL); err != nil {
