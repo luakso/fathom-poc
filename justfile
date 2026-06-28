@@ -123,7 +123,7 @@ backfill from to:
 
 # Build the Anatomy React frontend into web/anatomy/dist (embedded by the Go build)
 anatomy-web:
-    cd web/anatomy && npm install && npm run build
+    cd web/anatomy && bun install && bun run --bun build
 
 # Run the Anatomy service locally against the exposed postgres port (serves API + UI on :8090)
 anatomy:
