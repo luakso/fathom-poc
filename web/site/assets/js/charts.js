@@ -91,7 +91,7 @@ export function rMonthly(){
 
 /* ———————— 8 VELOCITY ———————— */
 export function rVelocity(){
-  const days = data.velocity.known_daily;
+  const days = data.velocity.verified_daily;
   const host = $("#velochart");
   if (!days.length){
     host.innerHTML = `<div class="readout">no known-facilitator velocity rows in this cube</div>`;

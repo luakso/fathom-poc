@@ -53,7 +53,7 @@ const PINNERS = {
       context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
       denom:"tx-deduped L1+L2 cost, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all;
-    const days = data.velocity.known_daily;
+    const days = data.velocity.verified_daily;
     if (!days.length) return null;
     const pi = peakIndex(days.map(d => d[1]));
     const med = medianOf(days.map(d => d[2]));

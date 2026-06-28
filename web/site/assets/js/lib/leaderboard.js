@@ -1,6 +1,6 @@
 // Sortable entity leaderboard. Re-renders its own <table> on header click;
 // innerHTML replacement means click listeners die with their nodes (no leak).
-import { num, fmtMoney, fmtInt, fmtCount, pct } from "../format.js";
+import { num, fmtMoney, fmtInt, fmtCount } from "../format.js";
 import { classify, CLASSES } from "./fingerprint.js";
 
 export const shortAddr = a => a.slice(0, 6) + "…" + a.slice(-4);
@@ -33,19 +33,17 @@ export function renderLeaderboard(tableEl, rows, opts) {
       <th data-sort="txns" style="cursor:pointer">txns${arrow("txns")}</th>
       <th data-sort="cparties" style="cursor:pointer">${cpartyLabel}${arrow("cparties")}</th>
       <th data-sort="amounts" style="cursor:pointer">amounts${arrow("amounts")}</th>
-      <th>known%</th><th>fingerprint</th><th>address</th><th></th>
+      <th>fingerprint</th><th>address</th><th></th>
     </tr></thead>`;
     const body = `<tbody>${sorted.map((r, i) => {
       const cls = classify(r);
       const meta = CLASSES[cls];
-      const known = pct(r.known_volume_usdc, r.volume_usdc);
       return `<tr>
         <td style="color:var(--faint)">${i + 1}</td>
         <td style="font-weight:700">${fmtMoney(r.volume_usdc)}</td>
         <td>${fmtInt(r.txn_count)}</td>
         <td>${fmtInt(r.distinct_counterparties)}</td>
         <td>${fmtInt(r.distinct_amounts)}</td>
-        <td style="color:var(--dim)">${known}</td>
         <td><span class="fp" style="color:${meta.color}" title="${meta.blurb}">${meta.label}</span></td>
         <td title="${r.address}\n${day(r.first_seen)} → ${day(r.last_seen)}" style="color:var(--dim)">${shortAddr(r.address)}</td>
         <td>${onPin ? `<button class="pin-row" data-pin-row="${i}" title="pin this entity">⊞</button>` : ""}</td>

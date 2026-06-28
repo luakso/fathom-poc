@@ -1,7 +1,8 @@
 // Loads reliability.json, validates the envelope, and re-checks the invariants the
-// emitter promised: windowed<=settlement, known+unknown==settlement, expired+
-// not_yet_valid<=windowed, every rate in [0,1], and settlement_count==economy
-// txn_count (the cube cross-check). The page renders nothing it cannot verify;
+// emitter promised: windowed<=settlement, expired+not_yet_valid<=windowed, every
+// rate in [0,1], and settlement_count==economy txn_count (the cube cross-check).
+// Verified-only artifact: all rows are known-facilitator payments; no membership
+// conservation check applies. The page renders nothing it cannot verify;
 // these checks feed the VERIFY LOG. Mirrors entity-adapter.js.
 
 export const LAT_BUCKETS = [

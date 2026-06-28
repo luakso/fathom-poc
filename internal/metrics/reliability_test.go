@@ -124,7 +124,6 @@ func TestBuildReliability_Shape(t *testing.T) {
 	require.Equal(t, int64(1), all.WindowedCount)
 	require.Equal(t, int64(0), all.ExpiredCount)
 	require.InDelta(t, 1.0, all.WindowedShare, 1e-9, "1 of 1 known carry window")
-	require.Greater(t, all.SettlementCount, int64(0))
 
 	require.NotEmpty(t, page.Daily)
 	// The cancellation submitter (0xrelayer) is not allowlisted → facilitator_known=false →

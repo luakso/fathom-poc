@@ -1,6 +1,7 @@
 // Loads mechanics.json, validates the envelope, and re-checks the invariants the
-// emitter promised: known+unknown==settlement, batch payment_count sums to
-// settlement, pct_batched in [0,1], settlement_count==economy txn_count. The
+// emitter promised: batch payment_count sums to settlement, pct_batched in [0,1],
+// settlement_count==economy txn_count. Verified-only artifact: all rows are
+// known-facilitator payments; no membership conservation check applies. The
 // selector mix is top-15 and tx_type buckets only 0/1/2 — those are surfaced as
 // remainders, NEVER asserted to conserve. Mirrors reliability-adapter.js.
 

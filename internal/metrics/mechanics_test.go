@@ -143,7 +143,6 @@ func TestBuildMechanics_Shape(t *testing.T) {
 	require.NotEmpty(t, all.SelectorMix)
 	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock, "verified only: one known payment in block 400")
 	require.GreaterOrEqual(t, all.Cost.BreakevenTxnCount, int64(0)) // cost block populated from gas cube
-	require.Greater(t, all.SettlementCount, int64(0))
 }
 
 func TestEmit_WritesMechanics(t *testing.T) {

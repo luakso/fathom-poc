@@ -70,7 +70,7 @@ SELECT
 FROM agg;
 
 -- M12 data hygiene: a GLOBAL QA canary computed once over the full table (one
--- scan, two composite count(DISTINCT)) and written to the all/all row only. Kept
+-- scan, two composite count(DISTINCT)) and written to the all/known row only. Kept
 -- out of the heavy per-membership x windows scan above.
 UPDATE metrics_mechanics_window_v2 t
 SET dup_auth_nonce_count = h.dup, same_block_replay_count = h.replay

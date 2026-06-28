@@ -12,23 +12,23 @@ export const payeeDoc = {
           // service: many payers, many amounts
           { address: "0xservice000000000000000000000000000000aaaa", volume_usdc: "1000000.00",
             txn_count: 50000, distinct_counterparties: 7000, distinct_amounts: 2000,
-            known_volume_usdc: "0.0", first_seen: "2026-05-08 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
+            first_seen: "2026-05-08 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
           // otc: few txns, huge avg
           { address: "0xotc0000000000000000000000000000000000bbbb", volume_usdc: "10000000.00",
             txn_count: 2, distinct_counterparties: 1, distinct_amounts: 2,
-            known_volume_usdc: "0.0", first_seen: "2026-05-24 07:01:31+00", last_seen: "2026-05-24 07:02:47+00" },
+            first_seen: "2026-05-24 07:01:31+00", last_seen: "2026-05-24 07:02:47+00" },
           // sink: huge txns, tiny avg, few amounts
           { address: "0xsink0000000000000000000000000000000000cccc", volume_usdc: "200.00",
             txn_count: 2000000, distinct_counterparties: 5, distinct_amounts: 3,
-            known_volume_usdc: "0.0", first_seen: "2026-05-01 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
+            first_seen: "2026-05-01 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
           // fleet: high txns, one amount, not dust
           { address: "0xfleet000000000000000000000000000000000dddd", volume_usdc: "500000.00",
             txn_count: 1000000, distinct_counterparties: 90, distinct_amounts: 1,
-            known_volume_usdc: "0.0", first_seen: "2026-05-01 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
+            first_seen: "2026-05-01 00:00:00+00", last_seen: "2026-06-06 00:00:00+00" },
           // tail: small, ambiguous
           { address: "0xtail0000000000000000000000000000000000eeee", volume_usdc: "12.00",
             txn_count: 4, distinct_counterparties: 3, distinct_amounts: 2,
-            known_volume_usdc: "0.0", first_seen: "2026-06-01 00:00:00+00", last_seen: "2026-06-02 00:00:00+00" },
+            first_seen: "2026-06-01 00:00:00+00", last_seen: "2026-06-02 00:00:00+00" },
         ],
         // entity_count sum = 5, txn_sum = 3050007, volume_sum = 11500224.00
         buckets: [

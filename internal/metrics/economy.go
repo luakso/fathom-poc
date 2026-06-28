@@ -60,7 +60,7 @@ type GasSection struct {
 	Windows map[string]GasWindow `json:"windows"`
 }
 
-// VelocityStat is the burstiness headline for one window × membership (E12).
+// VelocityStat is the burstiness headline for one window (E12).
 type VelocityStat struct {
 	MaxPerMin int64 `json:"max_per_min"`
 }
@@ -90,7 +90,7 @@ var gasMethodNotes = map[string]string{
 	"dedupe":      "both the L2 execution gas and the L1 data fee are tx-level; each is counted once per transaction and apportioned equally across its payments",
 	"price":       "monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)",
 	"breakeven":   "payments whose apportioned gas in USD exceeds the amount moved",
-	"granularity": "rolled up from (day, membership, amount_band)",
+	"granularity": "rolled up from verified (known-facilitator) (day, amount_band) gas rows",
 	"cost":        "true L2 settlement cost = execution gas + L1 data fee",
 }
 

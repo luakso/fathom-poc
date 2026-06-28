@@ -46,7 +46,7 @@ export function reshape(doc){
     },
     velocity: {
       windows: Object.fromEntries(winKeys.map(w => [w, d.velocity.windows[w] || { ...ZERO_VELOCITY }])),
-      known_daily: d.velocity.daily_series.map(p => [p.day, p.max_per_min, p.p99_per_min]),
+      verified_daily: d.velocity.daily_series.map(p => [p.day, p.max_per_min, p.p99_per_min]),
     },
     claims: d.claims || [],
   };
