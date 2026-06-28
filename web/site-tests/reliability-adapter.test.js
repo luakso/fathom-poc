@@ -25,12 +25,6 @@ describe("checkReliabilityIntegrity", () => {
     const issues = checkReliabilityIntegrity(reshapeReliability(broken));
     expect(issues.some(i => i.level === "error" && /windowed/.test(i.msg))).toBe(true);
   });
-  it("flags membership not reconciling to settlement_count", () => {
-    const broken = structuredClone(reliabilityDoc);
-    broken.data.windows.all.by_membership.known.settlement_count = 5;
-    const issues = checkReliabilityIntegrity(reshapeReliability(broken));
-    expect(issues.some(i => i.level === "error" && /known\+unknown/.test(i.msg))).toBe(true);
-  });
   it("flags a rate outside [0,1]", () => {
     const broken = structuredClone(reliabilityDoc);
     broken.data.windows.all.expired_rate = 1.5;

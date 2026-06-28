@@ -241,9 +241,6 @@ func TestEmit_WritesReliability(t *testing.T) {
 			Windows map[string]struct {
 				SettlementCount int64   `json:"settlement_count"`
 				WindowedShare   float64 `json:"windowed_share"`
-				ByMembership    map[string]struct {
-					SettlementCount int64 `json:"settlement_count"`
-				} `json:"by_membership"`
 			} `json:"windows"`
 			Daily                   []map[string]any `json:"daily"`
 			CancellationAttribution struct {
@@ -256,10 +253,11 @@ func TestEmit_WritesReliability(t *testing.T) {
 	require.Equal(t, 1, doc.MethodologyVersion)
 	require.Equal(t, "2026-06-10", doc.DataThroughDay)
 
+	// Headline is the verified (known) slice: only 0xa (0xfac1) is known.
+	const allKnownSettlement = int64(1)
 	all := doc.Data.Windows["all"]
-	require.Equal(t, int64(2), all.SettlementCount)
-	require.Equal(t, all.SettlementCount,
-		all.ByMembership["known"].SettlementCount+all.ByMembership["unknown"].SettlementCount)
+	require.Equal(t, allKnownSettlement, all.SettlementCount) // headline is the verified slice
 	require.NotEmpty(t, doc.Data.Daily)
-	require.Len(t, doc.Data.CancellationAttribution.ByPayer, 1)
+	// Cancellation submitter 0xrelayer is not allowlisted → filtered by facilitator_known.
+	require.Empty(t, doc.Data.CancellationAttribution.ByPayer)
 }

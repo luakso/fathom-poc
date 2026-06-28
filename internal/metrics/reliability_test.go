@@ -119,17 +119,17 @@ func TestBuildReliability_Shape(t *testing.T) {
 	require.NoError(t, err)
 
 	all := page.Windows["all"]
-	require.Equal(t, int64(2), all.SettlementCount)
-	require.Equal(t, int64(2), all.WindowedCount)
-	require.Equal(t, int64(1), all.ExpiredCount)
-	require.InDelta(t, 1.0, all.WindowedShare, 1e-9, "2 of 2 carry windows")
-	require.Contains(t, all.ByMembership, "known")
-	require.Contains(t, all.ByMembership, "unknown")
+	// Headline is the verified (known) slice: only 0xa is known in this fixture.
+	require.Equal(t, int64(1), all.SettlementCount, "known slice only: 0xa")
+	require.Equal(t, int64(1), all.WindowedCount)
+	require.Equal(t, int64(0), all.ExpiredCount)
+	require.InDelta(t, 1.0, all.WindowedShare, 1e-9, "1 of 1 known carry window")
+	require.Greater(t, all.SettlementCount, int64(0))
 
 	require.NotEmpty(t, page.Daily)
-	require.Len(t, page.CancellationAttribution.ByPayer, 1)
-	require.Equal(t, "0xp2", page.CancellationAttribution.ByPayer[0].Address)
-	require.Equal(t, int64(1), page.CancellationAttribution.ByPayer[0].Count)
+	// The cancellation submitter (0xrelayer) is not allowlisted → facilitator_known=false →
+	// filtered out by WHERE facilitator_known; leaderboard is empty.
+	require.Empty(t, page.CancellationAttribution.ByPayer, "no verified cancellations in this fixture")
 }
 
 func TestRebuildReliability_Daily(t *testing.T) {

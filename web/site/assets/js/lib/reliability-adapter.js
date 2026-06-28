@@ -37,11 +37,6 @@ export function checkReliabilityIntegrity(view) {
     if (win.windowed_count > win.settlement_count) {
       issues.push({ level: "error", msg: `conservation ✗ — ${w} windowed ${win.windowed_count} > settlement ${win.settlement_count}` });
     }
-    const k = win.by_membership && win.by_membership.known;
-    const u = win.by_membership && win.by_membership.unknown;
-    if (k && u && (k.settlement_count + u.settlement_count) !== win.settlement_count) {
-      issues.push({ level: "error", msg: `conservation ✗ — ${w} known+unknown ${k.settlement_count + u.settlement_count} ≠ all ${win.settlement_count}` });
-    }
     if ((win.expired_count + win.not_yet_valid_count) > win.windowed_count) {
       issues.push({ level: "error", msg: `conservation ✗ — ${w} expired+not_yet_valid ${win.expired_count + win.not_yet_valid_count} > windowed ${win.windowed_count}` });
     }

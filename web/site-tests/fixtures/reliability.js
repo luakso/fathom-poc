@@ -1,5 +1,5 @@
-// Hand-built reliability fixtures. Counts reconcile (known+unknown==settlement,
-// windowed<=settlement, expired+not_yet_valid<=windowed, rates in [0,1]).
+// Hand-built reliability fixtures. Counts reconcile (windowed<=settlement,
+// expired+not_yet_valid<=windowed, rates in [0,1]). The headline is verified-only.
 // Numbers illustrative, not production.
 function measure(o) {
   return {
@@ -12,20 +12,13 @@ function measure(o) {
   };
 }
 
-const allWindow = {
-  ...measure({
-    settlement_count: 100, windowed_count: 80, windowed_share: 0.8,
-    cancellation_count: 2, cancellation_rate: 0.02,
-    latency: { p50_s: 603, p90_s: 604, p99_s: 627,
-               buckets: { sub1s: 0, "1_10s": 10, "10_60s": 10, "1_10m": 20, gt10m: 40 } },
-    expired_count: 0, expired_rate: 0, not_yet_valid_count: 0, not_yet_valid_rate: 0,
-  }),
-  by_membership: {
-    known: measure({ settlement_count: 70, windowed_count: 60, windowed_share: 60 / 70 }),
-    unknown: measure({ settlement_count: 30, windowed_count: 20, windowed_share: 20 / 30,
-                       cancellation_count: 2, cancellation_rate: 2 / 30 }),
-  },
-};
+const allWindow = measure({
+  settlement_count: 100, windowed_count: 80, windowed_share: 0.8,
+  cancellation_count: 2, cancellation_rate: 0.02,
+  latency: { p50_s: 603, p90_s: 604, p99_s: 627,
+             buckets: { sub1s: 0, "1_10s": 10, "10_60s": 10, "1_10m": 20, gt10m: 40 } },
+  expired_count: 0, expired_rate: 0, not_yet_valid_count: 0, not_yet_valid_rate: 0,
+});
 
 export const reliabilityDoc = {
   methodology_version: 1,

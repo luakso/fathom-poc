@@ -29,10 +29,9 @@ type ReliabilityMeasure struct {
 	NotYetValidRate   float64            `json:"not_yet_valid_rate"`
 }
 
-// ReliabilityWindow is one window: the 'all' totals inline, plus the membership split.
+// ReliabilityWindow is one window: the verified (known) totals inline.
 type ReliabilityWindow struct {
 	ReliabilityMeasure
-	ByMembership map[string]ReliabilityMeasure `json:"by_membership"`
 }
 
 // ReliabilityDailyPoint is one day of the R1/R3/R4 trend (both memberships summed).
@@ -75,7 +74,7 @@ func rate(num, den int64) float64 {
 func BuildReliability(ctx context.Context, q Querier) (ReliabilityPage, error) {
 	page := ReliabilityPage{Windows: map[string]ReliabilityWindow{}}
 	for w := range windowDays {
-		page.Windows[w] = ReliabilityWindow{ByMembership: map[string]ReliabilityMeasure{}}
+		page.Windows[w] = ReliabilityWindow{}
 	}
 
 	wrows, err := q.Query(ctx, `
@@ -109,10 +108,8 @@ func BuildReliability(ctx context.Context, q Querier) (ReliabilityPage, error) {
 		if !ok {
 			return ReliabilityPage{}, fmt.Errorf("reliability: unknown window %q", wname)
 		}
-		if membership == "all" {
+		if membership == "known" {
 			win.ReliabilityMeasure = m
-		} else {
-			win.ByMembership[membership] = m
 		}
 		page.Windows[wname] = win
 	}
@@ -137,6 +134,7 @@ func readReliabilityDaily(ctx context.Context, q Querier) ([]ReliabilityDailyPoi
 		       sum(settlement_count), sum(windowed_count),
 		       sum(expired_count), sum(not_yet_valid_count), sum(cancellation_count)
 		FROM metrics_reliability_daily_v2
+		WHERE membership = 'known'
 		GROUP BY day ORDER BY day`)
 	if err != nil {
 		return nil, fmt.Errorf("reliability daily read: %w", err)
@@ -170,6 +168,7 @@ func readCancellationAttribution(ctx context.Context, q Querier, page *Reliabili
 		rows, err := q.Query(ctx, fmt.Sprintf(`
 			SELECT %[1]s, count(*), bool_or(facilitator_known)
 			FROM authorization_cancellation_v1
+			WHERE facilitator_known
 			GROUP BY %[1]s ORDER BY count(*) DESC, %[1]s LIMIT 100`, spec.col))
 		if err != nil {
 			return fmt.Errorf("cancellation attribution %s: %w", spec.col, err)
