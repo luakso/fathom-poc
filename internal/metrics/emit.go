@@ -21,6 +21,7 @@ import (
 // stamps for citability and staleness display.
 type artifact struct {
 	MethodologyVersion int    `json:"methodology_version"`
+	Scope              string `json:"scope"`
 	GeneratedAt        string `json:"generated_at"`
 	DataThroughDay     string `json:"data_through_day"`
 	Data               any    `json:"data"`
@@ -155,6 +156,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 func writeArtifact(outDir, name string, version int, through string, data any) error {
 	doc := artifact{
 		MethodologyVersion: version,
+		Scope:              "x402-attributed",
 		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
 		DataThroughDay:     through,
 		Data:               data,

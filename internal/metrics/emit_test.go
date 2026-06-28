@@ -31,6 +31,7 @@ func TestEmit_WritesStampedFiles(t *testing.T) {
 	require.NoError(t, err)
 	var doc struct {
 		MethodologyVersion int    `json:"methodology_version"`
+		Scope              string `json:"scope"`
 		GeneratedAt        string `json:"generated_at"`
 		DataThroughDay     string `json:"data_through_day"`
 		Data               struct {
@@ -41,6 +42,7 @@ func TestEmit_WritesStampedFiles(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(b, &doc))
 	require.Equal(t, 1, doc.MethodologyVersion)
+	require.Equal(t, "x402-attributed", doc.Scope)
 	require.NotEmpty(t, doc.GeneratedAt)
 	require.Equal(t, "2026-06-08", doc.DataThroughDay)
 	require.Equal(t, int64(1), doc.Data.Windows["all"].TxnCount)
