@@ -8,12 +8,13 @@ import { state, data, winLabel } from "./state.js";
 export function rOverview(){
   const w = data.windows[state.win];
   const avg = num(w.volume_usdc) / (w.txn_count || 1);
+  const payees = (((data.concentration.windows[state.win] || {}).payee) || {}).total_entities || 0;
   $("#ov-win").textContent = "· " + winLabel[state.win];
   $("#ov-stats").innerHTML = `
     <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>X402 PAYMENTS</small></div>
     <div class="bignum c-ag">${fmtMoney(w.volume_usdc)}<small>VOLUME</small></div>
     <div class="bignum">${fmtAmt(avg.toFixed(6))}<small>TYPICAL PAYMENT (avg)</small></div>
-    <div class="bignum">${fmtInt(w.by_band.whale.txn_count + w.by_band.mid.txn_count + w.by_band.small.txn_count + w.by_band.micro.txn_count + w.by_band.dust.txn_count)}<small>SETTLEMENTS</small></div>`;
+    <div class="bignum">${fmtInt(payees)}<small>ACTIVE PAYEES</small></div>`;
   // amount-band distribution bar (share of verified volume by band)
   const bands = BANDDEF.map(([k]) => [k, num(w.by_band[k].volume_usdc)]);
   const totalV = bands.reduce((s,[,v]) => s+v, 0) || 1;

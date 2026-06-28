@@ -49,6 +49,9 @@ export function reshape(doc){
       verified_daily: d.velocity.daily_series.map(p => [p.day, p.max_per_min, p.p99_per_min]),
     },
     claims: d.claims || [],
+    // E9 concentration (window -> role -> {total_entities,...}); the overview
+    // reads payee.total_entities as the verified "active payees" count.
+    concentration: d.concentration || { windows: {} },
   };
 }
 
