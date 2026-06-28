@@ -233,11 +233,12 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 	rows, err := q.Query(ctx, `
 		SELECT facilitator,
 		       bool_or(membership = 'known') AS facilitator_known,
-		       sum(txn_count),
-		       sum(volume_usdc)::text
+		       sum(txn_count) FILTER (WHERE membership = 'known'),
+		       sum(volume_usdc) FILTER (WHERE membership = 'known')::text
 		FROM metrics_daily_v2
 		GROUP BY facilitator
-		ORDER BY sum(volume_usdc) DESC, facilitator
+		HAVING bool_or(membership = 'known')
+		ORDER BY sum(volume_usdc) FILTER (WHERE membership = 'known') DESC, facilitator
 		LIMIT 100`)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)

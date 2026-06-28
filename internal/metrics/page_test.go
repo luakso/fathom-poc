@@ -56,11 +56,11 @@ func TestBuildFacilitators_TopN(t *testing.T) {
 
 	page, err := metrics.BuildFacilitators(ctx, pool)
 	require.NoError(t, err)
-	// Ranked by 'all'-window volume, fac1 (10) before fac2 (1).
+	// Only fac1 (allowlisted/known) appears; fac2 is excluded by the HAVING filter.
+	require.Len(t, page.Rows, 1)
 	require.Equal(t, "0xfac1", page.Rows[0].Facilitator)
 	require.Equal(t, "10.000000", page.Rows[0].VolumeUSDC)
-	require.True(t, page.Rows[0].FacilitatorKnown)  // fac1 is allowlisted
-	require.False(t, page.Rows[1].FacilitatorKnown) // fac2 is not
+	require.True(t, page.Rows[0].FacilitatorKnown)
 }
 
 func TestBuildEconomy_AsOfBoundsAbove(t *testing.T) {
@@ -80,12 +80,11 @@ func TestBuildEconomy_AsOfBoundsAbove(t *testing.T) {
 	require.Len(t, econ.DailySeries, 1, "daily series shares the asOf upper bound")
 }
 
-func TestBuildFacilitators_KnownIsDeterministicBoolOr(t *testing.T) {
+func TestBuildFacilitators_VerifiedOnly(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
-	// facilitator_known is bool_or over the facilitator's membership cells: a
-	// facilitator with any 'known' cell is known, regardless of other cells.
-	// Seed the cube directly — facilitator_known is a property of the rollup
-	// output, not of the payments pipeline.
+	// Only facilitators with at least one 'known' cell appear. Volume and count
+	// reflect only the known cells so the artifact is purely verified activity.
+	// 0xfac2 has no 'known' cell and must be excluded entirely.
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO metrics_daily_v2
 			(day, chain, facilitator, membership, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
@@ -97,9 +96,7 @@ func TestBuildFacilitators_KnownIsDeterministicBoolOr(t *testing.T) {
 
 	page, err := metrics.BuildFacilitators(ctx, pool)
 	require.NoError(t, err)
-	require.Len(t, page.Rows, 2)
+	require.Len(t, page.Rows, 1)
 	require.Equal(t, "0xfac1", page.Rows[0].Facilitator)
-	require.True(t, page.Rows[0].FacilitatorKnown, "any 'known' cell makes the facilitator known")
-	require.Equal(t, "0xfac2", page.Rows[1].Facilitator)
-	require.False(t, page.Rows[1].FacilitatorKnown, "no 'known' cell → not known")
+	require.True(t, page.Rows[0].FacilitatorKnown)
 }
