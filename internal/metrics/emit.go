@@ -108,7 +108,7 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 		return err
 	}
 	if err := writeSonar(outDir); err != nil {
-		return fmt.Errorf("write site: %w", err)
+		return fmt.Errorf("write sonar: %w", err)
 	}
 	return nil
 }
