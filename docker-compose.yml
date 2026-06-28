@@ -49,36 +49,6 @@ services:
       init-db:
         condition: service_completed_successfully
 
-  solana-collector:
-    build:
-      context: .
-      target: runtime
-      args:
-        BINARY: solana-collector
-    image: fathom-solana-collector:dev
-    restart: "no"  # switch to unless-stopped once it's a real long-running loop
-    environment:
-      APP_ENV: local
-      DATABASE__URL: ${DB_URL}
-    depends_on:
-      init-db:
-        condition: service_completed_successfully
-
-  probe-collector:
-    build:
-      context: .
-      target: runtime
-      args:
-        BINARY: probe-collector
-    image: fathom-probe-collector:dev
-    restart: "no"  # switch to unless-stopped once it's a real long-running loop
-    environment:
-      APP_ENV: local
-      DATABASE__URL: ${DB_URL}
-    depends_on:
-      init-db:
-        condition: service_completed_successfully
-
   publisher:
     build:
       context: .

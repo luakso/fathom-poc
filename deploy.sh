@@ -28,7 +28,7 @@ echo ">> Deploying FATHOM_TAG=$FATHOM_TAG"
 
 # 3. Pull target images from GHCR (requires prior docker login ghcr.io).
 docker compose -f "$COMPOSE_FILE" pull \
-  postgres init-db base-collector solana-collector probe-collector publisher caddy
+  postgres init-db base-collector publisher caddy
 
 # 4. Bring Postgres up, then apply migrations + views (idempotent: goose only
 #    applies new migrations; views use CREATE OR REPLACE).

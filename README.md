@@ -36,7 +36,7 @@ just lint         # golangci-lint
 just test                # go test -race (unit)
 just test-integration    # go test -tags=integration (real postgres via testcontainers)
 just dev <binary>        # run a binary from the host with APP_ENV=local
-just build        # produce all four binaries into ./bin/
+just build        # produce all three binaries into ./bin/
 just vuln         # govulncheck
 
 just up           # bring the stack up

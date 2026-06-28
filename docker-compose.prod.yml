@@ -53,26 +53,6 @@ services:
       init-db:
         condition: service_completed_successfully
 
-  solana-collector:
-    image: ghcr.io/luakso/fathom-solana-collector:${FATHOM_TAG:-latest}
-    restart: "no"
-    environment:
-      APP_ENV: ${APP_ENV:-prod}
-      DATABASE__URL: ${DB_URL}
-    depends_on:
-      init-db:
-        condition: service_completed_successfully
-
-  probe-collector:
-    image: ghcr.io/luakso/fathom-probe-collector:${FATHOM_TAG:-latest}
-    restart: "no"
-    environment:
-      APP_ENV: ${APP_ENV:-prod}
-      DATABASE__URL: ${DB_URL}
-    depends_on:
-      init-db:
-        condition: service_completed_successfully
-
   publisher:
     image: ghcr.io/luakso/fathom-publisher:${FATHOM_TAG:-latest}
     restart: "no"  # on-demand: ... run --rm publisher rollup ; ... run --rm publisher emit --out /dist

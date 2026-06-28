@@ -2,7 +2,7 @@
 
 Target box: **`picasso@reef`** (Ubuntu, single VPS). Login/deploy user `picasso`.
 Stack: Docker Compose (`docker-compose.prod.yml`) — tuned Postgres (no exposed
-port), on-demand collectors/publisher pulled from GHCR, Caddy serving static JSON.
+port), on-demand collector/publisher pulled from GHCR, Caddy serving static JSON.
 
 Deploys are **manual and deliberate**: CI pushes images to GHCR on merge to `main`;
 you run `./deploy.sh` here when you choose to ship.
@@ -86,12 +86,7 @@ you run `./deploy.sh` here when you choose to ship.
     docker compose --env-file .env.prod -f docker-compose.prod.yml \
       run --rm base-collector backfill --from-block <X> --to-block <Y>
     ```
-12. Solana backfill — **not yet implemented.** The `solana-collector` binary is
-    currently a stub: it connects to the DB, logs `solana-collector ready`, and
-    exits without indexing (it ignores `backfill` args). Running it appears to
-    succeed but writes nothing. Skip this step until the collector's ingest loop
-    lands; v1 data is Base-only.
-13. Recompute the rollup cube and economy tables:
+12. Recompute the rollup cube and economy tables:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm publisher rollup
     ```
@@ -103,7 +98,7 @@ you run `./deploy.sh` here when you choose to ship.
     `data/eth-usd-monthly.json` (baked into the image) — backfilling further into
     the past than the price file covers aborts the rollup until the file is
     extended, committed, and the image rebuilt.
-14. Emit static JSON into the shared `dist` volume:
+13. Emit static JSON into the shared `dist` volume:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm publisher emit --out /dist
     ```
@@ -114,13 +109,13 @@ you run `./deploy.sh` here when you choose to ship.
 
 ## Phase D — Serve
 
-15. (When you have a domain) point a DNS A-record at `reef`'s public IP and set
+14. (When you have a domain) point a DNS A-record at `reef`'s public IP and set
     `FATHOM_DOMAIN=<domain>` in `.env.prod`. Until then leave `FATHOM_DOMAIN=:80`.
-16. Start Caddy:
+15. Start Caddy:
     ```bash
     docker compose --env-file .env.prod -f docker-compose.prod.yml up -d caddy
     ```
-17. Verify:
+16. Verify:
     ```bash
     curl -sS http://localhost/economy.json | head
     # with a domain + HTTPS: curl -sS https://<domain>/economy.json | head

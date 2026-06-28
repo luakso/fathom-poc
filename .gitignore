@@ -38,8 +38,6 @@ CLAUDE.md
 
 # Stray top-level binaries (build via `just build` into bin/)
 /base-collector
-/solana-collector
-/probe-collector
 /publisher
 
 # Visual brainstorming companion

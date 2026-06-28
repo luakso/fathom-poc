@@ -74,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        binary: [base-collector, solana-collector, probe-collector, publisher]
+        binary: [base-collector, publisher]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -112,8 +112,6 @@ jobs:
       matrix:
         include:
           - { image: base-collector, target: runtime, binary: base-collector }
-          - { image: solana-collector, target: runtime, binary: solana-collector }
-          - { image: probe-collector, target: runtime, binary: probe-collector }
           - { image: publisher, target: runtime, binary: publisher }
           - { image: init-db, target: init-db, binary: "" }
     steps:
