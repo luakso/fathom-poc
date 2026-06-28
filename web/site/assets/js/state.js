@@ -1,6 +1,8 @@
 // Shared mutable UI state + the loaded dataset. ES-module live bindings let
 // every renderer see updates without threading arguments.
-export const state = { win:"all", dMetric:"tx", dScale:"lin", dMa:"raw", mMetric:"usd", bMetric:"tx", focused:"p1" };
+// dWin is the daily tape's OWN timeframe (independent of the data-backed global
+// `win`); it slices the full daily series client-side, default 30d.
+export const state = { win:"all", dWin:"30d", dMetric:"tx", dScale:"lin", dMa:"raw", mMetric:"usd", bMetric:"tx", focused:"p1" };
 
 export let data = null;
 export function setData(d){ data = d; }

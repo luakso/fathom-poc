@@ -7,8 +7,20 @@ import { medianOf, peakIndex } from "./stats.js";
 import { state, data } from "./state.js";
 
 function ma7(arr){ return arr.map((_,i) => { const s = arr.slice(Math.max(0,i-6), i+1); return s.reduce((x,y)=>x+y,0)/s.length; }); }
+
+// tapeSlice: the daily tape shows ONLY the selected timeframe (not the full
+// series with the window shaded). "all" is the whole series; otherwise take the
+// trailing N days, clamped so a window wider than the data returns everything.
+export function tapeSlice(days, win){
+  if (win === "all") return days;
+  const n = win === "7d" ? 7 : win === "30d" ? 30 : win === "90d" ? 90 : days.length;
+  return days.slice(Math.max(0, days.length - n));
+}
+
+const monDay = s => new Date(s+"T00:00:00Z").toLocaleString("en-US",{month:"short",day:"2-digit",timeZone:"UTC"});
+
 export function rDaily(){
-  const days = data.daily;
+  const days = tapeSlice(data.daily, state.dWin);
   const host = $("#dailychart");
   const W = host.clientWidth || 900, H = 250, padL = 56, padB = 22, padT = 12;
   let vals = days.map(d => state.dMetric === "tx" ? d[1] : d[2]);
@@ -30,19 +42,27 @@ export function rDaily(){
                  : [1,2,3].map(k=>vmax*k/4);
   gv.forEach(v => { grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-10}" y2="${y(v)}"/>
     <text x="${padL-7}" y="${y(v)+3}" text-anchor="end">${state.dMetric==="tx"?fmtCount(v):fmtMoney(v)}</text>`; });
+  // x-axis ticks adapt to the selected slice: month markers for long spans,
+  // evenly spaced dated markers for short windows (where no "-01" may fall).
   let ticks = "";
-  days.forEach((d,i) => { if (d[0].endsWith("-01")) {
-    const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
-    ticks += `<line class="gl" x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${H-padB}"/><text x="${x(i)+4}" y="${H-7}">${lab}</text>`; }});
-  // active window shading
-  let shade = "";
-  if (state.win !== "all"){
-    const n = state.win === "7d" ? 7 : 30;
-    const i0 = Math.max(0, days.length - n);
-    shade = `<rect x="${x(i0)}" y="${padT}" width="${x(days.length-1)-x(i0)}" height="${H-padT-padB}" fill="rgba(79,214,227,.07)" stroke="rgba(79,214,227,.35)" stroke-dasharray="3 3"/>`;
+  if (days.length > 60){
+    days.forEach((d,i) => { if (d[0].endsWith("-01")) {
+      const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
+      ticks += `<line class="gl" x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${H-padB}"/><text x="${x(i)+4}" y="${H-7}">${lab}</text>`; }});
+  } else {
+    const step = Math.max(1, Math.round(days.length/6));
+    for (let i=0; i<days.length; i+=step){
+      // labels read left-to-right except the right-edge tick, which anchors end
+      // so it never clips past the viewBox
+      const edge = i >= days.length - step;
+      const tx = edge ? `x="${x(i)-4}" text-anchor="end"` : `x="${x(i)+4}"`;
+      ticks += `<line class="gl" x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${H-padB}"/><text ${tx} y="${H-7}">${monDay(days[i][0]).toUpperCase()}</text>`;
+    }
   }
+  // the range chip reflects exactly what's drawn
+  if ($("#d-range")) $("#d-range").textContent = `${monDay(days[0][0])} → ${monDay(days[days.length-1][0])}`;
   host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="dsvg">
-    ${grid}${ticks}${shade}
+    ${grid}${ticks}
     <path d="${area}" fill="rgba(61,214,140,.10)"/>
     <path d="${p}" fill="none" stroke="var(--agentic)" stroke-width="1.4"/>
     <line id="dcross" x1="0" x2="0" y1="${padT}" y2="${H-padB}" stroke="var(--accent)" stroke-width="1" opacity="0"/>

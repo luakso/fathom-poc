@@ -65,6 +65,10 @@
       <section class="panel span8" id="p2" style="animation-delay:.05s">
         <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all x402 · <span id="d-range"></span></span></div>
         <div class="ptools">
+          <button data-t="d-win" data-v="7d">7D</button>
+          <button data-t="d-win" data-v="30d" class="on">30D</button>
+          <button data-t="d-win" data-v="90d">90D</button>
+          <button data-t="d-win" data-v="all">ALL</button>
           <button data-t="d-metric" data-v="tx" class="on">TX</button>
           <button data-t="d-metric" data-v="usd">USD</button>
           <button data-t="d-scale" data-v="lin" class="on">LIN</button>
@@ -75,7 +79,7 @@
         </div>
         <div class="readout" id="d-readout">hover the tape ▸ crosshair</div>
         <div class="chart-host" id="dailychart"></div>
-        <div class="denom">all x402 traffic · active window shaded cyan · <span id="d-edge"></span> = data edge (partial day)</div>
+        <div class="denom">all x402 traffic over the selected timeframe · <span id="d-edge"></span> = data edge (partial day)</div>
       </section>
 
       <!-- 3 MONTHLY -->

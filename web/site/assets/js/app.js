@@ -48,6 +48,7 @@ function wire(){
       const group = b.dataset.t;
       $$(`.ptools button[data-t="${group}"]`).forEach(x => x.classList.remove("on"));
       b.classList.add("on");
+      if (group === "d-win")    state.dWin = b.dataset.v;
       if (group === "d-metric") state.dMetric = b.dataset.v === "usd" ? "usd" : "tx";
       if (group === "d-scale")  state.dScale = b.dataset.v;
       if (group === "d-ma")     state.dMa = b.dataset.v;
@@ -115,7 +116,8 @@ function applyMeta(view, issues){
   $("#st-meth").textContent = "v" + view.meta.methodology_version;
   $("#st-gen").textContent = "emit " + view.meta.generated_at;
   const mon = d => new Date(d + "T00:00:00Z").toLocaleString("en-US", { month:"short", day:"2-digit", timeZone:"UTC" });
-  $("#d-range").textContent = `${mon(view.daily[0][0])} → ${mon(view.meta.data_through_day)}`;
+  // #d-range is owned by rDaily (reflects the selected tape slice); here we only
+  // stamp the data edge used by the daily-tape denom.
   $("#d-edge").textContent = mon(view.meta.data_through_day);
   const errs = issues.filter(i => i.level === "error");
   const cons = $("#st-cons");
