@@ -47,4 +47,6 @@ CLAUDE.md
 /anatomy
 
 # Test tooling node_modules
-web/site-tests/node_modules/
+web/sonar/tests/node_modules/
+# Stray vite cache if a tool runs in web/ root
+web/node_modules/

@@ -1,4 +1,4 @@
-// web/site/assets/js/payers/app.js
+// web/sonar/app/assets/js/payers/app.js
 // Boots /payers: loads payers.json, renders overview, activity buckets,
 // leaderboard + skew, concentration, demand-side fingerprint, verify log.
 import { $, $$ } from "../dom.js";

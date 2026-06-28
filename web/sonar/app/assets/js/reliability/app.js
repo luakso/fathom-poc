@@ -1,4 +1,4 @@
-// web/site/assets/js/reliability/app.js
+// web/sonar/app/assets/js/reliability/app.js
 // Boots /reliability: loads reliability.json (+ economy.json cross-check), renders
 // overview, latency (validAfter→settle), window integrity, abandonment, cancellation
 // attribution, daily trend, verify log. Mirrors payers/app.js.

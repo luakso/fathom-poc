@@ -1,4 +1,4 @@
-// web/site/assets/js/mechanics/app.js
+// web/sonar/app/assets/js/mechanics/app.js
 // Boots /mechanics: loads mechanics.json (+ economy cross-check), renders unit
 // economics, fee intent, batch mechanics, wrapper mix, rails physics, QA canaries,
 // verify log. Mirrors reliability/app.js.

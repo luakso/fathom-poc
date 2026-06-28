@@ -1,4 +1,4 @@
-// web/site/assets/js/payees/app.js
+// web/sonar/app/assets/js/payees/app.js
 // Boots /payees: loads payees.json, renders overview, fingerprint scatter +
 // legend, leaderboard, dust-sink registry, concentration, verify log. Pins
 // flow into the shared report tray.

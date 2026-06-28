@@ -78,8 +78,8 @@ percentile sorts dominate); emit reads only the small tables and takes ~1s, so
 re-emitting after a claims-file edit is free.
 
 Emit also writes the dashboard page itself (`index.html` + assets, embedded in the
-publisher binary from `web/site/`) into the same directory — Caddy serves one
-self-contained folder. Edit the page under `web/site/`, rebuild, re-emit.
+publisher binary from `web/sonar/app/`) into the same directory — Caddy serves one
+self-contained folder. Edit the page under `web/sonar/app/`, rebuild, re-emit.
 Preview locally: `python3 -m http.server 8901 -d dist` → http://localhost:8901
 (check the status bar shows `conservation ✓` and the stamps).
 
