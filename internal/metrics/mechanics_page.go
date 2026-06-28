@@ -86,14 +86,13 @@ type MechanicsMeasure struct {
 	SelectorMix      []SelectorRow `json:"selector_mix"`
 }
 
-// MechanicsWindow adds the window-grain blocks (batch, block density, cost) and
-// the membership split to the 'all'-membership measure.
+// MechanicsWindow adds the window-grain blocks (batch, block density, cost) to
+// the verified ('known') measure.
 type MechanicsWindow struct {
 	MechanicsMeasure
-	Batch        BatchBlock                  `json:"batch"`
-	BlockDensity BlockDensity                `json:"block_density"`
-	Cost         GasMeasure                  `json:"cost"`
-	ByMembership map[string]MechanicsMeasure `json:"by_membership"`
+	Batch        BatchBlock   `json:"batch"`
+	BlockDensity BlockDensity `json:"block_density"`
+	Cost         GasMeasure   `json:"cost"`
 }
 
 // MechanicsPage is the mechanics.json payload.
@@ -108,7 +107,6 @@ func BuildMechanics(ctx context.Context, q Querier) (MechanicsPage, error) {
 	for w := range windowDays {
 		page.Windows[w] = MechanicsWindow{
 			MechanicsMeasure: MechanicsMeasure{Fee: FeeBlock{TxType: map[string]int64{}}, SelectorMix: []SelectorRow{}},
-			ByMembership:     map[string]MechanicsMeasure{},
 		}
 	}
 
@@ -167,10 +165,8 @@ func readMechWindow(ctx context.Context, q Querier, page MechanicsPage) error {
 		if !ok {
 			return fmt.Errorf("mechanics: unknown window %q", wname)
 		}
-		if membership == "all" {
+		if membership == "known" {
 			win.MechanicsMeasure = m
-		} else {
-			win.ByMembership[membership] = m
 		}
 		page.Windows[wname] = win
 	}
@@ -195,12 +191,8 @@ func readMechSelector(ctx context.Context, q Querier, page MechanicsPage) error 
 		if !ok {
 			return fmt.Errorf("mechanics selector: unknown window %q", wname)
 		}
-		if membership == "all" {
+		if membership == "known" {
 			win.SelectorMix = append(win.SelectorMix, r)
-		} else {
-			mm := win.ByMembership[membership]
-			mm.SelectorMix = append(mm.SelectorMix, r)
-			win.ByMembership[membership] = mm
 		}
 		page.Windows[wname] = win
 	}
@@ -288,7 +280,7 @@ func readMechCost(ctx context.Context, q Querier, page MechanicsPage) error {
 	}
 	rows, err := q.Query(ctx, `
 		SELECT day::text, l2_gas_cost_wei::text, l1_fee_wei::text, cost_usd::text, breakeven_txn_count, txn_count, volume_usdc::text
-		FROM metrics_gas_daily_v2 WHERE day <= $1::date`, asOf.Format(dayFormat))
+		FROM metrics_gas_daily_v2 WHERE membership = 'known' AND day <= $1::date`, asOf.Format(dayFormat))
 	if err != nil {
 		return fmt.Errorf("mechanics cost read: %w", err)
 	}

@@ -137,13 +137,13 @@ func TestBuildMechanics_Shape(t *testing.T) {
 	page, err := metrics.BuildMechanics(ctx, pool)
 	require.NoError(t, err)
 	all := page.Windows["all"]
-	require.Equal(t, int64(2), all.SettlementCount)
-	require.Equal(t, int64(1), all.Fee.TxType["0"])
+	require.Equal(t, int64(1), all.SettlementCount) // verified headline: only 0xa (fac1=known)
+	require.Equal(t, int64(0), all.Fee.TxType["0"]) // known payment 0xa is type-2
 	require.Equal(t, int64(1), all.Fee.TxType["2"])
 	require.NotEmpty(t, all.SelectorMix)
 	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock, "verified only: one known payment in block 400")
 	require.GreaterOrEqual(t, all.Cost.BreakevenTxnCount, int64(0)) // cost block populated from gas cube
-	require.Contains(t, all.ByMembership, "known")
+	require.Greater(t, all.SettlementCount, int64(0))
 }
 
 func TestEmit_WritesMechanics(t *testing.T) {
@@ -170,18 +170,13 @@ func TestEmit_WritesMechanics(t *testing.T) {
 				BlockDensity struct {
 					MaxPerBlock int64 `json:"max_per_block"`
 				} `json:"block_density"`
-				SelectorMix  []map[string]any `json:"selector_mix"`
-				ByMembership map[string]struct {
-					SettlementCount int64 `json:"settlement_count"`
-				} `json:"by_membership"`
+				SelectorMix []map[string]any `json:"selector_mix"`
 			} `json:"windows"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(b, &doc))
 	all := doc.Data.Windows["all"]
-	require.Equal(t, int64(2), all.SettlementCount)
+	require.Equal(t, int64(1), all.SettlementCount)          // verified headline: only 0xa (fac1=known)
 	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock) // verified only: one known per block
 	require.NotEmpty(t, all.SelectorMix)
-	require.Equal(t, all.SettlementCount,
-		all.ByMembership["known"].SettlementCount+all.ByMembership["unknown"].SettlementCount)
 }

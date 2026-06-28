@@ -38,10 +38,6 @@ const allWindow = {
   },
   block_density: { max_per_block: 4, p99_per_block: 4, mean_per_block: 2.0, distinct_blocks: 5 },
   cost: { txn_count: 10, gas_eth: "0.01", gas_eth_l1: "0.001", gas_eth_l2: "0.009", gas_usd: "20.00", gas_cents_per_dollar: "0.0089", breakeven_txn_count: 5 },
-  by_membership: {
-    known: measure({ settlement_count: 7, fee: { tx_type: { "0": 1, "1": 0, "2": 6 }, max_fee: { p50: null, p90: null, p99: null }, max_priority: { p50: null, p90: null, p99: null } } }),
-    unknown: measure({ settlement_count: 3, fee: { tx_type: { "0": 0, "1": 0, "2": 2 }, max_fee: { p50: null, p90: null, p99: null }, max_priority: { p50: null, p90: null, p99: null } } }),
-  },
 };
 
 export const mechanicsDoc = {

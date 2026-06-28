@@ -39,11 +39,6 @@ export function checkMechanicsIntegrity(view) {
     issues.push({ level: "warn", msg: `methodology v${view.meta.methodology_version} — this page was built for v1; review before citing` });
   }
   for (const [w, win] of Object.entries(view.windows)) {
-    const k = win.by_membership && win.by_membership.known;
-    const u = win.by_membership && win.by_membership.unknown;
-    if (k && u && (k.settlement_count + u.settlement_count) !== win.settlement_count) {
-      issues.push({ level: "error", msg: `conservation ✗ — ${w} known+unknown ${k.settlement_count + u.settlement_count} ≠ all ${win.settlement_count}` });
-    }
     const batchSum = (win.batch.histogram || []).reduce((s, b) => s + b.payment_count, 0);
     if (batchSum !== win.settlement_count) {
       issues.push({ level: "error", msg: `conservation ✗ — ${w} batch payments ${batchSum} ≠ settlements ${win.settlement_count}` });

@@ -18,12 +18,6 @@ describe("checkMechanicsIntegrity", () => {
     const issues = checkMechanicsIntegrity(reshapeMechanics(mechanicsDoc));
     expect(issues.filter(i => i.level === "error")).toHaveLength(0);
   });
-  it("flags membership not reconciling", () => {
-    const b = structuredClone(mechanicsDoc);
-    b.data.windows.all.by_membership.known.settlement_count = 1;
-    const issues = checkMechanicsIntegrity(reshapeMechanics(b));
-    expect(issues.some(i => i.level === "error" && /known\+unknown/.test(i.msg))).toBe(true);
-  });
   it("flags batch payment_count not summing to settlements", () => {
     const b = structuredClone(mechanicsDoc);
     b.data.windows.all.batch.histogram[0].payment_count = 999;
