@@ -137,7 +137,6 @@ type EntityRow struct {
 	TxnCount               int64  `json:"txn_count"`
 	DistinctCounterparties int64  `json:"distinct_counterparties"`
 	DistinctAmounts        int64  `json:"distinct_amounts"`
-	KnownVolumeUSDC        string `json:"known_volume_usdc"`
 	FirstSeen              string `json:"first_seen"`
 	LastSeen               string `json:"last_seen"`
 }
@@ -193,7 +192,7 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 
 	rrows, err := q.Query(ctx, `
 		SELECT window_name, address, volume_usdc::text, txn_count, distinct_counterparties,
-		       distinct_amounts, known_volume_usdc::text, first_seen::text, last_seen::text
+		       distinct_amounts, first_seen::text, last_seen::text
 		FROM entity_rank_v1 WHERE role = $1
 		ORDER BY window_name, entity_rank_v1.volume_usdc DESC, address`, role)
 	if err != nil {
@@ -204,7 +203,7 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 		var w string
 		var r EntityRow
 		if err := rrows.Scan(&w, &r.Address, &r.VolumeUSDC, &r.TxnCount, &r.DistinctCounterparties,
-			&r.DistinctAmounts, &r.KnownVolumeUSDC, &r.FirstSeen, &r.LastSeen); err != nil {
+			&r.DistinctAmounts, &r.FirstSeen, &r.LastSeen); err != nil {
 			return EntityPage{}, fmt.Errorf("scan entity rank: %w", err)
 		}
 		ew, ok := page.Windows[w]
