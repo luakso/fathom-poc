@@ -31,6 +31,9 @@ function maybeGate(view){
 
 /* ————— error screen ————— */
 function fatal(err){
+  // Clear loading indicator if still visible
+  const cons = document.getElementById("st-cons");
+  if (cons && cons.textContent.includes("loading")) cons.textContent = "";
   $("#fatal-msg").textContent = String(err && err.message || err);
   $("#fatal").classList.add("open");
 }
@@ -137,6 +140,10 @@ function applyMeta(view, issues){
 /* ————— boot ————— */
 (async function boot(){
   $("#fatal-retry").addEventListener("click", () => location.reload());
+  // Show a terminal-styled loading indicator while the artifact is fetched and
+  // parsed. applyMeta() overwrites it on success; fatal() clears it on error.
+  const cons = document.getElementById("st-cons");
+  if (cons) cons.textContent = "loading verified payments...";
   let loaded;
   try { loaded = await loadEconomy(); }
   catch (err){ fatal(err); return; }
