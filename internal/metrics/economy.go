@@ -88,7 +88,7 @@ type ClaimResult struct {
 // gasMethodNotes documents how the gas numbers were computed; emitted verbatim.
 var gasMethodNotes = map[string]string{
 	"dedupe":      "both the L2 execution gas and the L1 data fee are tx-level; each is counted once per transaction and apportioned equally across its payments",
-	"price":       "monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)",
+	"price":       "weekly ETH/USD reference prices from data/eth-usd-weekly.json (ISO Monday week-start; source cited in the file)",
 	"breakeven":   "payments whose apportioned gas in USD exceeds the amount moved",
 	"granularity": "rolled up from verified (known-facilitator) (day, amount_band) gas rows",
 	"cost":        "true L2 settlement cost = execution gas + L1 data fee",

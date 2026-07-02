@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,25 +11,60 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// ETHPrices is the curated monthly ETH/USD reference used to convert
-// gas_cost_wei into dollars at rollup time. One price per "YYYY-MM" month;
-// rollup fails if any month present in payments lacks a price.
+// ETHPrices is the curated weekly ETH/USD reference used to convert
+// gas_cost_wei into dollars at rollup time. One price per ISO Monday
+// week-start date "YYYY-MM-DD"; rollup fails if any week present in
+// payments lacks a price.
 type ETHPrices struct {
 	Source string                     // citation, required
 	Unit   string                     // documentation only, e.g. "USD per ETH"
-	Prices map[string]decimal.Decimal // "YYYY-MM" → USD per ETH, all > 0
+	Prices map[string]decimal.Decimal // "YYYY-MM-DD" (Monday) → USD per ETH, all > 0
 }
 
 // ethPricesFile is the on-disk JSON shape (prices as decimal strings).
-// Note: encoding/json silently keeps the LAST value for any duplicate month key
-// in the JSON object; deduplication is a curatorial responsibility, not enforced here.
 type ethPricesFile struct {
-	Source string            `json:"source"`
-	Unit   string            `json:"unit"`
-	Prices map[string]string `json:"prices"`
+	Source string          `json:"source"`
+	Unit   string          `json:"unit"`
+	Prices json.RawMessage `json:"prices"`
 }
 
-// LoadETHPrices reads and validates the monthly price file. All validation
+// decodePricesStrict decodes the prices JSON object, returning an error on
+// any duplicate key. encoding/json.Unmarshal silently keeps the LAST value
+// for duplicate keys; this decoder makes duplicates a hard error.
+func decodePricesStrict(raw json.RawMessage) (map[string]string, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, fmt.Errorf("prices: %w", err)
+	}
+	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
+		return nil, fmt.Errorf("prices must be a JSON object")
+	}
+	seen := map[string]struct{}{}
+	result := map[string]string{}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return nil, fmt.Errorf("prices key: %w", err)
+		}
+		key, ok := keyTok.(string)
+		if !ok {
+			return nil, fmt.Errorf("prices: unexpected non-string key")
+		}
+		if _, exists := seen[key]; exists {
+			return nil, fmt.Errorf("prices: duplicate key %q", key)
+		}
+		seen[key] = struct{}{}
+		var val string
+		if err := dec.Decode(&val); err != nil {
+			return nil, fmt.Errorf("prices: value for key %q: %w", key, err)
+		}
+		result[key] = val
+	}
+	return result, nil
+}
+
+// LoadETHPrices reads and validates the weekly price file. All validation
 // happens here so a bad file aborts before the rollup transaction starts.
 func LoadETHPrices(path string) (ETHPrices, error) {
 	b, err := os.ReadFile(path) //nolint:gosec // G304: path is a CLI-supplied config file, not user input
@@ -45,19 +81,30 @@ func LoadETHPrices(path string) (ETHPrices, error) {
 	if len(f.Prices) == 0 {
 		return ETHPrices{}, fmt.Errorf("eth prices %s: no prices", path)
 	}
+	rawMap, err := decodePricesStrict(f.Prices)
+	if err != nil {
+		return ETHPrices{}, fmt.Errorf("eth prices %s: %w", path, err)
+	}
+	if len(rawMap) == 0 {
+		return ETHPrices{}, fmt.Errorf("eth prices %s: no prices", path)
+	}
 	out := ETHPrices{Source: f.Source, Unit: f.Unit, Prices: map[string]decimal.Decimal{}}
-	for month, raw := range f.Prices {
-		if _, err := time.Parse("2006-01", month); err != nil {
-			return ETHPrices{}, fmt.Errorf("eth prices %s: bad month key %q (want YYYY-MM)", path, month)
+	for week, raw := range rawMap {
+		t, err := time.Parse("2006-01-02", week)
+		if err != nil {
+			return ETHPrices{}, fmt.Errorf("eth prices %s: bad week key %q (want YYYY-MM-DD Monday)", path, week)
+		}
+		if t.Weekday() != time.Monday {
+			return ETHPrices{}, fmt.Errorf("eth prices %s: week key %q is not a Monday", path, week)
 		}
 		d, err := decimal.NewFromString(raw)
 		if err != nil {
-			return ETHPrices{}, fmt.Errorf("eth prices %s: month %s: bad decimal %q", path, month, raw)
+			return ETHPrices{}, fmt.Errorf("eth prices %s: week %s: bad decimal %q", path, week, raw)
 		}
 		if !d.IsPositive() {
-			return ETHPrices{}, fmt.Errorf("eth prices %s: month %s: price must be positive", path, month)
+			return ETHPrices{}, fmt.Errorf("eth prices %s: week %s: price must be positive", path, week)
 		}
-		out.Prices[month] = d
+		out.Prices[week] = d
 	}
 	return out, nil
 }

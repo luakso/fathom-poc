@@ -36,13 +36,13 @@ GROUP BY 1, 2, 3, 4, 5, 6`
 // superuser; under a least-privilege role this SET fails).
 const tempFileLimit = "30GB"
 
-// missingPriceMonthsSQL lists months present in payments but absent from the
-// session's eth_price_monthly temp table. NULL result = full coverage.
-const missingPriceMonthsSQL = `
-SELECT string_agg(m, ', ' ORDER BY m) FROM (
-    SELECT DISTINCT to_char(block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM') AS m FROM payments
+// missingPriceWeeksSQL lists ISO week-starts (YYYY-MM-DD) present in payments
+// but absent from the session's eth_price_weekly temp table. NULL result = full coverage.
+const missingPriceWeeksSQL = `
+SELECT string_agg(w, ', ' ORDER BY w) FROM (
+    SELECT DISTINCT to_char(date_trunc('week', block_timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS w FROM payments
     EXCEPT
-    SELECT month FROM eth_price_monthly
+    SELECT week FROM eth_price_weekly
 ) missing`
 
 // windowsValues enumerates the fixed emit windows for rollup-side anchoring.
@@ -118,9 +118,10 @@ WHERE rk <= 50`
 // stored separately (l2_gas_cost_wei, l1_fee_wei); cost_usd and breakeven use the
 // TOTAL (l2 + l1). The apportioned sum conserves the per-tx sum to ~16 significant
 // figures (numeric division; sub-wei drift, far below the 6dp ETH any artifact
-// reports). USD uses the staged monthly reference price; breakeven counts payments
-// whose apportioned total cost in USD exceeds the amount they moved. Membership is
-// tx-level by construction, so apportioning never crosses membership.
+// reports). USD uses the staged weekly reference price (ISO Monday week-start);
+// breakeven counts payments whose apportioned total cost in USD exceeds the
+// amount they moved. Membership is tx-level by construction, so apportioning
+// never crosses membership.
 const economyGasDailySQL = `
 TRUNCATE metrics_gas_daily_v2;
 WITH tx AS (
@@ -148,8 +149,8 @@ SELECT
     sum(p.amount_usdc)
 FROM payment_x402_v1 p
 JOIN tx t USING (chain, tx_hash)
-JOIN eth_price_monthly pr
-  ON pr.month = to_char(p.block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
+JOIN eth_price_weekly pr
+  ON pr.week = to_char(date_trunc('week', p.block_timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD')
 GROUP BY 1, 2, 3`
 
 // economyVelocityDailySQL: per-minute counts reduced to per-day stats.
@@ -212,11 +213,11 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 	}
 
 	var missing *string
-	if err := tx.QueryRow(ctx, missingPriceMonthsSQL).Scan(&missing); err != nil {
+	if err := tx.QueryRow(ctx, missingPriceWeeksSQL).Scan(&missing); err != nil {
 		return fmt.Errorf("check price coverage: %w", err)
 	}
 	if missing != nil {
-		return fmt.Errorf("eth price file is missing months present in payments: %s", *missing)
+		return fmt.Errorf("eth price file is missing weeks present in payments: %s", *missing)
 	}
 
 	for _, stmt := range rebuildStatements {
@@ -239,25 +240,25 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 	return nil
 }
 
-// stagePrices creates the session-scoped monthly price table the gas SQL joins.
+// stagePrices creates the session-scoped weekly price table the gas SQL joins.
 func stagePrices(ctx context.Context, tx pgx.Tx, prices ETHPrices) error {
 	if _, err := tx.Exec(ctx, `
-		CREATE TEMP TABLE eth_price_monthly (
-			month TEXT PRIMARY KEY,
-			usd   NUMERIC NOT NULL CHECK (usd > 0)
+		CREATE TEMP TABLE eth_price_weekly (
+			week TEXT PRIMARY KEY,
+			usd  NUMERIC NOT NULL CHECK (usd > 0)
 		) ON COMMIT DROP`); err != nil {
 		return fmt.Errorf("create price temp table: %w", err)
 	}
-	months := make([]string, 0, len(prices.Prices))
-	for m := range prices.Prices {
-		months = append(months, m)
+	weeks := make([]string, 0, len(prices.Prices))
+	for w := range prices.Prices {
+		weeks = append(weeks, w)
 	}
-	sort.Strings(months)
-	for _, m := range months {
+	sort.Strings(weeks)
+	for _, w := range weeks {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO eth_price_monthly (month, usd) VALUES ($1, $2)`,
-			m, prices.Prices[m].String()); err != nil {
-			return fmt.Errorf("stage price %s: %w", m, err)
+			`INSERT INTO eth_price_weekly (week, usd) VALUES ($1, $2)`,
+			w, prices.Prices[w].String()); err != nil {
+			return fmt.Errorf("stage price %s: %w", w, err)
 		}
 	}
 	return nil

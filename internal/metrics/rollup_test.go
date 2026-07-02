@@ -160,26 +160,64 @@ func TestRebuild_Idempotent(t *testing.T) {
 	require.Equal(t, int64(1), total)
 }
 
-func TestRebuild_MissingPriceMonthFailsAndPreservesTables(t *testing.T) {
+func TestRebuild_MissingPriceWeekFailsAndPreservesTables(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	seedPayments(t, ctx, db, []seedRow{
+		// 2026-06-01 is a Monday; its week-start is 2026-06-01.
 		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac2", "0xp1", "0xs1", "5.00"},
 	})
 	// First rebuild succeeds and populates the cube.
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	// Second rebuild with a price file that lacks 2026-06 must fail BEFORE
-	// truncating anything: the previous generation stays queryable.
+	// Second rebuild with a price file that lacks the 2026-06-01 week must fail
+	// BEFORE truncating anything: the previous generation stays queryable.
 	bad := metrics.ETHPrices{
 		Source: "test", Unit: "USD per ETH",
-		Prices: map[string]decimal.Decimal{"2026-01": decimal.NewFromInt(2000)},
+		Prices: map[string]decimal.Decimal{"2026-01-05": decimal.NewFromInt(2000)},
 	}
 	err := metrics.Rebuild(ctx, pool, bad)
-	require.ErrorContains(t, err, "2026-06")
+	// Error must name the missing week (2026-06-01).
+	require.ErrorContains(t, err, "2026-06-01")
 
 	var n int64
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM metrics_daily_v2`).Scan(&n))
 	require.NotZero(t, n, "failed rebuild must leave the previous cube intact")
+}
+
+// TestRebuild_GasWeekBoundary verifies that two payments in adjacent ISO weeks
+// use different ETH/USD prices for their USD gas cost. Without the week-key join
+// both payments would use the same price and their USD costs would be equal.
+func TestRebuild_GasWeekBoundary(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 2026-06-01 = Monday (week 2026-06-01); 2026-06-08 = Monday (week 2026-06-08).
+	// Use distinct prices: 1000 and 3000 USD/ETH. Both payments have 1e15 wei gas.
+	// cost_usd: week 1 = 1e15 * 1000 / 1e18 = $1.00; week 2 = 1e15 * 3000 / 1e18 = $3.00.
+	weekBoundaryPrices := metrics.ETHPrices{
+		Source: "test", Unit: "USD per ETH",
+		Prices: map[string]decimal.Decimal{
+			"2026-06-01": decimal.NewFromInt(1000),
+			"2026-06-08": decimal.NewFromInt(3000),
+		},
+	}
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "5.00", "1000000000000000"},
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp2", "0xs1", "5.00", "1000000000000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, weekBoundaryPrices))
+
+	var usdW1, usdW2 string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT cost_usd::text FROM metrics_gas_daily_v2 WHERE day='2026-06-01'`).Scan(&usdW1))
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT cost_usd::text FROM metrics_gas_daily_v2 WHERE day='2026-06-08'`).Scan(&usdW2))
+	// $1.00 vs $3.00 — they must differ, proving two prices were applied.
+	require.NotEqual(t, usdW1, usdW2, "gas USD cost must differ across week boundary")
+	// And the ratio must be 1:3 (week-2 price is 3x week-1 price).
+	w1, _ := decimal.NewFromString(usdW1)
+	w2, _ := decimal.NewFromString(usdW2)
+	ratio := w2.Div(w1)
+	require.True(t, ratio.Equal(decimal.NewFromInt(3)), "gas cost ratio must match price ratio (1:3): %s / %s = %s", usdW2, usdW1, ratio)
 }
 
 func TestRebuild_WindowStatsMedians(t *testing.T) {

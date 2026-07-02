@@ -19,24 +19,26 @@ func writeTemp(t *testing.T, name, content string) string {
 
 func TestLoadETHPrices_Valid(t *testing.T) {
 	p := writeTemp(t, "eth.json", `{
-		"source": "CoinGecko monthly average",
+		"source": "DefiLlama weekly average",
 		"unit": "USD per ETH",
-		"prices": {"2026-01": "3085.20", "2026-02": "2039.93"}
+		"prices": {"2026-01-05": "3157.17", "2026-01-12": "3261.55"}
 	}`)
 	prices, err := metrics.LoadETHPrices(p)
 	require.NoError(t, err)
-	require.Equal(t, "CoinGecko monthly average", prices.Source)
-	require.Equal(t, "3085.2", prices.Prices["2026-01"].String())
+	require.Equal(t, "DefiLlama weekly average", prices.Source)
+	require.Equal(t, "3157.17", prices.Prices["2026-01-05"].String())
 	require.Len(t, prices.Prices, 2)
 }
 
 func TestLoadETHPrices_Rejects(t *testing.T) {
 	cases := []struct{ name, body, wantErr string }{
-		{"bad month", `{"source":"s","unit":"u","prices":{"2026-13":"1"}}`, "2026-13"},
-		{"bad decimal", `{"source":"s","unit":"u","prices":{"2026-01":"abc"}}`, "abc"},
-		{"non-positive", `{"source":"s","unit":"u","prices":{"2026-01":"0"}}`, "positive"},
+		{"bad date", `{"source":"s","unit":"u","prices":{"2026-13-01":"1"}}`, "2026-13-01"},
+		{"non-monday", `{"source":"s","unit":"u","prices":{"2026-01-06":"1"}}`, "Monday"},
+		{"bad decimal", `{"source":"s","unit":"u","prices":{"2026-01-05":"abc"}}`, "abc"},
+		{"non-positive", `{"source":"s","unit":"u","prices":{"2026-01-05":"0"}}`, "positive"},
 		{"empty prices", `{"source":"s","unit":"u","prices":{}}`, "no prices"},
-		{"missing source", `{"source":"","unit":"u","prices":{"2026-01":"1"}}`, "source"},
+		{"missing source", `{"source":"","unit":"u","prices":{"2026-01-05":"1"}}`, "source"},
+		{"duplicate key", `{"source":"s","unit":"u","prices":{"2026-01-05":"1","2026-01-05":"2"}}`, "duplicate"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

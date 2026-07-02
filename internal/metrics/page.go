@@ -40,9 +40,13 @@ type WindowEconomy struct {
 	ByBand map[string]Measure `json:"by_band"`
 }
 
-// DailyPoint is one day on the economy time-series chart.
+// DailyPoint is one day on the economy time-series chart. Complete is false for
+// the newest (max) day because we cannot prove its block coverage is final —
+// that day may still be accumulating payments. All earlier days are complete.
+// Mirrors the MonthlyPoint.Complete convention.
 type DailyPoint struct {
-	Day string `json:"day"` // YYYY-MM-DD
+	Day      string `json:"day"`      // YYYY-MM-DD
+	Complete bool   `json:"complete"` // false iff this is the newest (edge) day
 	Measure
 }
 
@@ -229,14 +233,15 @@ func windowEconomy(slices []cubeSlice, lb string) WindowEconomy {
 
 // dailySeries collapses the day-ordered slices into one point per day. It has
 // no lower bound — the chart shows full history independent of the selected
-// window; the UI can window it client-side.
+// window; the UI can window it client-side. The newest (last) day is always
+// marked Complete=false because we cannot prove its block coverage is final.
 func dailySeries(slices []cubeSlice) []DailyPoint {
 	series := []DailyPoint{}
 	var cur accum
 	day := ""
 	flush := func() {
 		if day != "" {
-			series = append(series, DailyPoint{Day: day, Measure: cur.measure()})
+			series = append(series, DailyPoint{Day: day, Complete: true, Measure: cur.measure()})
 		}
 	}
 	for _, s := range slices {
@@ -247,6 +252,10 @@ func dailySeries(slices []cubeSlice) []DailyPoint {
 		cur = cur.add(s)
 	}
 	flush()
+	// The last point is always potentially partial: mark it incomplete.
+	if len(series) > 0 {
+		series[len(series)-1].Complete = false
+	}
 	return series
 }
 
