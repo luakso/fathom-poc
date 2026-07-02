@@ -220,8 +220,11 @@ type FacilitatorRow struct {
 }
 
 // FacilitatorsPage is the Facilitators page payload (top facilitators by volume).
+// Totals is the sum of all rows — a self-checking block so readers can verify
+// the rows conserve to the overall verified totals.
 type FacilitatorsPage struct {
-	Rows []FacilitatorRow `json:"rows"`
+	Rows   []FacilitatorRow `json:"rows"`
+	Totals Measure          `json:"totals"`
 }
 
 // BuildFacilitators ranks facilitators by all-time volume. The ranking is
@@ -229,6 +232,10 @@ type FacilitatorsPage struct {
 // they exist. facilitator_known is a deterministic allowlist property —
 // bool_or over the membership column is true iff any of the facilitator's
 // cube cells are 'known'.
+//
+// Every allowlisted facilitator with at least one verified (known) payment
+// appears — there is intentionally no row cap. Totals is computed as the
+// in-Go sum of the rows so the artifact is self-checking.
 func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error) {
 	rows, err := q.Query(ctx, `
 		SELECT facilitator,
@@ -238,20 +245,36 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 		FROM metrics_daily_v2
 		GROUP BY facilitator
 		HAVING bool_or(membership = 'known')
-		ORDER BY sum(volume_usdc) FILTER (WHERE membership = 'known') DESC, facilitator
-		LIMIT 100`)
+		ORDER BY sum(volume_usdc) FILTER (WHERE membership = 'known') DESC, facilitator`)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)
 	}
 	defer rows.Close()
 
 	page := FacilitatorsPage{Rows: []FacilitatorRow{}}
+	var totalTxns int64
+	var totalVol decimal.Decimal
 	for rows.Next() {
 		var r FacilitatorRow
-		if err := rows.Scan(&r.Facilitator, &r.FacilitatorKnown, &r.TxnCount, &r.VolumeUSDC); err != nil {
+		var volStr string
+		if err := rows.Scan(&r.Facilitator, &r.FacilitatorKnown, &r.TxnCount, &volStr); err != nil {
 			return FacilitatorsPage{}, fmt.Errorf("scan facilitator row: %w", err)
 		}
+		vol, err := decimal.NewFromString(volStr)
+		if err != nil {
+			return FacilitatorsPage{}, fmt.Errorf("parse facilitator volume %q: %w", volStr, err)
+		}
+		r.VolumeUSDC = vol.StringFixed(x402.USDCDecimals)
+		totalTxns += r.TxnCount
+		totalVol = totalVol.Add(vol)
 		page.Rows = append(page.Rows, r)
 	}
-	return page, rows.Err()
+	if err := rows.Err(); err != nil {
+		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)
+	}
+	page.Totals = Measure{
+		TxnCount:   totalTxns,
+		VolumeUSDC: totalVol.StringFixed(x402.USDCDecimals),
+	}
+	return page, nil
 }
