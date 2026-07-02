@@ -78,8 +78,10 @@ export const PINNERS = {
   claims(){ const c = data.claims[0];
     if (!c) return null;
     const ratio = num(c.claimed_value)/num(c.measured_value);
-    return { title:"CLAIM LEDGER", value:"×"+ratio.toFixed(1)+" "+claimVerdict(ratio),
-      context:`"${c.claim_text}" → measured ${fmtInt(c.measured_value)}`,
+    const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
+    const fmt = isUsd ? fmtMoney : fmtInt;
+    return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
+      context:`"${c.claim_text}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
 };
 export function addPin(key){

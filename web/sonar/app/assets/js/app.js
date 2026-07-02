@@ -74,7 +74,7 @@ function wire(){
   help.addEventListener("click", e => { if (e.target === help) help.classList.remove("open"); });
   initTray();
 
-  const PANEL_IDS = ["p1","p2","p3","p4","p5","p6","p7","p8","p9"];
+  const PANEL_IDS = ["p1","p2","p3","p5","p6","p7","p8","p9"];
   document.addEventListener("keydown", e => {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // browser chords (Cmd+R, Ctrl+W…) are not ours
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT"){

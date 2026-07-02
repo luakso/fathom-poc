@@ -24,5 +24,11 @@ export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mi
 
 // Shared verdict vocabulary — panel tags and pin/X-card text must agree, so
 // the thresholds live here, in one place, not in each renderer.
+// The check is asymmetric: ratios above 1.5× are called out; claims lower than
+// measured are uncommon but distinct from "matches". Plain outcome language
+// avoids implying a symmetric two-sided test.
 export const priceRead = p => p.payee_count < 1000 ? "menu" : p.payee_count >= 5000 ? "market" : "mixed";
-export const claimVerdict = ratio => ratio >= 1.5 ? "overstated" : "within range";
+export const claimVerdict = ratio =>
+  ratio >= 1.5 ? `${ratio.toFixed(1)}× higher than measured` :
+  ratio < 0.9  ? "lower than measured" :
+                 "matches measurement";
