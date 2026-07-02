@@ -52,6 +52,9 @@ export function reshape(doc){
     // E9 concentration (window -> role -> {total_entities,...}); the overview
     // reads payee.total_entities as the verified "active payees" count.
     concentration: d.concentration || { windows: {} },
+    // excluded: all-window totals of non-verified transfers, for the overview
+    // exclusion sentence. Tolerate absence (older artifacts lack this key).
+    excluded: d.excluded || null,
   };
 }
 

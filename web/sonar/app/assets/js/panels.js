@@ -5,6 +5,15 @@ import { USD_TOLERANCE } from "./adapter.js";
 import { state, data, winLabel } from "./state.js";
 
 /* ———————— 1 OVERVIEW ———————— */
+function fmtExcluded(ex) {
+  if (!ex || !ex.txn_count) return "";
+  const n = ex.txn_count;
+  const nStr = n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
+  const v = num(ex.volume_usdc);
+  const vStr = v >= 1e9 ? "$"+(v/1e9).toFixed(1)+"B" : v >= 1e6 ? "$"+(v/1e6).toFixed(0)+"M" : "$"+(v/1e3).toFixed(0)+"k";
+  return `Transfers we can't tie to a known facilitator (${nStr} transfers, ${vStr}, in the same period) are excluded from every number here.`;
+}
+
 export function rOverview(){
   const w = data.windows[state.win];
   const avg = num(w.volume_usdc) / (w.txn_count || 1);
@@ -22,7 +31,10 @@ export function rOverview(){
     const p = 100*v/totalV;
     return `<span class="seg" style="width:${p}%" title="${k} ${p.toFixed(1)}% of volume"><b>${k}</b></span>`;
   }).join("");
-  $("#ov-denom").textContent = "A verified payment is a USDC payment settled on Base by a known x402 facilitator. · " + winLabel[state.win] + " · windows anchored to data-through day";
+  const defn = "A verified payment is a USDC payment settled on Base by a known x402 facilitator.";
+  const excl = fmtExcluded(data.excluded);
+  const denomParts = [defn, excl, winLabel[state.win] + " · windows anchored to data-through day"].filter(Boolean);
+  $("#ov-denom").textContent = denomParts.join(" · ");
 }
 
 /* ———————— 5 SHAPE ———————— */

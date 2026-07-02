@@ -7,11 +7,21 @@ import { state, data, winLabel } from "./state.js";
 
 const pins = [];
 let selPin = 0;
+function overviewPinDenom() {
+  const defn = "A verified payment is a USDC payment settled on Base by a known x402 facilitator.";
+  const ex = data.excluded;
+  if (!ex || !ex.txn_count) return defn;
+  const n = ex.txn_count;
+  const nStr = n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
+  const v = num(ex.volume_usdc);
+  const vStr = v >= 1e9 ? "$"+(v/1e9).toFixed(1)+"B" : v >= 1e6 ? "$"+(v/1e6).toFixed(0)+"M" : "$"+(v/1e3).toFixed(0)+"k";
+  return `${defn} ${nStr} non-verified transfers (${vStr}) excluded.`;
+}
 export const PINNERS = {
   overview(){ const w = data.windows[state.win];
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
       context:`${fmtCount(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} volume`,
-      denom:"A verified payment is a USDC payment settled on Base by a known x402 facilitator. · "+winLabel[state.win],
+      denom:overviewPinDenom()+" · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
     const usd = state.dMetric === "usd";
