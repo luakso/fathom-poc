@@ -27,11 +27,16 @@ export const PINNERS = {
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
     if (!slice.length) return null;
     const usd = state.dMetric === "usd";
-    const peak = usd ? slice.reduce((a,b)=> b[2]>a[2]?b:a) : slice.reduce((a,b)=> b[1]>a[1]?b:a);
+    // Exclude incomplete points (d[3] === false) from peak selection.
+    const complete = slice.filter(d => d[3] !== false);
+    const peakPool = complete.length ? complete : slice; // fall back if all incomplete
+    const peak = usd ? peakPool.reduce((a,b)=> b[2]>a[2]?b:a) : peakPool.reduce((a,b)=> b[1]>a[1]?b:a);
     const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
+    const hasPartial = slice.some(d => d[3] === false);
+    const partialNote = hasPartial ? " · last day partial, excluded from peak" : "";
     return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:val,
       context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
-      denom:`verified payments, ${slice[0][0]} → ${slice[slice.length-1][0]}`,
+      denom:`verified payments, ${slice[0][0]} → ${slice[slice.length-1][0]}${partialNote}`,
       series:slice.map(d=> usd?d[2]:d[1]) }; },
   monthly(){
     const complete = data.monthly.filter(m => m.complete);

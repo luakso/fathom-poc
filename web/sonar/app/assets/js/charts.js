@@ -8,6 +8,9 @@ import { state, data } from "./state.js";
 
 function ma7(arr){ return arr.map((_,i) => { const s = arr.slice(Math.max(0,i-6), i+1); return s.reduce((x,y)=>x+y,0)/s.length; }); }
 
+// hasIncomplete: true when the last element of the tuple array is incomplete (d[3] === false).
+function hasIncomplete(days){ return days.length > 0 && days[days.length-1][3] === false; }
+
 // tapeSlice: the daily tape shows ONLY the selected timeframe (not the full
 // series with the window shaded). "all" is the whole series; otherwise take the
 // trailing N days, clamped so a window wider than the data returns everything.
@@ -25,11 +28,25 @@ export function rDaily(){
   if (!days.length){
     host.innerHTML = `<div class="readout">no verified payments in this window</div>`;
     if ($("#d-range")) $("#d-range").textContent = "—";
+    const partialNote = $("#d-partial-note");
+    if (partialNote) partialNote.style.display = "none";
     return;
   }
   const W = host.clientWidth || 900, H = 250, padL = 56, padB = 22, padT = 12;
-  let vals = days.map(d => state.dMetric === "tx" ? d[1] : d[2]);
-  if (state.dMa === "ma7") vals = ma7(vals);
+  // incomplete: the last point may be a partial day — exclude from MA7 and
+  // from peak annotation, show visually distinct.
+  const edgeIncomplete = hasIncomplete(days);
+  const rawVals = days.map(d => state.dMetric === "tx" ? d[1] : d[2]);
+  let vals;
+  if (state.dMa === "ma7") {
+    // Compute MA7 on all but the incomplete edge (if present), then keep the
+    // edge at its raw value so it doesn't distort the trailing average.
+    const completeCount = edgeIncomplete ? rawVals.length - 1 : rawVals.length;
+    const maOnComplete = ma7(rawVals.slice(0, completeCount));
+    vals = edgeIncomplete ? [...maOnComplete, rawVals[rawVals.length-1]] : maOnComplete;
+  } else {
+    vals = rawVals;
+  }
   const positives = vals.filter(v => v > 0);
   const log = state.dScale === "log" && positives.length > 0;
   const vmax = Math.max(...vals), vmin = log ? Math.min(...positives) : 0;
@@ -67,10 +84,18 @@ export function rDaily(){
   }
   // the range chip reflects exactly what's drawn
   if ($("#d-range")) $("#d-range").textContent = `${monDay(days[0][0])} → ${monDay(days[days.length-1][0])}`;
+  // incomplete edge: show a hollow circle marker distinct from the main path
+  const edgeMarker = edgeIncomplete
+    ? `<circle data-partial="true" cx="${x(days.length-1)}" cy="${y(vals[vals.length-1])}" r="4" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 2" opacity="0.6"/>`
+    : "";
+  // update the partial-day note visibility (data-driven, not wall-clock)
+  const partialNote = $("#d-partial-note");
+  if (partialNote) partialNote.style.display = edgeIncomplete ? "" : "none";
   host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="dsvg">
     ${grid}${ticks}
     <path d="${area}" fill="rgba(61,214,140,.10)"/>
     <path d="${p}" fill="none" stroke="var(--agentic)" stroke-width="1.4"/>
+    ${edgeMarker}
     <line id="dcross" x1="0" x2="0" y1="${padT}" y2="${H-padB}" stroke="var(--accent)" stroke-width="1" opacity="0"/>
     <circle id="ddot" r="3" fill="var(--accent)" opacity="0"/>
     <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-10}" y2="${H-padB}"/>

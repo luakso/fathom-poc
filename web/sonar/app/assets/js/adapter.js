@@ -37,8 +37,10 @@ export function reshape(doc){
       ...d.windows[w],
       by_band: dense(d.windows[w].by_band, BAND_KEYS, ZERO_MEASURE),
     }])),
-    // compact tape: [day, txn_count, volume rounded to cents]
-    daily: d.daily_series.map(p => [p.day, p.txn_count, Math.round(num(p.volume_usdc)*100)/100]),
+    // compact tape: [day, txn_count, volume rounded to cents, complete]
+    // complete is false only for the newest (edge) day. Older artifacts without
+    // the field are treated as complete (p.complete !== false).
+    daily: d.daily_series.map(p => [p.day, p.txn_count, Math.round(num(p.volume_usdc)*100)/100, p.complete !== false]),
     monthly: d.monthly_series,
     typical: Object.fromEntries(winKeys.map(w => [w, (d.typical_payment[w]) || { ...ZERO_TYPICAL }])),
     // renderers show top-12 price points per window; artifact ships 50
