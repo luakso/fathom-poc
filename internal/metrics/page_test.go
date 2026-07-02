@@ -22,8 +22,8 @@ func TestBuildEconomy_WindowVerifiedOnly(t *testing.T) {
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	// asOf pins "now" so the 7d/30d windows are deterministic in tests.
-	asOf := mustTime(t, "2026-06-09T00:00:00Z")
+	// asOf must match the cube's verified data edge (cubeMaxDay = Jun 8).
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
 	require.NoError(t, err)
 
@@ -36,15 +36,18 @@ func TestBuildEconomy_WindowVerifiedOnly(t *testing.T) {
 func TestBuildEconomy_WindowIsSevenDaysInclusive(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac2")
+	// asOf = Jun 3 (cubeMaxDay).  7d lower bound = Jun 3 - 6 = May 28.
+	// "in" (Jun 3) >= May 28: included.  "out" (May 27) < May 28: excluded.
 	seedPayments(t, ctx, db, []seedRow{
-		{"in", 0, "2026-06-03T12:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},  // exactly 7th day back from 06-09 → included
-		{"out", 0, "2026-06-02T12:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // 8th day back → excluded
+		{"in", 0, "2026-06-03T12:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},  // on asOf → in 7d
+		{"out", 0, "2026-05-27T12:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // 8 days before asOf → excluded
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
-	asOf := mustTime(t, "2026-06-09T00:00:00Z")
+	// cubeMaxDay = Jun 3 (max of Jun 3 and May 27); asOf must equal cubeMaxDay.
+	asOf := mustTime(t, "2026-06-03T00:00:00Z")
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), econ.Windows["7d"].TxnCount, "7d must include 06-03 but exclude 06-02")
+	require.Equal(t, int64(1), econ.Windows["7d"].TxnCount, "7d must include Jun 3 but exclude May 27")
 }
 
 func TestBuildFacilitators_TopN(t *testing.T) {
@@ -65,21 +68,32 @@ func TestBuildFacilitators_TopN(t *testing.T) {
 	require.True(t, page.Rows[0].FacilitatorKnown)
 }
 
-func TestBuildEconomy_AsOfBoundsAbove(t *testing.T) {
+// TestBuildEconomy_AsOfMatchesCubeEdge verifies that BuildEconomy accepts
+// exactly asOf == cubeMaxDay and rejects any other value.  The assertion
+// prevents internally inconsistent pages where typical_payment/price_points
+// (anchored at rollup time) and economy windows (bounded by asOf) would
+// describe different date ranges.
+func TestBuildEconomy_AsOfMatchesCubeEdge(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac2")
 	seedPayments(t, ctx, db, []seedRow{
 		{"in", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},
-		{"future", 0, "2026-06-15T10:00:00Z", "0xfac2", "0xp2", "0xs1", "1.00"}, // after asOf → excluded everywhere
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+	// cubeMaxDay = "2026-06-08"
 
-	asOf := mustTime(t, "2026-06-09T00:00:00Z")
-	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
+	// Exact match — must succeed and include the single payment.
+	econ, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-08T00:00:00Z"))
 	require.NoError(t, err)
-	require.Equal(t, int64(1), econ.Windows["7d"].TxnCount, "7d must not include days after asOf")
-	require.Equal(t, int64(1), econ.Windows["all"].TxnCount, "'all' is as-of asOf, not beyond it")
-	require.Len(t, econ.DailySeries, 1, "daily series shares the asOf upper bound")
+	require.Equal(t, int64(1), econ.Windows["all"].TxnCount)
+
+	// Any deviation — before or after — must return a clear error.
+	_, err = metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-07T00:00:00Z"))
+	require.ErrorContains(t, err, "2026-06-07", "error must name the passed asOf")
+	require.ErrorContains(t, err, "2026-06-08", "error must name the cube edge")
+
+	_, err = metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-09T00:00:00Z"))
+	require.Error(t, err, "asOf after cubeMaxDay must also be rejected")
 }
 
 func TestBuildFacilitators_VerifiedOnly(t *testing.T) {
@@ -118,7 +132,8 @@ func TestBuildFacilitators_TotalsConservation(t *testing.T) {
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	asOf := mustTime(t, "2026-06-09T00:00:00Z")
+	// asOf must equal cubeMaxDay (2026-06-08).
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
 	fac, err := metrics.BuildFacilitators(ctx, pool)
 	require.NoError(t, err)
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)

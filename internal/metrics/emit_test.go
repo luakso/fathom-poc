@@ -143,6 +143,7 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 
 func TestEmit_WritesSiteFiles(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac2") // must be known so cubeStamp finds a verified day
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "2.00"},
 	})
@@ -187,6 +188,7 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 
 func TestEmit_WritesEntityPages(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac2") // must be known so cubeStamp finds a verified day
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "2.00"},
 	})

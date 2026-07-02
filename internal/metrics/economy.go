@@ -141,8 +141,14 @@ func monthlySeries(slices []cubeSlice, asOf time.Time) ([]MonthlyPoint, error) {
 
 // buildTypicalPayment merges cube-side averages with rollup-side medians for
 // verified payments only. windows is the already-built map from BuildEconomy.
+// Every window is pre-initialised so the output always contains all three keys
+// even when a window has no verified rows in metrics_window_stats_v2.
 func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]WindowEconomy) (map[string]TypicalPayment, error) {
+	zero := decimal.Zero.StringFixed(x402.USDCDecimals)
 	out := map[string]TypicalPayment{}
+	for w := range windowDays {
+		out[w] = TypicalPayment{AvgUSDC: zero, MedianUSDC: zero}
+	}
 	rows, err := q.Query(ctx, `
 		SELECT window_name, txn_count, median_amount_usdc::text
 		FROM metrics_window_stats_v2 WHERE membership = 'known'`)
@@ -159,21 +165,27 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 		if _, ok := windows[w]; !ok {
 			return nil, fmt.Errorf("window stats read: unknown window_name %q", w)
 		}
-		out[w] = TypicalPayment{AvgUSDC: avgUSDC(windows[w].Measure), MedianUSDC: median, TxnCount: txns}
+		avg, err := avgUSDC(windows[w].Measure)
+		if err != nil {
+			return nil, fmt.Errorf("avg for window %s: %w", w, err)
+		}
+		out[w] = TypicalPayment{AvgUSDC: avg, MedianUSDC: median, TxnCount: txns}
 	}
 	return out, rows.Err()
 }
 
-// avgUSDC divides a Measure's volume by its count, "0.000000" for empty.
-func avgUSDC(m Measure) string {
+// avgUSDC divides a Measure's volume by its count. Returns "0.000000" for an
+// empty measure (TxnCount == 0).  Returns an error if VolumeUSDC is not a
+// valid decimal — callers must not swallow this into a silent zero.
+func avgUSDC(m Measure) (string, error) {
 	if m.TxnCount == 0 {
-		return decimal.Zero.StringFixed(x402.USDCDecimals)
+		return decimal.Zero.StringFixed(x402.USDCDecimals), nil
 	}
 	vol, err := decimal.NewFromString(m.VolumeUSDC)
 	if err != nil {
-		return decimal.Zero.StringFixed(x402.USDCDecimals)
+		return "", fmt.Errorf("avgUSDC: parse volume %q: %w", m.VolumeUSDC, err)
 	}
-	return vol.Div(decimal.NewFromInt(m.TxnCount)).StringFixed(x402.USDCDecimals)
+	return vol.Div(decimal.NewFromInt(m.TxnCount)).StringFixed(x402.USDCDecimals), nil
 }
 
 // buildPricePoints reads the precomputed top-N and attaches the window share.
@@ -367,17 +379,20 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("claim %s: %w", c.ID, err)
 		}
-		m := page.Windows[window].Measure
+		we, ok := page.Windows[window]
+		if !ok {
+			return nil, fmt.Errorf("claim %s: window %q not present in economy page — rebuild and re-emit", c.ID, window)
+		}
+		m := we.Measure
 		r := ClaimResult{Claim: c}
 		switch kind {
 		case "txns":
 			r.MeasuredValue = strconv.FormatInt(m.TxnCount, 10)
 			r.MeasuredUnit = "transactions"
 		case "volume":
+			// VolumeUSDC from accum.measure() is always a valid decimal string;
+			// no empty-string fallback needed after the ok-check above.
 			r.MeasuredValue = m.VolumeUSDC
-			if r.MeasuredValue == "" {
-				r.MeasuredValue = decimal.Zero.StringFixed(x402.USDCDecimals)
-			}
 			r.MeasuredUnit = "USDC"
 		default:
 			return nil, fmt.Errorf("claim %s: unhandled kind %q", c.ID, kind)

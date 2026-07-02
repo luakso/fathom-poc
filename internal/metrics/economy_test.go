@@ -94,6 +94,70 @@ func TestBuildEconomy_GasL1L2Split(t *testing.T) {
 	require.Equal(t, "0.002000", g.GasETH) // total l1+l2
 }
 
+// TestBuildEconomy_TypicalPaymentAllWindowsPresent verifies that all three
+// windows are always present in the typical_payment map even when only a
+// subset of windows have rows in metrics_window_stats_v2.  Without
+// pre-initialisation a missing window silently disappears from the artifact.
+func TestBuildEconomy_TypicalPaymentAllWindowsPresent(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+
+	// Insert one verified cube row so the asOf assertion in BuildEconomy passes.
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO metrics_daily_v2
+			(day, chain, facilitator, membership, amount_band, methodology_version,
+			 txn_count, volume_usdc, max_amount_usdc)
+		VALUES ('2026-06-01','base','0xfac1','known','small',1,10,20.000000,5.000000)`)
+	require.NoError(t, err)
+
+	// Only seed a '7d' row in window_stats — simulating the case where one
+	// window has no verified rows (e.g. data edge or rollup anomaly).
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO metrics_window_stats_v2
+			(window_name, membership, methodology_version, txn_count, median_amount_usdc)
+		VALUES ('7d','known',1,5,2.000000)`)
+	require.NoError(t, err)
+
+	asOf := mustTime(t, "2026-06-01T00:00:00Z")
+	page, err := metrics.BuildEconomy(ctx, pool, asOf)
+	require.NoError(t, err)
+
+	// All three windows must exist in the map regardless of DB row coverage.
+	for _, w := range []string{"7d", "30d", "all"} {
+		tp, ok := page.TypicalPayment[w]
+		require.True(t, ok, "window %q must always be present in typical_payment", w)
+		if w != "7d" {
+			require.Equal(t, int64(0), tp.TxnCount, "unset window %q must default to zero", w)
+		}
+	}
+}
+
+// TestBuildEconomy_RejectsAsOfMismatch verifies that BuildEconomy returns a
+// descriptive error when the caller passes an asOf that differs from the
+// cube's verified data edge.  typical_payment and price_points are anchored
+// at rollup time; a different asOf would make those windows inconsistent
+// with the economy series, gas, and velocity sections.
+func TestBuildEconomy_RejectsAsOfMismatch(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac2")
+	seedPayments(t, ctx, db, []seedRow{
+		{"in", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "1.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+	// cubeMaxDay = "2026-06-08"
+
+	// asOf one day before the cube's verified edge — must error.
+	_, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-07T00:00:00Z"))
+	require.Error(t, err, "asOf before cubeMaxDay must be rejected")
+	require.ErrorContains(t, err, "2026-06-07")
+	require.ErrorContains(t, err, "2026-06-08")
+
+	// asOf one day after the cube's verified edge — also must error (window
+	// semantics shift: economy 7d anchors at Jun 9 while typical_payment
+	// anchors at Jun 8, yielding different lower bounds).
+	_, err = metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-09T00:00:00Z"))
+	require.Error(t, err, "asOf after cubeMaxDay must also be rejected")
+}
+
 func TestBuildEconomy_TypicalPricePointsGasVelocity(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")

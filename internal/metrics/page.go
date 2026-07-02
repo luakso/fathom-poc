@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -117,6 +118,30 @@ func (a accum) measure() Measure {
 // decimals keep the math exact — the cube's NUMERIC(38,6) text round-trips
 // losslessly.
 func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, error) {
+	// Build-time consistency assertion: asOf must equal the cube's verified data
+	// edge (max day with membership='known').  typical_payment and price_points
+	// are anchored at rollup time to that same edge; a different asOf would make
+	// those windows describe a different period than the economy series, gas, and
+	// velocity sections — an internally inconsistent page with no visible error.
+	var cubeMaxDay *string
+	if err := q.QueryRow(ctx, `
+		SELECT max(day)::text FROM metrics_daily_v2 WHERE membership = 'known'`).
+		Scan(&cubeMaxDay); err != nil {
+		return EconomyPage{}, fmt.Errorf("build economy: read verified data edge: %w", err)
+	}
+	if cubeMaxDay == nil {
+		return EconomyPage{}, errors.New("build economy: cube has no verified rows — run `publisher rollup` first")
+	}
+	want := asOf.Format(dayFormat)
+	if want != *cubeMaxDay {
+		return EconomyPage{}, fmt.Errorf(
+			"build economy: asOf %s does not match cube's verified data_through_day %s — "+
+				"typical_payment and price_points are anchored at rollup time to %s and would be "+
+				"inconsistent with a different asOf; pass the cube's own data_through_day",
+			want, *cubeMaxDay, *cubeMaxDay,
+		)
+	}
+
 	slices, err := readCubeSlices(ctx, q, asOf)
 	if err != nil {
 		return EconomyPage{}, err
