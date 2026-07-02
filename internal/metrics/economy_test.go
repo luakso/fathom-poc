@@ -10,6 +10,43 @@ import (
 	"github.com/lukostrobl/fathom/internal/metrics"
 )
 
+func TestBuildEconomy_ExcludedBlock(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac2", "0xp2", "0xs2", "2.00"}, // unknown
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	page, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-05T00:00:00Z"))
+	require.NoError(t, err)
+
+	// Verified window includes only the known payment.
+	require.Equal(t, int64(1), page.Windows["all"].TxnCount)
+	require.Equal(t, "1.000000", page.Windows["all"].VolumeUSDC)
+
+	// Excluded block captures the non-verified (unknown) payment.
+	require.Equal(t, int64(1), page.Excluded.TxnCount)
+	require.Equal(t, "2.000000", page.Excluded.VolumeUSDC)
+}
+
+func TestBuildEconomy_ExcludedBlockZeroWhenNoneUnknown(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known only
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	page, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-05T00:00:00Z"))
+	require.NoError(t, err)
+
+	// No unknown rows: excluded should be zero, not nil/error.
+	require.Equal(t, int64(0), page.Excluded.TxnCount)
+	require.Equal(t, "0.000000", page.Excluded.VolumeUSDC)
+}
+
 func TestBuildEconomy_MonthlySeriesCompleteness(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")

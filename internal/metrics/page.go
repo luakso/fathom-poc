@@ -45,6 +45,16 @@ type DailyPoint struct {
 	Measure
 }
 
+// ExcludedTotals is the all-window aggregate of payments that are NOT verified
+// (cube rows with membership = 'unknown'). Emitted explicitly in economy.json
+// as "excluded" so the overview panel can cite real numbers in its exclusion
+// sentence. This is a deliberate, named exception to the verified-only rule:
+// the block is the excluded remainder, never mixed into verified figures.
+type ExcludedTotals struct {
+	TxnCount   int64  `json:"txn_count"`
+	VolumeUSDC string `json:"volume_usdc"`
+}
+
 // EconomyPage is the full payload for the Payment Economy page. Claims is
 // attached by Emit (ResolveClaims) — BuildEconomy leaves it empty.
 type EconomyPage struct {
@@ -57,6 +67,7 @@ type EconomyPage struct {
 	Velocity       VelocitySection           `json:"velocity"`
 	Claims         []ClaimResult             `json:"claims"`
 	Concentration  ConcentrationSection      `json:"concentration"`
+	Excluded       ExcludedTotals            `json:"excluded"`
 }
 
 // lowerBound returns the inclusive lower day (YYYY-MM-DD) for a window, or ""
@@ -135,6 +146,9 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 	if page.Velocity, err = buildVelocity(ctx, q, asOf); err != nil {
 		return EconomyPage{}, err
 	}
+	if page.Excluded, err = buildExcluded(ctx, q, asOf); err != nil {
+		return EconomyPage{}, err
+	}
 	return page, nil
 }
 
@@ -209,6 +223,28 @@ func dailySeries(slices []cubeSlice) []DailyPoint {
 	}
 	flush()
 	return series
+}
+
+// buildExcluded queries the cube for all non-verified rows (membership = 'unknown')
+// and returns their all-window totals. Returns a zero ExcludedTotals when no
+// unknown rows exist (never an error in that case).
+func buildExcluded(ctx context.Context, q Querier, asOf time.Time) (ExcludedTotals, error) {
+	row := q.QueryRow(ctx, `
+		SELECT COALESCE(sum(txn_count), 0)::bigint,
+		       COALESCE(sum(volume_usdc), 0)::text
+		FROM metrics_daily_v2
+		WHERE day <= $1::date AND membership = 'unknown'`, asOf.Format(dayFormat))
+	var ex ExcludedTotals
+	var vol string
+	if err := row.Scan(&ex.TxnCount, &vol); err != nil {
+		return ExcludedTotals{}, fmt.Errorf("excluded totals read: %w", err)
+	}
+	d, err := decimal.NewFromString(vol)
+	if err != nil {
+		return ExcludedTotals{}, fmt.Errorf("parse excluded volume %q: %w", vol, err)
+	}
+	ex.VolumeUSDC = d.StringFixed(x402.USDCDecimals)
+	return ex, nil
 }
 
 // FacilitatorRow is one facilitator's all-window totals. facilitator_known is a
