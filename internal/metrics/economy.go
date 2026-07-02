@@ -24,13 +24,16 @@ type MonthlyPoint struct {
 // P10/P90/P99 are omitempty: they are absent in pre-6.3 artifacts (until the
 // next rollup+emit after migration 00019). JS checks for nil before showing
 // the percentile strip.
+// LargestPaymentUSDC (6.2): max over the window's known cube cells, 6 dp.
+// Omitempty so old artifacts stay unchanged; JS checks for nil before rendering.
 type TypicalPayment struct {
-	AvgUSDC    string  `json:"avg_usdc"`
-	MedianUSDC string  `json:"median_usdc"`
-	TxnCount   int64   `json:"txn_count"`
-	P10USDC    *string `json:"p10_usdc,omitempty"`
-	P90USDC    *string `json:"p90_usdc,omitempty"`
-	P99USDC    *string `json:"p99_usdc,omitempty"`
+	AvgUSDC            string  `json:"avg_usdc"`
+	MedianUSDC         string  `json:"median_usdc"`
+	TxnCount           int64   `json:"txn_count"`
+	P10USDC            *string `json:"p10_usdc,omitempty"`
+	P90USDC            *string `json:"p90_usdc,omitempty"`
+	P99USDC            *string `json:"p99_usdc,omitempty"`
+	LargestPaymentUSDC *string `json:"largest_payment_usdc,omitempty"`
 }
 
 // PricePoint is one row of the agentic price-point spectrum (E8).
@@ -426,6 +429,32 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// windowLargestPayments computes the per-window largest individual payment from
+// the already-loaded verified cube slices. For each window, it takes the max
+// of each cell's max_amount_usdc (populated by the rollup from the payments
+// table), bounded by asOf like all other window measures. Returns nil for a
+// window with no verified rows (window value absent in the result map).
+func windowLargestPayments(slices []cubeSlice, asOf time.Time) map[string]*string {
+	out := make(map[string]*string)
+	for w := range windowDays {
+		lb := lowerBound(asOf, w)
+		var wmax decimal.Decimal
+		for _, s := range slices {
+			if lb != "" && s.day < lb {
+				continue
+			}
+			if s.maxAmt.GreaterThan(wmax) {
+				wmax = s.maxAmt
+			}
+		}
+		if wmax.IsPositive() {
+			v := wmax.StringFixed(x402.USDCDecimals)
+			out[w] = &v
+		}
+	}
+	return out
 }
 
 // buildActiveEntities reads metrics_active_entities_daily_v2 up to and including

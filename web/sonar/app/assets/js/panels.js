@@ -18,11 +18,16 @@ export function rOverview(){
   const w = data.windows[state.win];
   const t = data.typical[state.win];
   const payees = (((data.concentration.windows[state.win] || {}).payee) || {}).total_entities || 0;
+  // 6.2: largest payment — omit when absent (old-artifact tolerance).
+  const largestStat = t.largest_payment_usdc != null
+    ? `<div class="bignum">${fmtMoney(t.largest_payment_usdc)}<small>LARGEST PAYMENT</small></div>`
+    : "";
   $("#ov-win").textContent = "· " + winLabel[state.win];
   $("#ov-stats").innerHTML = `
     <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>VERIFIED PAYMENTS</small></div>
     <div class="bignum c-ag">${fmtMoney(w.volume_usdc)}<small>VOLUME</small></div>
     <div class="bignum">${fmtAmt(t.median_usdc)}<small>TYPICAL PAYMENT (median)</small><small style="display:block;font-size:.65em;opacity:.65;margin-top:2px">${fmtAmt(t.avg_usdc)} average — pulled up by large payments</small></div>
+    ${largestStat}
     <div class="bignum">${fmtInt(payees)}<small>ACTIVE PAYEES</small></div>`;
   // amount-band distribution bar (share of verified volume by band)
   const bands = BANDDEF.map(([k]) => [k, num(w.by_band[k].volume_usdc)]);

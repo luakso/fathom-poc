@@ -20,8 +20,12 @@ function overviewPinDenom() {
 export const PINNERS = {
   overview(){ const w = data.windows[state.win];
     const t = data.typical[state.win];
+    // 6.2: append largest payment to context when the artifact carries the field.
+    const largestCtx = t.largest_payment_usdc != null
+      ? ` · largest ${fmtMoney(t.largest_payment_usdc)}`
+      : "";
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
-      context:`median ${fmtAmt(t.median_usdc)} typical · avg ${fmtAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments`,
+      context:`median ${fmtAmt(t.median_usdc)} typical · avg ${fmtAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments${largestCtx}`,
       denom:overviewPinDenom()+" · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);

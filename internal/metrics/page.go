@@ -90,11 +90,13 @@ func lowerBound(asOf time.Time, window string) string {
 
 // cubeSlice is one (day, amount_band) cell of the verified (known) cube,
 // bounded above by asOf. Every window, breakdown, and series point is a sum of these.
+// maxAmt is the largest individual payment amount in this cell (6.2).
 type cubeSlice struct {
 	day    string // YYYY-MM-DD
 	band   string
 	txns   int64
 	volume decimal.Decimal
+	maxAmt decimal.Decimal // max_amount_usdc from the cube cell
 }
 
 // accum is a Measure under construction: integer count plus exact decimal sum,
@@ -167,6 +169,12 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 	if page.TypicalPayment, err = buildTypicalPayment(ctx, q, page.Windows); err != nil {
 		return EconomyPage{}, err
 	}
+	// 6.2: inject per-window largest payment from the already-loaded slices.
+	for w, ptr := range windowLargestPayments(slices, asOf) {
+		tp := page.TypicalPayment[w]
+		tp.LargestPaymentUSDC = ptr
+		page.TypicalPayment[w] = tp
+	}
 	if page.PricePoints, err = buildPricePoints(ctx, q, page.Windows); err != nil {
 		return EconomyPage{}, err
 	}
@@ -186,9 +194,10 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 }
 
 // readCubeSlices fetches the verified (known) cube cells up to and including asOf's day, in day order.
+// max(max_amount_usdc) is fetched per cell for the per-window largest-payment stat (6.2).
 func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice, error) {
 	rows, err := q.Query(ctx, `
-		SELECT day::text, amount_band, sum(txn_count), sum(volume_usdc)::text
+		SELECT day::text, amount_band, sum(txn_count), sum(volume_usdc)::text, max(max_amount_usdc)::text
 		FROM metrics_daily_v2
 		WHERE day <= $1::date AND membership = 'known'
 		GROUP BY day, amount_band
@@ -201,12 +210,15 @@ func readCubeSlices(ctx context.Context, q Querier, asOf time.Time) ([]cubeSlice
 	var slices []cubeSlice
 	for rows.Next() {
 		var s cubeSlice
-		var vol string
-		if err := rows.Scan(&s.day, &s.band, &s.txns, &vol); err != nil {
+		var vol, maxAmt string
+		if err := rows.Scan(&s.day, &s.band, &s.txns, &vol, &maxAmt); err != nil {
 			return nil, fmt.Errorf("scan cube slice: %w", err)
 		}
 		if s.volume, err = decimal.NewFromString(vol); err != nil {
 			return nil, fmt.Errorf("parse cube volume %q: %w", vol, err)
+		}
+		if s.maxAmt, err = decimal.NewFromString(maxAmt); err != nil {
+			return nil, fmt.Errorf("parse cube max_amount %q: %w", maxAmt, err)
 		}
 		slices = append(slices, s)
 	}

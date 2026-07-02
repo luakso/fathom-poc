@@ -204,3 +204,37 @@ func TestBuildEconomy_TypicalPricePointsGasVelocity(t *testing.T) {
 	require.Len(t, econ.Velocity.DailySeries, 1)
 	require.Equal(t, int64(2), econ.Velocity.DailySeries[0].MaxPerMin)
 }
+
+// TestBuildEconomy_LargestPaymentPerWindow verifies item 6.2:
+//   - The per-window largest_payment_usdc reflects only known-membership rows.
+//   - The "all" window sees all known rows; a tighter window sees only its range.
+//   - An unknown-membership payment with a larger amount must NOT win.
+func TestBuildEconomy_LargestPaymentPerWindow(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Old known payment: large amount but outside the 7d window.
+		{"0xa", 0, "2026-01-10T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1000.00"},
+		// Recent known payment: smaller amount, inside the 7d window.
+		{"0xb", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp2", "0xs1", "50.00"},
+		// Unknown payment with an even larger amount: must NOT affect the largest stat.
+		{"0xc", 0, "2026-06-05T11:00:00Z", "0xfac2", "0xp3", "0xs3", "9999.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// cubeMaxDay = 2026-06-05 (max of known rows).
+	page, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-05T00:00:00Z"))
+	require.NoError(t, err)
+
+	// "all" window: $1000 (Jan) > $50 (Jun), unknown $9999 excluded.
+	tp := page.TypicalPayment["all"]
+	require.NotNil(t, tp.LargestPaymentUSDC, "all-window largest must be non-nil when verified rows exist")
+	require.Equal(t, "1000.000000", *tp.LargestPaymentUSDC,
+		"all-window must find the Jan $1000 known payment; unknown $9999 must not win")
+
+	// "7d" window (2026-05-30 → 2026-06-05): only the Jun $50 is in range.
+	tp7 := page.TypicalPayment["7d"]
+	require.NotNil(t, tp7.LargestPaymentUSDC, "7d-window largest must be non-nil")
+	require.Equal(t, "50.000000", *tp7.LargestPaymentUSDC,
+		"7d-window must only see the Jun 5 $50 payment (Jan is out of range)")
+}

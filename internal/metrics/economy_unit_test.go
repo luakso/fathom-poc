@@ -2,10 +2,23 @@ package metrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+// dec parses a decimal from string — test helper only.
+func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
+
+// mustDay parses "YYYY-MM-DD" into a time.Time at midnight UTC — test helper.
+func mustDay(s string) time.Time {
+	t, err := time.Parse(dayFormat, s)
+	if err != nil {
+		panic("mustDay: " + err.Error())
+	}
+	return t
+}
 
 // TestAvgUSDC_ErrorOnMalformedVolume proves that a non-parseable VolumeUSDC
 // produces a named error instead of a silent zero.  If avgUSDC used the old
@@ -75,4 +88,43 @@ func TestDailySeries_MultipleBandsPerDayOnlyLastDayIncomplete(t *testing.T) {
 	require.False(t, got[1].Complete)
 	require.Equal(t, int64(15), got[0].TxnCount, "bands must be summed within a day")
 	require.Equal(t, int64(10), got[1].TxnCount)
+}
+
+// ---------------------------------------------------------------------------
+// windowLargestPayments (item 6.2)
+// ---------------------------------------------------------------------------
+
+func TestWindowLargestPayments_AllWindowTakesMax(t *testing.T) {
+	// Three cells; max is the whale on Jan 10. "all" must see it; "7d" (from May 30) must not.
+	asOf := mustDay("2026-06-05")
+	slices := []cubeSlice{
+		{day: "2026-01-10", band: "whale", txns: 1, volume: dec("1000"), maxAmt: dec("1000")},
+		{day: "2026-06-05", band: "small", txns: 1, volume: dec("50"), maxAmt: dec("50")},
+		{day: "2026-06-05", band: "micro", txns: 1, volume: dec("1"), maxAmt: dec("0.50")},
+	}
+
+	got := windowLargestPayments(slices, asOf)
+
+	require.NotNil(t, got["all"], "all-window max must be non-nil when verified rows exist")
+	require.Equal(t, "1000.000000", *got["all"])
+
+	require.NotNil(t, got["7d"])
+	require.Equal(t, "50.000000", *got["7d"], "7d must only see the Jun 5 slice")
+}
+
+func TestWindowLargestPayments_NilWhenNoSlices(t *testing.T) {
+	got := windowLargestPayments(nil, mustDay("2026-06-05"))
+	require.Nil(t, got["all"], "nil slices → nil largest for all window")
+	require.Nil(t, got["7d"], "nil slices → nil largest for 7d window")
+}
+
+func TestWindowLargestPayments_MultipleBandsSameDay(t *testing.T) {
+	// Two bands on the same day: largest must come from the bigger max_amount_usdc.
+	asOf := mustDay("2026-06-05")
+	slices := []cubeSlice{
+		{day: "2026-06-05", band: "dust", txns: 5, volume: dec("1"), maxAmt: dec("0.001")},
+		{day: "2026-06-05", band: "whale", txns: 1, volume: dec("5000"), maxAmt: dec("5000")},
+	}
+	got := windowLargestPayments(slices, asOf)
+	require.Equal(t, "5000.000000", *got["all"])
 }
