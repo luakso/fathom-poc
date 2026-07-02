@@ -67,15 +67,21 @@ func LoadETHPrices(path string) (ETHPrices, error) {
 // number, as "total_<kind>_<window>" (e.g. total_txns_all): kind ∈
 // {txns, volume}, window ∈ {7d, 30d, all}. The subject is always "total"
 // (the verified/known window total).
+//
+// Lens is a required free-text note naming what the claim actually measures
+// (e.g. "all EIP-3009 USDC transfers" vs "verified x402 payments") so readers
+// can judge comparability without reading the source.  It is emitted verbatim
+// into the artifact alongside the verdict.
 type Claim struct {
 	ID             string `json:"id"`
 	Source         string `json:"source"`
-	SourceURL      string `json:"source_url"`
+	SourceURL      string `json:"source_url"` // required; must start with http/https
 	ClaimDate      string `json:"claim_date"` // free-form ("2026 (Q2 report)")
 	ClaimText      string `json:"claim_text"`
 	ClaimedValue   string `json:"claimed_value"`
 	ClaimedUnit    string `json:"claimed_unit"`
 	MeasuredMetric string `json:"measured_metric"`
+	Lens           string `json:"lens"` // required; what the claim measures
 	Note           string `json:"note"`
 }
 
@@ -103,6 +109,15 @@ func LoadClaims(path string) ([]Claim, error) {
 		seen[c.ID] = true
 		if c.Source == "" || c.ClaimText == "" || c.ClaimedValue == "" {
 			return nil, fmt.Errorf("claims %s: %s: source, claim_text and claimed_value are required", path, c.ID)
+		}
+		if c.SourceURL == "" {
+			return nil, fmt.Errorf("claims %s: %s: source_url is required", path, c.ID)
+		}
+		if !strings.HasPrefix(c.SourceURL, "http://") && !strings.HasPrefix(c.SourceURL, "https://") {
+			return nil, fmt.Errorf("claims %s: %s: source_url must start with http:// or https://", path, c.ID)
+		}
+		if c.Lens == "" {
+			return nil, fmt.Errorf("claims %s: %s: lens is required", path, c.ID)
 		}
 		if _, _, _, err := parseMetric(c.MeasuredMetric); err != nil {
 			return nil, fmt.Errorf("claims %s: %s: %w", path, c.ID, err)

@@ -68,27 +68,33 @@ func TestLoadClaims_MalformedJSON(t *testing.T) {
 
 func TestLoadClaims_Valid(t *testing.T) {
 	p := writeTemp(t, "claims.json", `[{
-		"id": "c1", "source": "Report", "source_url": "",
+		"id": "c1", "source": "Report", "source_url": "https://example.com/report",
 		"claim_date": "2026 (Q2 report)", "claim_text": "169M+ payments",
 		"claimed_value": "169000000", "claimed_unit": "transactions",
-		"measured_metric": "total_txns_all", "note": ""
+		"measured_metric": "total_txns_all", "note": "",
+		"lens": "verified x402 payments"
 	}]`)
 	claims, err := metrics.LoadClaims(p)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	require.Equal(t, "total_txns_all", claims[0].MeasuredMetric)
+	require.Equal(t, "https://example.com/report", claims[0].SourceURL)
+	require.Equal(t, "verified x402 payments", claims[0].Lens)
 }
 
 func TestLoadClaims_Rejects(t *testing.T) {
 	cases := []struct{ name, body, wantErr string }{
-		{"unknown subject", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all"}]`, "agentic"},
-		{"known subject rejected", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all"}]`, "known"},
-		{"unknown kind", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_count_all"}]`, "count"},
-		{"unknown window", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_90d"}]`, "90d"},
-		{"missing id", `[{"id":"","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all"}]`, "id"},
-		{"duplicate id", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all"},{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all"}]`, "duplicate"},
-		{"short metric", `[{"id":"c","source":"s","claim_text":"t","claimed_value":"1","measured_metric":"total_txns"}]`, "subject_kind_window"},
-		{"missing source", `[{"id":"c","source":"","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all"}]`, "required"},
+		{"unknown subject", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"agentic_txns_all","lens":"l"}]`, "agentic"},
+		{"known subject rejected", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"known_txns_all","lens":"l"}]`, "known"},
+		{"unknown kind", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_count_all","lens":"l"}]`, "count"},
+		{"unknown window", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_90d","lens":"l"}]`, "90d"},
+		{"missing id", `[{"id":"","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"}]`, "id"},
+		{"duplicate id", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"},{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"}]`, "duplicate"},
+		{"short metric", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns","lens":"l"}]`, "subject_kind_window"},
+		{"missing source", `[{"id":"c","source":"","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"}]`, "required"},
+		{"missing source_url", `[{"id":"c","source":"s","source_url":"","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"}]`, "source_url"},
+		{"non-http source_url", `[{"id":"c","source":"s","source_url":"ftp://example.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":"l"}]`, "http"},
+		{"missing lens", `[{"id":"c","source":"s","source_url":"https://x.com","claim_text":"t","claimed_value":"1","measured_metric":"total_txns_all","lens":""}]`, "lens"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -98,18 +104,40 @@ func TestLoadClaims_Rejects(t *testing.T) {
 	}
 }
 
+// TestResolveClaims_MissingWindow verifies that ResolveClaims returns a
+// descriptive error when the window named in a claim is absent from the page.
+// Without this check a missing key yields a zero Measure and the claim would
+// silently publish "0.000000" as a confident measured value.
+func TestResolveClaims_MissingWindow(t *testing.T) {
+	// Page has NO windows — any claim referencing a window must fail.
+	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{}}
+	claims := []metrics.Claim{
+		{ID: "c1", Source: "s", ClaimText: "t", ClaimedValue: "1", MeasuredMetric: "total_txns_all"},
+	}
+	_, err := metrics.ResolveClaims(page, claims)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "all", "error must name the missing window")
+}
+
 func TestResolveClaims(t *testing.T) {
 	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{
 		"30d": {Measure: metrics.Measure{TxnCount: 100, VolumeUSDC: "500.000000"}},
 	}}
 	claims := []metrics.Claim{
-		{ID: "a", Source: "s", ClaimText: "t", ClaimedValue: "3700000", MeasuredMetric: "total_txns_30d"},
-		{ID: "b", Source: "s", ClaimText: "t", ClaimedValue: "1000000", MeasuredMetric: "total_volume_30d"},
+		{
+			ID: "a", Source: "s", SourceURL: "https://example.com", Lens: "verified x402",
+			ClaimText: "t", ClaimedValue: "3700000", MeasuredMetric: "total_txns_30d",
+		},
+		{
+			ID: "b", Source: "s", SourceURL: "https://example.com", Lens: "verified x402",
+			ClaimText: "t", ClaimedValue: "1000000", MeasuredMetric: "total_volume_30d",
+		},
 	}
 	got, err := metrics.ResolveClaims(page, claims)
 	require.NoError(t, err)
 	require.Equal(t, "100", got[0].MeasuredValue)
 	require.Equal(t, "transactions", got[0].MeasuredUnit)
+	require.Equal(t, "verified x402", got[0].Lens, "lens must pass through to the resolved claim")
 	require.Equal(t, "500.000000", got[1].MeasuredValue)
 	require.Equal(t, "USDC", got[1].MeasuredUnit)
 }

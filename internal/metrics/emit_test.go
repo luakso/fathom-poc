@@ -77,9 +77,9 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	claims := []metrics.Claim{{
-		ID: "c1", Source: "Report", ClaimText: "169M+ payments",
-		ClaimedValue: "169000000", ClaimedUnit: "transactions",
-		MeasuredMetric: "total_txns_all",
+		ID: "c1", Source: "Report", SourceURL: "https://example.com/report",
+		ClaimText: "169M+ payments", ClaimedValue: "169000000", ClaimedUnit: "transactions",
+		MeasuredMetric: "total_txns_all", Lens: "verified x402 payments",
 	}}
 	dir := t.TempDir()
 	require.NoError(t, metrics.Emit(ctx, pool, dir, claims))
@@ -118,6 +118,7 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 				ID            string `json:"id"`
 				MeasuredValue string `json:"measured_value"`
 				MeasuredUnit  string `json:"measured_unit"`
+				Lens          string `json:"lens"`
 			} `json:"claims"`
 		} `json:"data"`
 	}
@@ -139,6 +140,7 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.False(t, doc.Data.MonthlySeries[0].Complete, "single mid-month data day cannot be a complete month")
 	require.Equal(t, "100.00", doc.Data.PricePoints["all"][0].TxnSharePct)
 	require.Equal(t, "transactions", doc.Data.Claims[0].MeasuredUnit)
+	require.Equal(t, "verified x402 payments", doc.Data.Claims[0].Lens, "lens must flow through to emitted claim")
 }
 
 func TestEmit_WritesSiteFiles(t *testing.T) {
