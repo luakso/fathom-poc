@@ -1,6 +1,6 @@
 // Report tray: pin findings -> compose thread -> 1200x675 X card.
 import { $, $$ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, BANDDEF } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { tapeSlice } from "./charts.js";
 import { state, data, winLabel } from "./state.js";
@@ -51,9 +51,14 @@ export const PINNERS = {
   },
   shape(){ const t = data.typical[state.win];
     if (!t.txn_count) return null;
+    const b = data.windows[state.win].by_band;
+    const totTx  = BANDDEF.reduce((s,[k]) => s + b[k].txn_count, 0) || 1;
+    const totUsd = BANDDEF.reduce((s,[k]) => s + num(b[k].volume_usdc), 0) || 1;
+    const dustTxPct  = (100 * b.dust.txn_count / totTx).toFixed(1);
+    const dustUsdPct = (100 * num(b.dust.volume_usdc) / totUsd).toFixed(1);
     const xMed = num(t.avg_usdc)/num(t.median_usdc);
     return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median`,
+      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars`,
       denom:"verified payments · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;

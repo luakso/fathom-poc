@@ -49,13 +49,22 @@ export function rShape(){
   const tx = state.bMetric === "tx";
   const get = r => tx ? r.txn_count : num(r.volume_usdc);
   const max = Math.max(...BANDDEF.map(([k]) => get(b[k]))) || 1;
-  $("#bands").innerHTML = BANDDEF.map(([k,def]) => {
-    const r = b[k], v = get(r), wp = Math.max(1, 66*v/max);
-    return `<div class="mrow">
-      <span class="lab">${k}<small>${def}</small></span>
-      <span class="meter"><span class="bar ${k==="whale"||k==="mid"?"dim":""}" style="width:${wp}%"></span>
-      <span class="val">${tx?fmtCount(v)+" tx":fmtMoney(v)}</span><span class="sub">${tx?fmtMoney(r.volume_usdc):fmtCount(r.txn_count)+" tx"}</span></span></div>`;
-  }).join("");
+  const stackBar = (pairs, lbl) => {
+    const tot = pairs.reduce((s,[,v]) => s+v, 0) || 1;
+    return `<div class="bbrow"><span class="bblbl">${lbl}</span><div class="bandbar">${
+      pairs.map(([k,v]) => `<span class="seg" style="width:${(100*v/tot).toFixed(2)}%" title="${k} ${(100*v/tot).toFixed(1)}%"><b>${k}</b></span>`).join("")
+    }</div></div>`;
+  };
+  const txBands  = BANDDEF.map(([k]) => [k, b[k].txn_count]);
+  const usdBands = BANDDEF.map(([k]) => [k, num(b[k].volume_usdc)]);
+  $("#bands").innerHTML = stackBar(txBands, "share of payments") + stackBar(usdBands, "share of dollars")
+    + BANDDEF.map(([k,def]) => {
+      const r = b[k], v = get(r), wp = Math.max(1, 66*v/max);
+      return `<div class="mrow">
+        <span class="lab">${k}<small>${def}</small></span>
+        <span class="meter"><span class="bar ${k==="whale"||k==="mid"?"dim":""}" style="width:${wp}%"></span>
+        <span class="val">${tx?fmtCount(v)+" tx":fmtMoney(v)}</span><span class="sub">${tx?fmtMoney(r.volume_usdc):fmtCount(r.txn_count)+" tx"}</span></span></div>`;
+    }).join("");
 }
 
 /* ———————— 6 PRICE POINTS ———————— */
