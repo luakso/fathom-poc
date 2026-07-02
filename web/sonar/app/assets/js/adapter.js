@@ -1,7 +1,7 @@
 // Loads the canonical economy.json and reshapes it into the view-model the
 // renderers consume. Also the integrity gate: version guard + client-side
 // conservation re-check, so the status bar's glyphs are earned, not painted.
-import { num, BANDDEF } from "./format.js";
+import { num, fmtInt, BANDDEF } from "./format.js";
 
 const MONTH_NAME = m => new Date(m + "-01T00:00:00Z").toLocaleString("en-US", { month:"short", timeZone:"UTC" });
 
@@ -72,24 +72,49 @@ export function winLabels(view){
 // dollars within $0.50 (display-grade float tolerance over decimal strings).
 export const USD_TOLERANCE = 0.5;
 
-// checkIntegrity: returns a list of {level:"warn"|"error", msg}. Counts must
-// conserve exactly; dollars within USD_TOLERANCE.
+// checkIntegrity: returns a list of {name, pass, detail, level, msg} for every
+// check — including passing ones. Callers filter for !pass to find failures.
+// Counts must conserve exactly; dollars within USD_TOLERANCE.
 export function checkIntegrity(view){
-  const issues = [];
-  if (view.meta.methodology_version !== 1){
-    issues.push({ level:"warn", msg:`methodology v${view.meta.methodology_version} — this page was built for v1; review before citing` });
-  }
+  const checks = [];
+
+  // Methodology version
+  const vPass = view.meta.methodology_version === 1;
+  const vDetail = vPass
+    ? `methodology v${view.meta.methodology_version} OK`
+    : `methodology v${view.meta.methodology_version} — page built for v1; review before citing`;
+  checks.push({ name:"methodology", pass:vPass, detail:vDetail,
+    level: vPass ? "ok" : "warn",
+    msg:   vPass ? null : vDetail });
+
+  // Conservation checks per window
   for (const [w, win] of Object.entries(view.windows)){
     let n = 0, usd = 0;
     for (const m of Object.values(win.by_band)){ n += m.txn_count; usd += num(m.volume_usdc); }
-    if (n !== win.txn_count){
-      issues.push({ level:"error", msg:`conservation ✗ — ${w} band txns ${n} ≠ total ${win.txn_count}` });
-    }
-    if (Math.abs(usd - num(win.volume_usdc)) > USD_TOLERANCE){
-      issues.push({ level:"error", msg:`conservation ✗ — ${w} band USD off by $${Math.abs(usd - num(win.volume_usdc)).toFixed(2)}` });
-    }
+    const cntPass = n === win.txn_count;
+    const cntDetail = `${w} bands ${fmtInt(n)} ${cntPass ? "==" : "≠"} window ${fmtInt(win.txn_count)} ${cntPass ? "OK" : "FAIL"}`;
+    checks.push({ name:`${w}-count`, pass:cntPass, detail:cntDetail,
+      level: cntPass ? "ok" : "error",
+      msg:   cntPass ? null : `conservation ✗ — ${w} band txns ${n} ≠ total ${win.txn_count}` });
+
+    const usdPass = Math.abs(usd - num(win.volume_usdc)) <= USD_TOLERANCE;
+    const usdDetail = `${w} bands $${usd.toFixed(2)} ${usdPass ? "≈" : "≠"} window $${num(win.volume_usdc).toFixed(2)} ${usdPass ? "OK" : `FAIL (off $${Math.abs(usd - num(win.volume_usdc)).toFixed(2)})`}`;
+    checks.push({ name:`${w}-usd`, pass:usdPass, detail:usdDetail,
+      level: usdPass ? "ok" : "error",
+      msg:   usdPass ? null : `conservation ✗ — ${w} band USD off by $${Math.abs(usd - num(win.volume_usdc)).toFixed(2)}` });
   }
-  return issues;
+
+  // Excluded remainder (informational, always pass when present)
+  if (view.excluded && view.excluded.txn_count){
+    const verified = (view.windows.all || {}).txn_count || 0;
+    const excl = view.excluded.txn_count;
+    const total = verified + excl;
+    checks.push({ name:"excluded-remainder", pass:true,
+      detail:`verified ${fmtInt(verified)} + excluded ${fmtInt(excl)} = ${fmtInt(total)} observed transfers`,
+      level:"ok", msg:null });
+  }
+
+  return checks;
 }
 
 // loadEconomy: fetch + parse + reshape. Throws Error with a readable message

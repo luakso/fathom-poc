@@ -2,7 +2,7 @@
 // switching, panel tools, keyboard, resize. Render functions live in
 // charts.js / panels.js / tray.js.
 import { $, $$ } from "./dom.js";
-import { state, setData, setWinLabel } from "./state.js";
+import { state, setData, setWinLabel, setIssues } from "./state.js";
 import { loadEconomy, winLabels } from "./adapter.js";
 import { rDaily, rMonthly, rVelocity } from "./charts.js";
 import { rOverview, rShape, rPrice, rGas, rClaims, rShell } from "./panels.js";
@@ -123,12 +123,13 @@ function applyMeta(view, issues){
   // #d-range is owned by rDaily (reflects the selected tape slice); here we only
   // stamp the data edge used by the daily-tape denom.
   $("#d-edge").textContent = mon(view.meta.data_through_day);
-  const errs = issues.filter(i => i.level === "error");
+  const errs    = issues.filter(i => !i.pass && i.level === "error");
+  const failing = issues.filter(i => !i.pass);
   const cons = $("#st-cons");
   cons.textContent = errs.length ? "conservation ✗" : "conservation ✓";
   if (errs.length) cons.style.color = "var(--contam)";
-  if (issues.length){
-    $("#banner").textContent = issues.map(i => i.msg).join(" · ");
+  if (failing.length){
+    $("#banner").textContent = failing.map(i => i.detail || i.msg).join(" · ");
     $("#banner").classList.add("open");
   }
 }
@@ -141,6 +142,7 @@ function applyMeta(view, issues){
   catch (err){ fatal(err); return; }
   const { view, issues } = loaded;
   setData(view);
+  setIssues(issues);
   setWinLabel(winLabels(view));
   maybeGate(view);
   applyMeta(view, issues);

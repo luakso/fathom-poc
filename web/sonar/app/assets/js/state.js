@@ -10,3 +10,7 @@ export function setData(d){ data = d; }
 // Window labels; "all" is derived from the data's month range by the adapter.
 export let winLabel = { "7d":"trailing 7d", "30d":"trailing 30d", "all":"all data" };
 export function setWinLabel(l){ winLabel = l; }
+
+// Integrity check results from checkIntegrity(); consumed by rShell.
+export let issues = [];
+export function setIssues(i){ issues = i; }

@@ -2,7 +2,7 @@
 import { $ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, priceRead, claimVerdict } from "./format.js";
 import { USD_TOLERANCE } from "./adapter.js";
-import { state, data, winLabel } from "./state.js";
+import { state, data, winLabel, issues } from "./state.js";
 
 /* ———————— 1 OVERVIEW ———————— */
 function fmtExcluded(ex) {
@@ -141,9 +141,15 @@ export function rClaims(){
 /* ———————— LOG ———————— */
 export function rShell(){
   const w = data.windows.all;
+  const allPass = issues.every(c => c.pass);
+  const glyph = allPass ? `<span class="ok">✓</span>` : `<span class="fail">✗</span>`;
+  const lines = issues.map(c => {
+    const cls = c.pass ? "ok" : "fail";
+    return `<div class="out"><span class="${cls}">${c.pass ? "✓" : "✗"}</span> ${c.detail}</div>`;
+  }).join("");
   $("#shell").innerHTML = `
     <div><span class="ps">$</span> <span class="cmd">jq '.scope, .methodology_version, .data_through_day' dist/economy.json</span></div>
     <div class="out">x402-attributed · v${data.meta.methodology_version} · ${data.meta.data_through_day}</div>
-    <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} <span class="ok">✓</span></div>
-    <div class="out">every shown payment is settled by a known x402 facilitator.<span class="cursor" style="margin-left:6px"></span></div>`;
+    ${lines}
+    <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} ${glyph}<span class="cursor" style="margin-left:6px"></span></div>`;
 }
