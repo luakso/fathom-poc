@@ -10,13 +10,18 @@ import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
 /* ————— small-screen gate ————— */
 const GATE_KEY = "fathom.smallScreenOk";
-function maybeGate(view){
-  if (window.innerWidth >= 980 || localStorage.getItem(GATE_KEY) === "1") return;
+export function buildGateHtml(view){
   const w = view.windows.all;
-  $("#gate-nums").innerHTML = `
+  const payees = ((view.concentration.windows.all || {}).payee || {}).total_entities || 0;
+  const payeesStr = payees >= 1e3 ? (payees/1e3).toFixed(0)+"k" : String(payees);
+  return `
     <div>${(w.txn_count/1e6).toFixed(1)}M<small>PAYMENTS</small></div>
     <div>$${(parseFloat(w.volume_usdc)/1e6).toFixed(0)}M<small>VOLUME</small></div>
-    <div>${(w.txn_count/1e6).toFixed(2)}M<small>VERIFIED TX</small></div>`;
+    <div>${payeesStr}<small>PAYEES</small></div>`;
+}
+function maybeGate(view){
+  if (window.innerWidth >= 980 || localStorage.getItem(GATE_KEY) === "1") return;
+  $("#gate-nums").innerHTML = buildGateHtml(view);
   $("#gate").classList.add("open");
   $("#gate-continue").addEventListener("click", () => {
     localStorage.setItem(GATE_KEY, "1");
@@ -29,7 +34,6 @@ function fatal(err){
   $("#fatal-msg").textContent = String(err && err.message || err);
   $("#fatal").classList.add("open");
 }
-$("#fatal-retry").addEventListener("click", () => location.reload());
 
 /* ————— render orchestration ————— */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
@@ -131,6 +135,7 @@ function applyMeta(view, issues){
 
 /* ————— boot ————— */
 (async function boot(){
+  $("#fatal-retry").addEventListener("click", () => location.reload());
   let loaded;
   try { loaded = await loadEconomy(); }
   catch (err){ fatal(err); return; }
