@@ -22,11 +22,17 @@ const monDay = s => new Date(s+"T00:00:00Z").toLocaleString("en-US",{month:"shor
 export function rDaily(){
   const days = tapeSlice(data.daily, state.dWin);
   const host = $("#dailychart");
+  if (!days.length){
+    host.innerHTML = `<div class="readout">no verified payments in this window</div>`;
+    if ($("#d-range")) $("#d-range").textContent = "—";
+    return;
+  }
   const W = host.clientWidth || 900, H = 250, padL = 56, padB = 22, padT = 12;
   let vals = days.map(d => state.dMetric === "tx" ? d[1] : d[2]);
   if (state.dMa === "ma7") vals = ma7(vals);
-  const log = state.dScale === "log";
-  const vmax = Math.max(...vals), vmin = log ? Math.min(...vals.filter(v=>v>0)) : 0;
+  const positives = vals.filter(v => v > 0);
+  const log = state.dScale === "log" && positives.length > 0;
+  const vmax = Math.max(...vals), vmin = log ? Math.min(...positives) : 0;
   const ty = v => log ? Math.log10(Math.max(v, vmin)) : v;
   const yMax = ty(vmax), yMin = log ? ty(vmin) : 0;
   const x = i => padL + (W-padL-10) * (days.length > 1 ? i/(days.length-1) : 0.5);

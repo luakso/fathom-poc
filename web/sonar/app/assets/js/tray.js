@@ -25,6 +25,7 @@ export const PINNERS = {
       denom:overviewPinDenom()+" · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
+    if (!slice.length) return null;
     const usd = state.dMetric === "usd";
     const peak = usd ? slice.reduce((a,b)=> b[2]>a[2]?b:a) : slice.reduce((a,b)=> b[1]>a[1]?b:a);
     const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
