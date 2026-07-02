@@ -16,13 +16,13 @@ function fmtExcluded(ex) {
 
 export function rOverview(){
   const w = data.windows[state.win];
-  const avg = num(w.volume_usdc) / (w.txn_count || 1);
+  const t = data.typical[state.win];
   const payees = (((data.concentration.windows[state.win] || {}).payee) || {}).total_entities || 0;
   $("#ov-win").textContent = "· " + winLabel[state.win];
   $("#ov-stats").innerHTML = `
     <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>VERIFIED PAYMENTS</small></div>
     <div class="bignum c-ag">${fmtMoney(w.volume_usdc)}<small>VOLUME</small></div>
-    <div class="bignum">${fmtAmt(avg.toFixed(6))}<small>TYPICAL PAYMENT (avg)</small></div>
+    <div class="bignum">${fmtAmt(t.median_usdc)}<small>TYPICAL PAYMENT (median)</small><small style="display:block;font-size:.65em;opacity:.65;margin-top:2px">${fmtAmt(t.avg_usdc)} average — pulled up by large payments</small></div>
     <div class="bignum">${fmtInt(payees)}<small>ACTIVE PAYEES</small></div>`;
   // amount-band distribution bar (share of verified volume by band)
   const bands = BANDDEF.map(([k]) => [k, num(w.by_band[k].volume_usdc)]);

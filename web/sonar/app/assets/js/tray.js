@@ -19,8 +19,9 @@ function overviewPinDenom() {
 }
 export const PINNERS = {
   overview(){ const w = data.windows[state.win];
+    const t = data.typical[state.win];
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
-      context:`${fmtCount(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} volume`,
+      context:`median ${fmtAmt(t.median_usdc)} typical · avg ${fmtAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments`,
       denom:overviewPinDenom()+" · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
