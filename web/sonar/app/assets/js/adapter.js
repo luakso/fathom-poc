@@ -18,8 +18,13 @@ const dense = (m, keys, zero) => Object.fromEntries(keys.map(k => [k, (m && m[k]
 
 // reshape: artifact shape -> view-model (exported separately so it can be
 // equivalence-checked against a fixture without a DOM or network).
+// Required top-level sections of doc.data — omitting any of these produces a
+// named fatal error listing ALL missing keys, not a useless undefined-read crash.
+const REQUIRED_SECTIONS = ["daily_series", "monthly_series", "typical_payment", "price_points", "gas", "velocity"];
 export function reshape(doc){
   const d = doc.data;
+  const missing = REQUIRED_SECTIONS.filter(k => !d || !(k in d) || d[k] === undefined);
+  if (missing.length) throw new Error(`artifact missing sections: ${missing.join(", ")}`);
   const winKeys = Object.keys(d.windows);
   return {
     meta: {
