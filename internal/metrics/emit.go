@@ -155,7 +155,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 func writeArtifact(outDir, name string, version int, through string, data any) error {
 	doc := artifact{
 		MethodologyVersion: version,
-		Scope:              "x402-attributed",
+		Scope:              "verified-x402",
 		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
 		DataThroughDay:     through,
 		Data:               data,
