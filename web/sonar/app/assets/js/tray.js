@@ -12,7 +12,7 @@ export const PINNERS = {
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
       context:`${fmtCount(w.txn_count)} verified x402 payments · ${fmtMoney(w.volume_usdc)} volume`,
       denom:"x402 payment = USDC authorization settled by a known facilitator (EIP-3009) on Base · "+winLabel[state.win],
-      series:data.daily.map(d=>d[1]) }; },
+      series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
     const usd = state.dMetric === "usd";
     const peak = usd ? slice.reduce((a,b)=> b[2]>a[2]?b:a) : slice.reduce((a,b)=> b[1]>a[1]?b:a);
