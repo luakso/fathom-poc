@@ -48,7 +48,7 @@ export const PINNERS = {
     if (!p) return null;
     const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
     return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${p.txn_share_pct}% of known-facilitator tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
+      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of known-facilitator tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
       denom:"known-facilitator set · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
     if (!g.txn_count) return null;
