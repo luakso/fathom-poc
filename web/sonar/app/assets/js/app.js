@@ -4,7 +4,7 @@
 import { $, $$ } from "./dom.js";
 import { state, setData, setWinLabel, setIssues } from "./state.js";
 import { loadEconomy, winLabels } from "./adapter.js";
-import { rDaily, rMonthly, rVelocity } from "./charts.js";
+import { rDaily, rMonthly, rVelocity, rActiveWallets } from "./charts.js";
 import { rOverview, rShape, rPrice, rGas, rClaims, rShell } from "./panels.js";
 import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
@@ -40,7 +40,7 @@ function fatal(err){
 
 /* ————— render orchestration ————— */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
-const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rShell(); };
+const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rShell(); };
 
 function setWin(w){
   state.win = w;
@@ -77,7 +77,7 @@ function wire(){
   help.addEventListener("click", e => { if (e.target === help) help.classList.remove("open"); });
   initTray();
 
-  const PANEL_IDS = ["p1","p2","p3","p5","p6","p7","p8","p9"];
+  const PANEL_IDS = ["p1","p2","p3","p5","p6","p7","p8","p9","p11"];
   document.addEventListener("keydown", e => {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // browser chords (Cmd+R, Ctrl+W…) are not ours
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT"){
@@ -114,7 +114,7 @@ function wire(){
   });
 
   let rsz;
-  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); }, 150); });
+  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); rActiveWallets(); }, 150); });
 }
 
 /* ————— status bar + banner from integrity results ————— */

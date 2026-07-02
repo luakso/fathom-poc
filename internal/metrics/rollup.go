@@ -153,6 +153,23 @@ JOIN eth_price_weekly pr
   ON pr.week = to_char(date_trunc('week', p.block_timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD')
 GROUP BY 1, 2, 3`
 
+// activeEntitiesDailySQL: verified-only distinct payer + payee counts per
+// calendar day. Distinct counts are NOT additive across cube cells (the same
+// wallet appears in multiple facilitator/band rows), so this is computed
+// directly from payment_x402_v1 rather than derived from the cube.
+const activeEntitiesDailySQL = `
+TRUNCATE metrics_active_entities_daily_v2;
+INSERT INTO metrics_active_entities_daily_v2
+    (day, payer_count, payee_count, methodology_version)
+SELECT
+    (block_timestamp AT TIME ZONE 'UTC')::date AS day,
+    count(DISTINCT payer)           AS payer_count,
+    count(DISTINCT payee)           AS payee_count,
+    min(methodology_version)
+FROM payment_x402_v1
+WHERE facilitator_known
+GROUP BY 1`
+
 // economyVelocityDailySQL: per-minute counts reduced to per-day stats.
 // p99 is over the day's ACTIVE minutes (idle minutes would zero it).
 const economyVelocityDailySQL = `
@@ -186,6 +203,7 @@ var rebuildStatements = []struct {
 	{"price_points", economyPricePointsSQL},
 	{"gas_daily", economyGasDailySQL},
 	{"velocity_daily", economyVelocityDailySQL},
+	{"active_entities_daily", activeEntitiesDailySQL},
 }
 
 // Rebuild fully recomputes every metrics table from payment_x402_v1 in a

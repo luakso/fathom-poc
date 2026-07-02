@@ -60,6 +60,17 @@ type GasSection struct {
 	Windows map[string]GasWindow `json:"windows"`
 }
 
+// ActiveEntitiesPoint is one day of the active-wallet daily series (6.1).
+// Payers and payees are counted distinctly over verified payments only;
+// the same wallet on two days is counted once per day, not globally merged.
+// Complete is false for the newest (edge) day — the same convention as DailyPoint.
+type ActiveEntitiesPoint struct {
+	Day        string `json:"day"`      // YYYY-MM-DD
+	Complete   bool   `json:"complete"` // false iff this is the newest (edge) day
+	PayerCount int64  `json:"payer_count"`
+	PayeeCount int64  `json:"payee_count"`
+}
+
 // VelocityStat is the burstiness headline for one window (E12).
 type VelocityStat struct {
 	MaxPerMin int64 `json:"max_per_min"`
@@ -400,4 +411,37 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// buildActiveEntities reads metrics_active_entities_daily_v2 up to and including
+// asOf's day and marks the newest (edge) day Complete=false — the same convention
+// as the daily economy series.
+func buildActiveEntities(ctx context.Context, q Querier, asOf time.Time) ([]ActiveEntitiesPoint, error) {
+	rows, err := q.Query(ctx, `
+		SELECT day::text, payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day <= $1::date
+		ORDER BY day`, asOf.Format(dayFormat))
+	if err != nil {
+		return nil, fmt.Errorf("active entities read: %w", err)
+	}
+	defer rows.Close()
+	series := []ActiveEntitiesPoint{}
+	for rows.Next() {
+		var p ActiveEntitiesPoint
+		p.Complete = true
+		if err := rows.Scan(&p.Day, &p.PayerCount, &p.PayeeCount); err != nil {
+			return nil, fmt.Errorf("scan active entities: %w", err)
+		}
+		series = append(series, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("active entities read: %w", err)
+	}
+	// The newest day is always potentially partial: its block window may still
+	// be accumulating payments.
+	if len(series) > 0 {
+		series[len(series)-1].Complete = false
+	}
+	return series, nil
 }

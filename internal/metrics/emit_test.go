@@ -292,3 +292,50 @@ func TestEmit_WritesReliability(t *testing.T) {
 	// Cancellation submitter 0xrelayer is not allowlisted → filtered by facilitator_known.
 	require.Empty(t, doc.Data.CancellationAttribution.ByPayer)
 }
+
+// TestEmit_ActiveEntitiesSeries verifies that economy.json carries an
+// active_entities daily series: day, payer_count, payee_count, and complete.
+// The newest (edge) day must be marked complete=false.
+func TestEmit_ActiveEntitiesSeries(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Day 1: 2 payers, 1 payee.
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"},
+		// Day 2 (edge/newest): 1 payer, 1 payee.
+		{"0xc", 0, "2026-06-02T09:00:00Z", "0xfac1", "0xp1", "0xs2", "3.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		Data struct {
+			ActiveEntities []struct {
+				Day        string `json:"day"`
+				Complete   bool   `json:"complete"`
+				PayerCount int64  `json:"payer_count"`
+				PayeeCount int64  `json:"payee_count"`
+			} `json:"active_entities"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Len(t, doc.Data.ActiveEntities, 2, "one point per verified day")
+
+	pt1 := doc.Data.ActiveEntities[0]
+	require.Equal(t, "2026-06-01", pt1.Day)
+	require.True(t, pt1.Complete, "non-edge day must be complete=true")
+	require.Equal(t, int64(2), pt1.PayerCount)
+	require.Equal(t, int64(1), pt1.PayeeCount)
+
+	pt2 := doc.Data.ActiveEntities[1]
+	require.Equal(t, "2026-06-02", pt2.Day)
+	require.False(t, pt2.Complete, "edge (newest) day must be complete=false")
+	require.Equal(t, int64(1), pt2.PayerCount)
+	require.Equal(t, int64(1), pt2.PayeeCount)
+}

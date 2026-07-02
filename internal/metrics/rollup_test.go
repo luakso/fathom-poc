@@ -526,3 +526,58 @@ func TestRebuild_GasFoldsL1FeeAcrossBatch(t *testing.T) {
 		WHERE amount_band='small' AND membership='known'`).Scan(&smallL1))
 	require.True(t, smallL1, "small band gets one payment's L1 share (100)")
 }
+
+// TestRebuild_ActiveEntitiesDaily verifies that metrics_active_entities_daily_v2
+// counts distinct payers and payees per calendar day for verified payments only.
+// Key property: a wallet active on two days is counted ONCE per day, not merged.
+func TestRebuild_ActiveEntitiesDaily(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Day 1: payer P1 → payee S1, payer P2 → payee S1
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"},
+		// Day 2: same payer P1 appears again — must count 1, not 2
+		{"0xc", 0, "2026-06-02T09:00:00Z", "0xfac1", "0xp1", "0xs2", "3.00"},
+		// Unverified payment (unknown facilitator) must be excluded.
+		{"0xd", 0, "2026-06-01T12:00:00Z", "0xfac2", "0xp3", "0xs3", "4.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var rows int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_active_entities_daily_v2`).Scan(&rows))
+	require.Equal(t, int64(2), rows, "one row per verified day")
+
+	var payers1, payees1 int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day = '2026-06-01'`).Scan(&payers1, &payees1))
+	require.Equal(t, int64(2), payers1, "day 1: 2 distinct payers (P1, P2)")
+	require.Equal(t, int64(1), payees1, "day 1: 1 distinct payee (S1)")
+
+	var payers2, payees2 int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day = '2026-06-02'`).Scan(&payers2, &payees2))
+	require.Equal(t, int64(1), payers2, "day 2: 1 distinct payer (P1, same wallet as day 1)")
+	require.Equal(t, int64(1), payees2, "day 2: 1 distinct payee (S2)")
+}
+
+// TestRebuild_ActiveEntitiesIdempotent confirms TRUNCATE+INSERT makes the
+// active-entities rebuild safe to re-run without double-counting.
+func TestRebuild_ActiveEntitiesIdempotent(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t))) // second run
+	var n int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_active_entities_daily_v2`).Scan(&n))
+	require.Equal(t, int64(1), n, "second rebuild must not double-count rows")
+}

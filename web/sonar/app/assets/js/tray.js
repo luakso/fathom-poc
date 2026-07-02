@@ -96,6 +96,16 @@ export const PINNERS = {
     return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
       context:`"${escHtml(c.claim_text)}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
+  active_wallets(){ const ae = data.active_entities;
+    if (!ae || !ae.length) return null;
+    // Show counts from the last complete day (exclude the partial edge day).
+    const complete = ae.filter(p => p.complete);
+    const ref = complete.length ? complete[complete.length-1] : ae[ae.length-1];
+    return { title:"ACTIVE WALLETS",
+      value:`${fmtInt(ref.payer_count)} payers · ${fmtInt(ref.payee_count)} payees`,
+      context:`${ref.day} · distinct wallets from verified payments`,
+      denom:"distinct paying and receiving wallets per day · verified payments",
+      series: ae.map(p => p.payer_count) }; },
 };
 export function addPin(key){
   const gen = PINNERS[key]; if (!gen) return;

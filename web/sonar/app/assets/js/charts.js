@@ -1,6 +1,6 @@
-// Chart-heavy renderers: daily tape, monthly bars, velocity. Hand-rolled SVG,
-// moved verbatim from the mockup; innerHTML replacement on each render means
-// hover listeners die with their nodes (no leak).
+// Chart-heavy renderers: daily tape, monthly bars, velocity, active wallets.
+// Hand-rolled SVG; innerHTML replacement on each render means hover listeners
+// die with their nodes (no leak).
 import { $ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
@@ -185,4 +185,69 @@ export function rVelocity(){
   $("#velostats").innerHTML = ["7d","30d","all"].map(k =>
     `<div class="kv"><span class="k">peak · ${k.toUpperCase()}</span><span class="v">${fmtInt(vw[k].max_per_min)}/min</span></div>`).join("") +
     `<div class="kv"><span class="k">median p99 (active)</span><span class="v">${fmtInt(medianOf(days.map(d => d[2])))}/min</span></div>`;
+}
+
+/* ———————— 9 ACTIVE WALLETS ———————— */
+export function rActiveWallets(){
+  const ae = data.active_entities;
+  const host = $("#aechart");
+  if (!ae || !ae.length){
+    host.innerHTML = `<div class="readout">active wallet series not in this artifact — re-emit after rollup</div>`;
+    return;
+  }
+  const W = host.clientWidth || 800, H = 190, padL = 62, padB = 20, padT = 14;
+  const maxPayers = Math.max(...ae.map(d => d.payer_count)) || 1;
+  const maxPayees = Math.max(...ae.map(d => d.payee_count)) || 1;
+  const vmax = Math.max(maxPayers, maxPayees);
+  const x = i => padL + (W-padL-8) * (ae.length > 1 ? i/(ae.length-1) : 0.5);
+  const y = v => padT + (H-padT-padB) * (1 - v/vmax);
+  let grid = "";
+  [1,2,3].map(k => vmax*k/4).forEach(v => {
+    grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-8}" y2="${y(v)}"/><text x="${padL-6}" y="${y(v)+3}" text-anchor="end">${fmtCount(v)}</text>`;
+  });
+  let ticks = "";
+  ae.forEach((d,i) => { if (d.day.endsWith("-01")){
+    const lab = new Date(d.day+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
+    ticks += `<text x="${x(i)+3}" y="${H-6}">${lab}</text>`; }});
+  // Payer line (agentic green); payee line (accent, dashed).
+  let payerPath = "", payeePath = "";
+  ae.forEach((d,i) => {
+    const xx = x(i), yp = y(d.payer_count), yq = y(d.payee_count);
+    payerPath += i===0 ? `M${xx},${yp}` : `L${xx},${yp}`;
+    payeePath += i===0 ? `M${xx},${yq}` : `L${xx},${yq}`;
+  });
+  // Edge day marker (last point, complete=false).
+  const last = ae[ae.length-1];
+  const edgeMarker = !last.complete
+    ? `<circle data-partial="true" cx="${x(ae.length-1)}" cy="${y(last.payer_count)}" r="3.5" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 2" opacity="0.6"/>
+       <circle data-partial="true" cx="${x(ae.length-1)}" cy="${y(last.payee_count)}" r="3.5" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 2" opacity="0.6"/>`
+    : "";
+  host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="aesvg">
+    ${grid}${ticks}
+    <path d="${payerPath}" fill="none" stroke="var(--agentic)" stroke-width="1.4"/>
+    <path d="${payeePath}" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4 2"/>
+    ${edgeMarker}
+    <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-8}" y2="${H-padB}"/>
+    <rect id="aehover" x="${padL}" y="${padT}" width="${W-padL-8}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>
+  <div class="ae-legend">
+    <span style="color:var(--agentic)">— payers</span>
+    <span style="color:var(--accent);margin-left:12px">-- payees</span>
+  </div>`;
+  const svg = $("#aesvg");
+  if (!svg) return;
+  const hoverRect = $("#aehover");
+  if (!hoverRect) return;
+  hoverRect.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W/r.width);
+    const i = Math.max(0, Math.min(ae.length-1, Math.round((sx-padL)/((W-padL-8)/(ae.length-1 || 1)))));
+    const d = ae[i];
+    const readout = document.getElementById("ae-readout");
+    if (readout) readout.innerHTML = `<span class="d">${d.day}</span> ▸ payers ${fmtInt(d.payer_count)} ▸ payees ${fmtInt(d.payee_count)}`;
+  });
+  hoverRect.addEventListener("mouseleave", () => {
+    const readout = document.getElementById("ae-readout");
+    if (readout) readout.textContent = "payers (solid) · payees (dashed) · per day";
+  });
 }

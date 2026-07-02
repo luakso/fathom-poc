@@ -73,6 +73,7 @@ type EconomyPage struct {
 	Claims         []ClaimResult             `json:"claims"`
 	Concentration  ConcentrationSection      `json:"concentration"`
 	Excluded       ExcludedTotals            `json:"excluded"`
+	ActiveEntities []ActiveEntitiesPoint     `json:"active_entities"`
 }
 
 // lowerBound returns the inclusive lower day (YYYY-MM-DD) for a window, or ""
@@ -176,6 +177,9 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 		return EconomyPage{}, err
 	}
 	if page.Excluded, err = buildExcluded(ctx, q, asOf); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.ActiveEntities, err = buildActiveEntities(ctx, q, asOf); err != nil {
 		return EconomyPage{}, err
 	}
 	return page, nil

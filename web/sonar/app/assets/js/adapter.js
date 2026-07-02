@@ -63,6 +63,9 @@ export function reshape(doc){
     // excluded: all-window totals of non-verified transfers, for the overview
     // exclusion sentence. Tolerate absence (older artifacts lack this key).
     excluded: d.excluded || null,
+    // 6.1 active wallets daily series; absent in pre-6.1 artifacts (old-artifact
+    // tolerance: panel renders a "not in this artifact" state, not a crash).
+    active_entities: d.active_entities || null,
   };
 }
 
