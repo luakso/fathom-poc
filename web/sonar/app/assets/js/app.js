@@ -4,7 +4,7 @@
 import { $, $$ } from "./dom.js";
 import { state, setData, setWinLabel, setIssues } from "./state.js";
 import { loadEconomy, winLabels } from "./adapter.js";
-import { rDaily, rMonthly, rVelocity, rActiveWallets } from "./charts.js";
+import { rDaily, rMonthly, rVelocity, rActiveWallets, rGasCostDaily } from "./charts.js";
 import { rOverview, rShape, rPrice, rGas, rClaims, rShell } from "./panels.js";
 import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
@@ -40,7 +40,7 @@ function fatal(err){
 
 /* ————— render orchestration ————— */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
-const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rShell(); };
+const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rShell(); };
 
 function setWin(w){
   state.win = w;
@@ -114,7 +114,7 @@ function wire(){
   });
 
   let rsz;
-  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); rActiveWallets(); }, 150); });
+  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); rActiveWallets(); rGasCostDaily(); }, 150); });
 }
 
 /* ————— status bar + banner from integrity results ————— */

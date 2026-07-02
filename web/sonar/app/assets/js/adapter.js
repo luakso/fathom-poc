@@ -51,6 +51,9 @@ export function reshape(doc){
         const g = d.gas.windows[w] || {};
         return [w, { ...ZERO_GAS, ...g, by_band: g.by_band || {} }];
       })),
+      // 6.4: daily cost-per-dollar series; absent in pre-6.4 artifacts (old-artifact
+      // tolerance: chart omits when empty). Compact tuple: [day, cents_float, complete].
+      cost_daily: (d.gas.cost_daily || []).map(p => [p.day, +p.cents_per_dollar, p.complete !== false]),
     },
     velocity: {
       windows: Object.fromEntries(winKeys.map(w => [w, d.velocity.windows[w] || { ...ZERO_VELOCITY }])),

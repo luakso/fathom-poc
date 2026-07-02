@@ -62,11 +62,22 @@ type GasWindow struct {
 	ByBand map[string]GasMeasure `json:"by_band"`
 }
 
+// GasCostDailyPoint is one day of the per-day settlement cost series (6.4).
+// Complete is false for the newest (edge) day — same convention as DailyPoint.
+// CentsPerDollar is cost_usd / volume_usdc * 100, 4 dp. Days with zero verified
+// volume are skipped (undefined cost ratio); the JS adapts to the gap.
+type GasCostDailyPoint struct {
+	Day            string `json:"day"`
+	Complete       bool   `json:"complete"`
+	CentsPerDollar string `json:"cents_per_dollar"`
+}
+
 // GasSection carries the gas windows plus the methodology notes that make the
-// number citable.
+// number citable. CostDaily (6.4) is the full-history daily cost-per-dollar series.
 type GasSection struct {
-	Method  map[string]string    `json:"method"`
-	Windows map[string]GasWindow `json:"windows"`
+	Method    map[string]string    `json:"method"`
+	Windows   map[string]GasWindow `json:"windows"`
+	CostDaily []GasCostDailyPoint  `json:"cost_daily"`
 }
 
 // ActiveEntitiesPoint is one day of the active-wallet daily series (6.1).
@@ -336,7 +347,7 @@ func buildGas(ctx context.Context, q Querier, asOf time.Time) (GasSection, error
 		return GasSection{}, fmt.Errorf("gas read: %w", err)
 	}
 
-	sec := GasSection{Method: gasMethodNotes, Windows: map[string]GasWindow{}}
+	sec := GasSection{Method: gasMethodNotes, Windows: map[string]GasWindow{}, CostDaily: buildGasCostDailySeries(slices)}
 	for w := range windowDays {
 		lb := lowerBound(asOf, w)
 		var total gasAccum
@@ -455,6 +466,43 @@ func windowLargestPayments(slices []cubeSlice, asOf time.Time) map[string]*strin
 		}
 	}
 	return out
+}
+
+// buildGasCostDailySeries derives a daily cost-per-dollar series from gasSlices,
+// aggregating all bands per day. Days with zero verified volume are skipped
+// (undefined cost ratio). The last day is always marked Complete=false (edge
+// day convention). The series is bounded by the slices themselves, which the
+// caller already restricted to day <= asOf.
+func buildGasCostDailySeries(slices []gasSlice) []GasCostDailyPoint {
+	type dayAcc struct {
+		usd    decimal.Decimal
+		volume decimal.Decimal
+	}
+	dayOrder := []string{}
+	dailyMap := map[string]*dayAcc{}
+	for _, s := range slices {
+		if _, ok := dailyMap[s.day]; !ok {
+			dailyMap[s.day] = &dayAcc{}
+			dayOrder = append(dayOrder, s.day)
+		}
+		dailyMap[s.day].usd = dailyMap[s.day].usd.Add(s.usd)
+		dailyMap[s.day].volume = dailyMap[s.day].volume.Add(s.volume)
+	}
+	series := []GasCostDailyPoint{}
+	for _, day := range dayOrder {
+		acc := dailyMap[day]
+		if !acc.volume.IsPositive() {
+			continue // skip zero-volume days (undefined cost ratio)
+		}
+		cents := acc.usd.Mul(decimal.NewFromInt(100)).Div(acc.volume).StringFixed(4)
+		series = append(series, GasCostDailyPoint{Day: day, Complete: true, CentsPerDollar: cents})
+	}
+	// Mark the edge day incomplete — the same convention as DailyPoint and
+	// ActiveEntitiesPoint: the newest day's block window may still be accumulating.
+	if len(series) > 0 {
+		series[len(series)-1].Complete = false
+	}
+	return series
 }
 
 // buildActiveEntities reads metrics_active_entities_daily_v2 up to and including

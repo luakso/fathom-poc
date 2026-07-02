@@ -128,3 +128,55 @@ func TestWindowLargestPayments_MultipleBandsSameDay(t *testing.T) {
 	got := windowLargestPayments(slices, asOf)
 	require.Equal(t, "5000.000000", *got["all"])
 }
+
+// ---------------------------------------------------------------------------
+// buildGasCostDailySeries (item 6.4)
+// ---------------------------------------------------------------------------
+
+func TestBuildGasCostDailySeries_TwoDaysCorrectRatio(t *testing.T) {
+	// Day 1: $1 cost / $10 vol = 10¢/$
+	// Day 2: $4 cost / $100 vol = 4¢/$
+	slices := []gasSlice{
+		{day: "2026-06-01", band: "small", txns: 1, usd: dec("1.00"), volume: dec("10.00")},
+		{day: "2026-06-02", band: "small", txns: 1, usd: dec("4.00"), volume: dec("100.00")},
+	}
+	got := buildGasCostDailySeries(slices)
+	require.Len(t, got, 2)
+
+	require.Equal(t, "2026-06-01", got[0].Day)
+	require.True(t, got[0].Complete, "first day must be complete")
+	require.Equal(t, "10.0000", got[0].CentsPerDollar)
+
+	require.Equal(t, "2026-06-02", got[1].Day)
+	require.False(t, got[1].Complete, "last day must be incomplete (edge convention)")
+	require.Equal(t, "4.0000", got[1].CentsPerDollar)
+}
+
+func TestBuildGasCostDailySeries_ZeroVolumeDaySkipped(t *testing.T) {
+	// A day with zero volume is undefined (division by zero) — skip it.
+	slices := []gasSlice{
+		{day: "2026-06-01", band: "small", txns: 0, usd: dec("0"), volume: dec("0")},
+		{day: "2026-06-02", band: "small", txns: 1, usd: dec("2.00"), volume: dec("50.00")},
+	}
+	got := buildGasCostDailySeries(slices)
+	require.Len(t, got, 1, "zero-volume day must be skipped, not produce a null or panic")
+	require.Equal(t, "2026-06-02", got[0].Day)
+	require.False(t, got[0].Complete, "only day in series is also the edge day")
+}
+
+func TestBuildGasCostDailySeries_MultipleBandsAggregated(t *testing.T) {
+	// Two bands on the same day must be summed before computing the ratio.
+	// cost=1+3=4, vol=10+40=50 → 4/50*100 = 8.0000¢/$
+	slices := []gasSlice{
+		{day: "2026-06-01", band: "dust", txns: 10, usd: dec("1.00"), volume: dec("10.00")},
+		{day: "2026-06-01", band: "small", txns: 5, usd: dec("3.00"), volume: dec("40.00")},
+	}
+	got := buildGasCostDailySeries(slices)
+	require.Len(t, got, 1)
+	require.Equal(t, "8.0000", got[0].CentsPerDollar, "bands must be summed before the ratio")
+	require.False(t, got[0].Complete)
+}
+
+func TestBuildGasCostDailySeries_EmptyInput(t *testing.T) {
+	require.Empty(t, buildGasCostDailySeries(nil))
+}

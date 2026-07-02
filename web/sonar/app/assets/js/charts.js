@@ -187,6 +187,76 @@ export function rVelocity(){
     `<div class="kv"><span class="k">median p99 (active)</span><span class="v">${fmtInt(medianOf(days.map(d => d[2])))}/min</span></div>`;
 }
 
+/* ———————— 6.4 GAS COST DAILY ———————— */
+// rGasCostDaily renders a small line chart of settlement cost (cents per $1 moved)
+// over time inside #gascost-chart. Old artifacts without gas.cost_daily show a
+// "not in this artifact" fallback — this section is NOT in REQUIRED_SECTIONS.
+export function rGasCostDaily(){
+  const days = data.gas.cost_daily;
+  const host = $("#gascost-chart");
+  if (!host) return;
+  if (!days || !days.length){
+    host.innerHTML = `<div class="readout">cost-daily series not in this artifact — re-emit after rollup</div>`;
+    return;
+  }
+  const W = host.clientWidth || 800, H = 130, padL = 46, padB = 20, padT = 10;
+  const vals = days.map(d => d[1]);
+  const vmax = Math.max(...vals) || 1;
+  const x = i => padL + (W-padL-8) * (days.length > 1 ? i/(days.length-1) : 0.5);
+  const y = v => padT + (H-padT-padB) * (1 - v/vmax);
+  // gridlines at quarter-multiples of the max
+  let grid = "";
+  [1,2,3].map(k => vmax*k/4).forEach(v => {
+    grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-8}" y2="${y(v)}"/><text x="${padL-6}" y="${y(v)+3}" text-anchor="end">${v.toFixed(1)}</text>`;
+  });
+  // x-axis month ticks for long series; sparse date ticks for short
+  let ticks = "";
+  if (days.length > 60){
+    days.forEach((d,i) => { if (d[0].endsWith("-01")){
+      const lab = new Date(d[0]+"T00:00:00").toLocaleString("en-US",{month:"short"}).toUpperCase();
+      ticks += `<text x="${x(i)+3}" y="${H-6}">${lab}</text>`; }});
+  } else {
+    const step = Math.max(1, Math.round(days.length/5));
+    for (let i=0; i<days.length; i+=step){
+      const edge = i >= days.length - step;
+      const tx = edge ? `x="${x(i)-4}" text-anchor="end"` : `x="${x(i)+4}"`;
+      const lab = new Date(days[i][0]+"T00:00:00Z").toLocaleString("en-US",{month:"short",day:"2-digit",timeZone:"UTC"}).toUpperCase();
+      ticks += `<text ${tx} y="${H-6}">${lab}</text>`;
+    }
+  }
+  // line path
+  let p = "";
+  days.forEach((d,i) => { const xx = x(i), yy = y(d[1]); p += i===0 ? `M${xx},${yy}` : `L${xx},${yy}`; });
+  // edge day marker (incomplete = d[2] === false)
+  const last = days[days.length-1];
+  const edgeMarker = last[2] === false
+    ? `<circle data-partial="true" cx="${x(days.length-1)}" cy="${y(last[1])}" r="3.5" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 2" opacity="0.6"/>`
+    : "";
+  host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="gcsvg">
+    ${grid}${ticks}
+    <path d="${p}" fill="none" stroke="var(--contam)" stroke-width="1.4"/>
+    ${edgeMarker}
+    <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-8}" y2="${H-padB}"/>
+    <rect id="gchover" x="${padL}" y="${padT}" width="${W-padL-8}" height="${H-padT-padB}" fill="transparent"/>
+  </svg>`;
+  const svg = $("#gcsvg");
+  if (!svg) return;
+  const hoverRect = $("#gchover");
+  if (!hoverRect) return;
+  hoverRect.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W/r.width);
+    const i = Math.max(0, Math.min(days.length-1, Math.round((sx-padL)/((W-padL-8)/(days.length-1 || 1)))));
+    const d = days[i];
+    const readout = document.getElementById("gascost-readout");
+    if (readout) readout.innerHTML = `<span class="d">${d[0]}</span> ▸ ${(+d[1]).toFixed(2)}¢ per $1${d[2]===false ? " · partial day" : ""}`;
+  });
+  hoverRect.addEventListener("mouseleave", () => {
+    const readout = document.getElementById("gascost-readout");
+    if (readout) readout.textContent = "hover ▸ cents per $1 moved";
+  });
+}
+
 /* ———————— 9 ACTIVE WALLETS ———————— */
 export function rActiveWallets(){
   const ae = data.active_entities;

@@ -238,3 +238,39 @@ func TestBuildEconomy_LargestPaymentPerWindow(t *testing.T) {
 	require.Equal(t, "50.000000", *tp7.LargestPaymentUSDC,
 		"7d-window must only see the Jun 5 $50 payment (Jan is out of range)")
 }
+
+// TestBuildEconomy_CostDailySeries verifies item 6.4:
+//   - The daily cost-per-dollar series is emitted inside gas.
+//   - Two days with different cost/volume ratios produce correct per-day values.
+//   - Unknown-membership payments (no entry in the gas table's 'known' rows) are excluded.
+//   - The last day is marked Complete=false (edge convention).
+func TestBuildEconomy_CostDailySeries(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+
+	// Day 1 (known): $10 vol, 1e15 wei = $2 cost → 2/10*100 = 20.0000¢/$
+	// Day 2 (known): $100 vol, 1e15 wei = $2 cost → 2/100*100 = 2.0000¢/$
+	// Day 2 (unknown): large amount — excluded from gas table's known rows.
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "10.00", "1000000000000000"},
+		{"0xb", 0, "2026-06-02T10:00:00Z", "0xfac1", "0xp2", "0xs1", "100.00", "1000000000000000"},
+		{"0xc", 0, "2026-06-02T11:00:00Z", "0xfac2", "0xp3", "0xs3", "50.00", "1000000000000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	page, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-02T00:00:00Z"))
+	require.NoError(t, err)
+
+	cd := page.Gas.CostDaily
+	require.Len(t, cd, 2, "two known-verified days must appear in cost_daily")
+
+	require.Equal(t, "2026-06-01", cd[0].Day)
+	require.True(t, cd[0].Complete, "first day is complete")
+	require.Equal(t, "20.0000", cd[0].CentsPerDollar,
+		"day 1: $2 gas / $10 vol * 100 = 20¢/$")
+
+	require.Equal(t, "2026-06-02", cd[1].Day)
+	require.False(t, cd[1].Complete, "last (edge) day must be marked incomplete")
+	require.Equal(t, "2.0000", cd[1].CentsPerDollar,
+		"day 2: $2 gas / $100 vol * 100 = 2¢/$ (unknown $50 payment excluded)")
+}
