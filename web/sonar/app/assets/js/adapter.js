@@ -41,7 +41,7 @@ export function reshape(doc){
       ...d.gas,
       windows: Object.fromEntries(winKeys.map(w => {
         const g = d.gas.windows[w] || {};
-        return [w, { ...g, by_band: g.by_band || {} }];
+        return [w, { ...ZERO_GAS, ...g, by_band: g.by_band || {} }];
       })),
     },
     velocity: {
