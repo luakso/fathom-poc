@@ -11,7 +11,7 @@ export function rOverview(){
   const payees = (((data.concentration.windows[state.win] || {}).payee) || {}).total_entities || 0;
   $("#ov-win").textContent = "· " + winLabel[state.win];
   $("#ov-stats").innerHTML = `
-    <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>X402 PAYMENTS</small></div>
+    <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>VERIFIED PAYMENTS</small></div>
     <div class="bignum c-ag">${fmtMoney(w.volume_usdc)}<small>VOLUME</small></div>
     <div class="bignum">${fmtAmt(avg.toFixed(6))}<small>TYPICAL PAYMENT (avg)</small></div>
     <div class="bignum">${fmtInt(payees)}<small>ACTIVE PAYEES</small></div>`;
@@ -22,7 +22,7 @@ export function rOverview(){
     const p = 100*v/totalV;
     return `<span class="seg" style="width:${p}%" title="${k} ${p.toFixed(1)}% of volume"><b>${k}</b></span>`;
   }).join("");
-  $("#ov-denom").textContent = "x402 payment = a USDC authorization settled by a known facilitator (EIP-3009) on Base · " + winLabel[state.win] + " · windows anchored to data-through day";
+  $("#ov-denom").textContent = "A verified payment is a USDC payment settled on Base by a known x402 facilitator. · " + winLabel[state.win] + " · windows anchored to data-through day";
 }
 
 /* ———————— 5 SHAPE ———————— */
@@ -51,13 +51,13 @@ export function rPrice(){
   const pts = data.price_points[state.win];
   $("#pp-win").textContent = "· " + winLabel[state.win];
   if (!pts.length){
-    $("#pptable").innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no known-facilitator payments in this window</td></tr></tbody>`;
+    $("#pptable").innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no verified payments in this window</td></tr></tbody>`;
     return;
   }
   const maxS = Math.max(...pts.map(p => num(p.txn_share_pct))) || 1;
   const TAG = { menu:`<span class="tag menu">MENU</span>`, market:`<span class="tag market">MARKET</span>`, mixed:`<span class="tag mixed">—</span>` };
   $("#pptable").innerHTML = `
-    <thead><tr><th>amount</th><th style="text-align:left">share of known tx</th><th>tx</th><th>payees</th><th>read</th></tr></thead>
+    <thead><tr><th>amount</th><th style="text-align:left">share of verified tx</th><th>tx</th><th>payees</th><th>read</th></tr></thead>
     <tbody>${pts.map(p => {
       const s = num(p.txn_share_pct), w = Math.max(1.5, 100*s/maxS);
       const tag = TAG[priceRead(p)];
@@ -120,6 +120,6 @@ export function rShell(){
   $("#shell").innerHTML = `
     <div><span class="ps">$</span> <span class="cmd">jq '.scope, .methodology_version, .data_through_day' dist/economy.json</span></div>
     <div class="out">x402-attributed · v${data.meta.methodology_version} · ${data.meta.data_through_day}</div>
-    <div class="out">${fmtInt(w.txn_count)} verified x402 payments · ${fmtMoney(w.volume_usdc)} <span class="ok">✓</span></div>
-    <div class="out">every shown row is settled by a known x402 facilitator.<span class="cursor" style="margin-left:6px"></span></div>`;
+    <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} <span class="ok">✓</span></div>
+    <div class="out">every shown payment is settled by a known x402 facilitator.<span class="cursor" style="margin-left:6px"></span></div>`;
 }

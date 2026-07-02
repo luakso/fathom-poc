@@ -10,8 +10,8 @@ let selPin = 0;
 export const PINNERS = {
   overview(){ const w = data.windows[state.win];
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
-      context:`${fmtCount(w.txn_count)} verified x402 payments · ${fmtMoney(w.volume_usdc)} volume`,
-      denom:"x402 payment = USDC authorization settled by a known facilitator (EIP-3009) on Base · "+winLabel[state.win],
+      context:`${fmtCount(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} volume`,
+      denom:"A verified payment is a USDC payment settled on Base by a known x402 facilitator. · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
     const usd = state.dMetric === "usd";
@@ -19,12 +19,12 @@ export const PINNERS = {
     const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
     return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:val,
       context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
-      denom:`x402 settlements, ${slice[0][0]} → ${slice[slice.length-1][0]}`,
+      denom:`verified payments, ${slice[0][0]} → ${slice[slice.length-1][0]}`,
       series:slice.map(d=> usd?d[2]:d[1]) }; },
   monthly(){
     const complete = data.monthly.filter(m => m.complete);
     if (complete.length < 2) return { title:"MONTHLY", value:"insufficient complete months",
-      context:"need two complete months for MoM", denom:"x402 set · complete months",
+      context:"need two complete months for MoM", denom:"verified payments · complete months",
       series: data.monthly.map(m => num(m.volume_usdc)) };
     const prev = complete[complete.length-2], last = complete[complete.length-1];
     const v = m => num(m.volume_usdc);
@@ -35,7 +35,7 @@ export const PINNERS = {
     return { title:"MONTHLY",
       value:`${name} $: ${dUsd>0?"+":""}${dUsd.toFixed(0)}% MoM`,
       context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while $ ${dUsd<0?"fell":"rose"} ${fmtMoney(v(prev))}→${fmtMoney(v(last))}`,
-      denom:"x402 set · complete months",
+      denom:"verified payments · complete months",
       series: data.monthly.map(m => num(m.volume_usdc)) };
   },
   shape(){ const t = data.typical[state.win];
@@ -43,18 +43,18 @@ export const PINNERS = {
     const xMed = num(t.avg_usdc)/num(t.median_usdc);
     return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.median_usdc)+" median",
       context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median`,
-      denom:"verified x402 set · "+winLabel[state.win] }; },
+      denom:"verified payments · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;
     const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
     return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of known-facilitator tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
-      denom:"known-facilitator set · "+winLabel[state.win] }; },
+      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
+      denom:"verified payments · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
     if (!g.txn_count) return null;
     const p = 100*g.breakeven_txn_count/g.txn_count;
     return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% cost>value",
-      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments cost more than value · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
       denom:"tx-deduped L1+L2 cost, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all;
     const days = data.velocity.verified_daily;
@@ -63,7 +63,7 @@ export const PINNERS = {
     const med = medianOf(days.map(d => d[2]));
     return { title:"VELOCITY", value:fmtInt(vw.max_per_min)+"/min peak",
       context:`${days[pi][0]} · body ~${fmtInt(med)}/min p99 — bursts, not drip`,
-      denom:"known-facilitator set · p99 over active minutes",
+      denom:"verified payments · p99 over active minutes",
       series: days.map(d => d[1]) }; },
   claims(){ const c = data.claims[0];
     if (!c) return null;
