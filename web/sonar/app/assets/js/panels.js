@@ -1,6 +1,6 @@
 // Non-chart panel renderers, moved verbatim from the mockup.
 import { $ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, priceRead, claimVerdict } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, priceRead, claimVerdict, escHtml } from "./format.js";
 import { USD_TOLERANCE } from "./adapter.js";
 import { state, data, winLabel, issues } from "./state.js";
 
@@ -124,14 +124,15 @@ export function rClaims(){
     return;
   }
   $("#claims").innerHTML = data.claims.map(c => {
-    const ratio = num(c.claimed_value)/num(c.measured_value);
+    const measured = num(c.measured_value);
+    const ratio = measured !== 0 ? num(c.claimed_value) / measured : null;
     const verdict = claimVerdict(ratio);
-    const tagClass = ratio >= 1.5 ? "over" : ratio < 0.9 ? "low" : "ok";
+    const tagClass = ratio === null ? "na" : ratio >= 1.5 ? "over" : ratio < 0.9 ? "low" : "ok";
     const tag = `<span class="tag ${tagClass}">claim ${verdict}</span>`;
     const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
     const fmt = isUsd ? fmtMoney : fmtInt;
     return `<div class="claimrow">
-      <div class="q">"${c.claim_text}"</div>
+      <div class="q">"${escHtml(c.claim_text)}"</div>
       <div class="src">${/^https?:\/\//i.test(c.source_url) ? `<a href="${c.source_url.replace(/"/g,"%22")}" target="_blank" rel="noopener" style="color:inherit">${c.source}</a>` : c.source} · ${c.claim_date} · measured as ${c.measured_metric}</div>
       <div class="nums"><span class="a">claimed ${fmt(c.claimed_value)}</span><span>▸</span><span class="m">measured ${fmt(c.measured_value)}</span>${tag}</div>
     </div>`;

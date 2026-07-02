@@ -84,7 +84,8 @@ export const PINNERS = {
       series: days.map(d => d[1]) }; },
   claims(){ const c = data.claims[0];
     if (!c) return null;
-    const ratio = num(c.claimed_value)/num(c.measured_value);
+    const measured = num(c.measured_value);
+    const ratio = measured !== 0 ? num(c.claimed_value) / measured : null;
     const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
     const fmt = isUsd ? fmtMoney : fmtInt;
     return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),

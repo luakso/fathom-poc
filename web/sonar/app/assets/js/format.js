@@ -29,6 +29,15 @@ export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mi
 // avoids implying a symmetric two-sided test.
 export const priceRead = p => p.payee_count < 1000 ? "menu" : p.payee_count >= 5000 ? "market" : "mixed";
 export const claimVerdict = ratio =>
+  (ratio === null || !isFinite(ratio)) ? "not comparable" :
   ratio >= 1.5 ? `${ratio.toFixed(1)}× higher than measured` :
   ratio < 0.9  ? "lower than measured" :
                  "matches measurement";
+
+// HTML escaper for user-visible text injected into innerHTML.
+// claim_text comes from a curated file, but must not be able to break markup.
+export const escHtml = s => String(s)
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;");
