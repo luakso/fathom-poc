@@ -7,18 +7,20 @@ import { state, data, winLabel } from "./state.js";
 
 const pins = [];
 let selPin = 0;
-const PINNERS = {
+export const PINNERS = {
   overview(){ const w = data.windows[state.win];
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
       context:`${fmtCount(w.txn_count)} verified x402 payments · ${fmtMoney(w.volume_usdc)} volume`,
       denom:"x402 payment = USDC authorization settled by a known facilitator (EIP-3009) on Base · "+winLabel[state.win],
       series:data.daily.map(d=>d[1]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
-    const peak = slice.reduce((a,b)=> b[1]>a[1]?b:a);
-    return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:fmtInt(peak[1])+" tx/day peak",
+    const usd = state.dMetric === "usd";
+    const peak = usd ? slice.reduce((a,b)=> b[2]>a[2]?b:a) : slice.reduce((a,b)=> b[1]>a[1]?b:a);
+    const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
+    return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:val,
       context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
       denom:`x402 settlements, ${slice[0][0]} → ${slice[slice.length-1][0]}`,
-      series:slice.map(d=> state.dMetric==="tx"?d[1]:d[2]) }; },
+      series:slice.map(d=> usd?d[2]:d[1]) }; },
   monthly(){
     const complete = data.monthly.filter(m => m.complete);
     if (complete.length < 2) return { title:"MONTHLY", value:"insufficient complete months",
