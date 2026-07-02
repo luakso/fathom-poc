@@ -121,7 +121,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	var minVersion *int16
 	if err := q.QueryRow(ctx, `
 		SELECT
-		    (SELECT max(day)::text FROM metrics_daily_v2),
+		    (SELECT max(day)::text FROM metrics_daily_v2 WHERE membership = 'known'),
 		    count(DISTINCT methodology_version),
 		    min(methodology_version)
 		FROM (

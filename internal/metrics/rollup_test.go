@@ -123,6 +123,31 @@ func TestRebuild_MembershipConservation(t *testing.T) {
 	require.Equal(t, int64(1), unknown)
 }
 
+// TestRebuild_WindowStatsAnchorKnownOnly verifies that the window-stat rollup
+// anchors its time windows to the newest KNOWN payment day, not the newest day
+// overall. Without this, if the latest day contains only unknown payments, the
+// "7d" window would be anchored too far forward and exclude known payments that
+// should appear in it.
+func TestRebuild_WindowStatsAnchorKnownOnly(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known, Jun 1
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp2", "0xs2", "2.00"}, // unknown, Jun 8 (newer)
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// The known payment is on Jun 1. With the anchor fixed to the last known day:
+	// anchor = Jun 1 → 7d window = [May 26, Jun 1] → includes the Jun 1 payment.
+	// Without the fix: anchor = Jun 8 → 7d = [Jun 2, Jun 8] → Jun 1 payment absent.
+	var knownTxns int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT txn_count FROM metrics_window_stats_v2 WHERE window_name='7d' AND membership='known'`).
+		Scan(&knownTxns))
+	require.Equal(t, int64(1), knownTxns,
+		"7d window stats must anchor to the last known day so the Jun 1 payment is counted")
+}
+
 func TestRebuild_Idempotent(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	seedPayments(t, ctx, db, []seedRow{

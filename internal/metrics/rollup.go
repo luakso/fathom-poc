@@ -58,7 +58,7 @@ const windowsValues = `(VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_n
 const economyWindowStatsSQL = `
 TRUNCATE metrics_window_stats_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1 WHERE facilitator_known
 )
 INSERT INTO metrics_window_stats_v2
     (window_name, membership, methodology_version, txn_count, median_amount_usdc)
@@ -83,7 +83,7 @@ GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'know
 const economyPricePointsSQL = `
 TRUNCATE metrics_price_points_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1 WHERE facilitator_known
 )
 INSERT INTO metrics_price_points_v2
     (window_name, rank, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version)

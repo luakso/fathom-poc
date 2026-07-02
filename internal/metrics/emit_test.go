@@ -216,6 +216,33 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	require.Contains(t, string(idx), `href="mechanics.html"`)
 }
 
+// TestEmit_StampsKnownDayWhenNewestDayUnknownOnly verifies that data_through_day
+// reflects the newest KNOWN (verified) payment day, not the newest day overall.
+// If the dataset's newest day contains only unknown-membership rows, the stamp
+// must not advance past the last known day - otherwise the dashboard would claim
+// to cover a day its own verified series never reaches.
+func TestEmit_StampsKnownDayWhenNewestDayUnknownOnly(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known, Jun 1
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp2", "0xs2", "2.00"}, // unknown, Jun 8 (newer)
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+	var doc struct {
+		DataThroughDay string `json:"data_through_day"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Equal(t, "2026-06-01", doc.DataThroughDay,
+		"data_through_day must be the newest KNOWN day, not the newest unknown day")
+}
+
 func TestEmit_WritesReliability(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")
