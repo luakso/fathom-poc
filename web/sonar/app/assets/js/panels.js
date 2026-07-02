@@ -42,9 +42,15 @@ export function rShape(){
   const t = data.typical[state.win];
   const xMed = num(t.avg_usdc)/num(t.median_usdc);
   $("#shp-win").textContent = "· " + winLabel[state.win];
+  // 6.3 percentile strip: shown only when the artifact carries p10/p90/p99.
+  // Old-artifact tolerance: missing or null fields → strip omitted, not a crash.
+  const pctStrip = t.p10_usdc != null && t.p90_usdc != null && t.p99_usdc != null
+    ? `<div class="pct-strip" style="margin-top:6px;font-size:.8em;color:var(--dim)">p10 ${fmtAmt(t.p10_usdc)} · median ${fmtAmt(t.median_usdc)} · p90 ${fmtAmt(t.p90_usdc)} · p99 ${fmtAmt(t.p99_usdc)}</div>`
+    : "";
   $("#shp-big").innerHTML = `
     <div class="bignum c-ag glow">${fmtAmt(t.median_usdc)}<small>MEDIAN PAYMENT</small></div>
-    <div class="bignum">${fmtAmt(t.avg_usdc)}<small>MEAN — ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× THE MEDIAN</small></div>`;
+    <div class="bignum">${fmtAmt(t.avg_usdc)}<small>MEAN — ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× THE MEDIAN</small></div>
+    ${pctStrip}`;
   const b = data.windows[state.win].by_band;
   const tx = state.bMetric === "tx";
   const get = r => tx ? r.txn_count : num(r.volume_usdc);

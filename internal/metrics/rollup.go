@@ -50,30 +50,36 @@ SELECT string_agg(w, ', ' ORDER BY w) FROM (
 // same anchor emit uses, so rollup and emit always agree on what '7d' means.
 const windowsValues = `(VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_name, days)`
 
-// economyWindowStatsSQL: medians per (window, membership) + the synthetic
-// 'all' membership via GROUPING SETS. Medians are not mergeable from a cube,
-// so they are computed here, once, at scan time. min(methodology_version) is
-// safe only because the v1 view is frozen single-version; emit independently
-// asserts exactly one version across all metrics tables.
+// economyWindowStatsSQL: medians + p10/p90/p99 per (window, membership) + the
+// synthetic 'all' membership via GROUPING SETS. Medians are not mergeable from
+// a cube, so they are computed here, once, at scan time.
+// percentile_disc(ARRAY[...]) issues ONE sort and extracts all four quantiles in
+// a single pass; the subscripted CTE avoids repeating the WITHIN GROUP expression.
+// min(methodology_version) is safe only because the v1 view is frozen single-version.
 const economyWindowStatsSQL = `
 TRUNCATE metrics_window_stats_v2;
 WITH anchor AS (
     SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1 WHERE facilitator_known
+), raw AS (
+    SELECT
+        w.window_name,
+        COALESCE(CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END, 'all') AS membership,
+        min(p.methodology_version) AS methodology_version,
+        count(*) AS txn_count,
+        percentile_disc(ARRAY[0.1, 0.5, 0.9, 0.99]) WITHIN GROUP (ORDER BY p.amount_usdc) AS percs
+    FROM payment_x402_v1 p
+    CROSS JOIN ` + windowsValues + `
+    CROSS JOIN anchor a
+    WHERE w.days = 0
+       OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+    GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END), ())
 )
 INSERT INTO metrics_window_stats_v2
-    (window_name, membership, methodology_version, txn_count, median_amount_usdc)
-SELECT
-    w.window_name,
-    COALESCE(CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END, 'all'),
-    min(p.methodology_version),
-    count(*),
-    percentile_disc(0.5) WITHIN GROUP (ORDER BY p.amount_usdc)
-FROM payment_x402_v1 p
-CROSS JOIN ` + windowsValues + `
-CROSS JOIN anchor a
-WHERE w.days = 0
-   OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
-GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END), ())`
+    (window_name, membership, methodology_version, txn_count,
+     median_amount_usdc, p10_amount_usdc, p90_amount_usdc, p99_amount_usdc)
+SELECT window_name, membership, methodology_version, txn_count,
+    percs[2], percs[1], percs[3], percs[4]
+FROM raw`
 
 // economyPricePointsSQL: top 50 exact known-facilitator amounts per window,
 // ranked by txn count (ties broken by amount for determinism). payee_count

@@ -5,6 +5,7 @@ package metrics_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -525,6 +526,46 @@ func TestRebuild_GasFoldsL1FeeAcrossBatch(t *testing.T) {
 		SELECT l1_fee_wei = 100 FROM metrics_gas_daily_v2
 		WHERE amount_band='small' AND membership='known'`).Scan(&smallL1))
 	require.True(t, smallL1, "small band gets one payment's L1 share (100)")
+}
+
+// TestRebuild_WindowStatsPercentiles verifies that the window stats rollup
+// populates p10/p90/p99 alongside the existing median. Uses a 10-element
+// known distribution so that disc-percentile picks are exact and hand-verifiable.
+func TestRebuild_WindowStatsPercentiles(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 10 payments at distinct amounts: 0.01, 0.02, ..., 0.10 (all in one day).
+	// disc percentile pick at fraction f over n=10 rows = row at ceil(f*10):
+	//   p10 = ceil(0.1*10)=1 → 0.010000
+	//   p50 = ceil(0.5*10)=5 → 0.050000 (median)
+	//   p90 = ceil(0.9*10)=9 → 0.090000
+	//   p99 = ceil(0.99*10)=10 → 0.100000 (PostgreSQL disc rounds up to last)
+	payments := make([]seedRow, 10)
+	for i := range payments {
+		payments[i] = seedRow{
+			txHash:      fmt.Sprintf("0x%02x", i),
+			logIndex:    0,
+			ts:          "2026-06-05T10:00:00Z",
+			facilitator: "0xfac1",
+			payer:       fmt.Sprintf("0xp%d", i),
+			payee:       "0xs1",
+			amountUSDC:  fmt.Sprintf("0.%02d", i+1),
+		}
+	}
+	seedPayments(t, ctx, db, payments)
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var median, p10, p90, p99 string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT median_amount_usdc::text, p10_amount_usdc::text,
+		       p90_amount_usdc::text, p99_amount_usdc::text
+		FROM metrics_window_stats_v2
+		WHERE window_name='all' AND membership='known'`).Scan(&median, &p10, &p90, &p99))
+
+	require.Equal(t, "0.050000", median, "median (p50) = 5th of 10 amounts = 0.05")
+	require.Equal(t, "0.010000", p10, "p10 = 1st of 10 amounts = 0.01")
+	require.Equal(t, "0.090000", p90, "p90 = 9th of 10 amounts = 0.09")
+	require.Equal(t, "0.100000", p99, "p99 (disc) rounds to last element = 0.10")
 }
 
 // TestRebuild_ActiveEntitiesDaily verifies that metrics_active_entities_daily_v2

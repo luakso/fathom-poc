@@ -63,8 +63,12 @@ export const PINNERS = {
     const dustTxPct  = (100 * b.dust.txn_count / totTx).toFixed(1);
     const dustUsdPct = (100 * num(b.dust.volume_usdc) / totUsd).toFixed(1);
     const xMed = num(t.avg_usdc)/num(t.median_usdc);
+    // 6.3 percentile context: appended when artifact carries p10/p90/p99.
+    const pctCtx = t.p10_usdc != null && t.p90_usdc != null && t.p99_usdc != null
+      ? ` · p10 ${fmtAmt(t.p10_usdc)} → p90 ${fmtAmt(t.p90_usdc)} → p99 ${fmtAmt(t.p99_usdc)}`
+      : "";
     return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars`,
+      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars${pctCtx}`,
       denom:"verified payments · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;

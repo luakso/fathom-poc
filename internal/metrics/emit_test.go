@@ -293,6 +293,49 @@ func TestEmit_WritesReliability(t *testing.T) {
 	require.Empty(t, doc.Data.CancellationAttribution.ByPayer)
 }
 
+// TestEmit_TypicalPaymentPercentiles verifies that economy.json carries
+// p10_usdc/p90_usdc/p99_usdc alongside the existing median in each
+// typical_payment window entry.
+func TestEmit_TypicalPaymentPercentiles(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Three amounts on the anchor day so percentiles are non-trivial.
+	// p10 disc = 1st of 3 = 0.01, median = 2nd = 0.10, p90/p99 disc = 3rd = 5.00.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.01"},
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp2", "0xs1", "0.10"},
+		{"0xc", 0, "2026-06-05T12:00:00Z", "0xfac1", "0xp3", "0xs1", "5.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		Data struct {
+			TypicalPayment map[string]struct {
+				MedianUSDC string  `json:"median_usdc"`
+				P10USDC    *string `json:"p10_usdc"`
+				P90USDC    *string `json:"p90_usdc"`
+				P99USDC    *string `json:"p99_usdc"`
+			} `json:"typical_payment"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+
+	tp := doc.Data.TypicalPayment["all"]
+	require.Equal(t, "0.100000", tp.MedianUSDC, "median unchanged by percentile addition")
+	require.NotNil(t, tp.P10USDC, "p10_usdc must be present")
+	require.NotNil(t, tp.P90USDC, "p90_usdc must be present")
+	require.NotNil(t, tp.P99USDC, "p99_usdc must be present")
+	require.Equal(t, "0.010000", *tp.P10USDC)
+	require.Equal(t, "5.000000", *tp.P90USDC)
+	require.Equal(t, "5.000000", *tp.P99USDC)
+}
+
 // TestEmit_ActiveEntitiesSeries verifies that economy.json carries an
 // active_entities daily series: day, payer_count, payee_count, and complete.
 // The newest (edge) day must be marked complete=false.

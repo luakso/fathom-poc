@@ -21,10 +21,16 @@ type MonthlyPoint struct {
 }
 
 // TypicalPayment answers "what does a typical payment look like" (E7).
+// P10/P90/P99 are omitempty: they are absent in pre-6.3 artifacts (until the
+// next rollup+emit after migration 00019). JS checks for nil before showing
+// the percentile strip.
 type TypicalPayment struct {
-	AvgUSDC    string `json:"avg_usdc"`
-	MedianUSDC string `json:"median_usdc"`
-	TxnCount   int64  `json:"txn_count"`
+	AvgUSDC    string  `json:"avg_usdc"`
+	MedianUSDC string  `json:"median_usdc"`
+	TxnCount   int64   `json:"txn_count"`
+	P10USDC    *string `json:"p10_usdc,omitempty"`
+	P90USDC    *string `json:"p90_usdc,omitempty"`
+	P99USDC    *string `json:"p99_usdc,omitempty"`
 }
 
 // PricePoint is one row of the agentic price-point spectrum (E8).
@@ -161,7 +167,8 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 		out[w] = TypicalPayment{AvgUSDC: zero, MedianUSDC: zero}
 	}
 	rows, err := q.Query(ctx, `
-		SELECT window_name, txn_count, median_amount_usdc::text
+		SELECT window_name, txn_count, median_amount_usdc::text,
+		       p10_amount_usdc::text, p90_amount_usdc::text, p99_amount_usdc::text
 		FROM metrics_window_stats_v2 WHERE membership = 'known'`)
 	if err != nil {
 		return nil, fmt.Errorf("window stats read: %w", err)
@@ -170,7 +177,8 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 	for rows.Next() {
 		var w, median string
 		var txns int64
-		if err := rows.Scan(&w, &txns, &median); err != nil {
+		var p10, p90, p99 *string
+		if err := rows.Scan(&w, &txns, &median, &p10, &p90, &p99); err != nil {
 			return nil, fmt.Errorf("scan window stats: %w", err)
 		}
 		if _, ok := windows[w]; !ok {
@@ -180,7 +188,14 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 		if err != nil {
 			return nil, fmt.Errorf("avg for window %s: %w", w, err)
 		}
-		out[w] = TypicalPayment{AvgUSDC: avg, MedianUSDC: median, TxnCount: txns}
+		out[w] = TypicalPayment{
+			AvgUSDC:    avg,
+			MedianUSDC: median,
+			TxnCount:   txns,
+			P10USDC:    p10,
+			P90USDC:    p90,
+			P99USDC:    p99,
+		}
 	}
 	return out, rows.Err()
 }
