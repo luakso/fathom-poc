@@ -104,7 +104,7 @@ export function genThread(){
   if (!pins.length){ $("#thread").value = ""; rCount(); return; }
   const head = `fathom // x402 on Base — data through ${data.meta.data_through_day}\n\n`;
   const body = pins.map(p => `▸ ${p.value} — ${p.context}`).join("\n");
-  const foot = `\n\ndenominators stated. no row dropped — only labeled.`;
+  const foot = `\n\nverified payments only. unverified transfers excluded. denominators stated.`;
   $("#thread").value = head + body + foot;
   rCount();
 }
@@ -116,7 +116,9 @@ export function rCount(){
 }
 /* X card — canvas 1200×675 */
 export function rCard(){
-  const cv = $("#xcard"), ctx = cv.getContext("2d");
+  const cv = $("#xcard"); if (!cv || !cv.getContext) return;
+  let ctx; try { ctx = cv.getContext("2d"); } catch(e){ return; }
+  if (!ctx) return;
   const W = 1200, H = 675;
   ctx.fillStyle = "#070b09"; ctx.fillRect(0,0,W,H);
   // grid
@@ -179,6 +181,9 @@ function wrapText(ctx, text, x, y, maxW, lh){
   });
   ctx.fillText(line.trim(), x, yy);
 }
+
+/** Reset pin state between tests — not used in production. */
+export function _clearPins(){ pins.length = 0; selPin = 0; }
 
 const tray = () => $("#tray");
 export function toggleTray(force){
