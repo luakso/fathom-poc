@@ -1,6 +1,6 @@
 // Report tray: pin findings -> compose thread -> 1200x675 X card.
 import { $, $$ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, BANDDEF } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, escHtml, BANDDEF } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { tapeSlice } from "./charts.js";
 import { state, data, winLabel } from "./state.js";
@@ -89,7 +89,7 @@ export const PINNERS = {
     const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
     const fmt = isUsd ? fmtMoney : fmtInt;
     return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
-      context:`"${c.claim_text}" → measured ${fmt(c.measured_value)}`,
+      context:`"${escHtml(c.claim_text)}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
 };
 export function addPin(key){

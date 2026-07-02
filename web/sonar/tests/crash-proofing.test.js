@@ -337,7 +337,7 @@ describe("4.3 - claims: zero measured_value renders not-comparable", () => {
     expect(el.querySelector(".q b")).toBeNull();
   });
 
-  it("PINNERS.claims: returns null when measured_value is 0 (rather than crashing or showing Infinity)", () => {
+  it("PINNERS.claims: returns a not-comparable card when measured_value is 0 (does not crash, does not show Infinity)", () => {
     const view = {
       ...baseView,
       claims: [{
@@ -357,6 +357,28 @@ describe("4.3 - claims: zero measured_value renders not-comparable", () => {
     expect(() => { result = PINNERS.claims(); }).not.toThrow();
     expect(result?.value).not.toContain("Infinity");
     expect(result?.value).toContain("not comparable");
+  });
+
+  it("PINNERS.claims: claim_text with HTML tags is escaped in pin context", () => {
+    const view = {
+      ...baseView,
+      claims: [{
+        claim_text: '<script>xss</script> and "quotes"',
+        source: "S",
+        source_url: "https://example.com",
+        claim_date: "2026-01-01",
+        claimed_value: "100",
+        measured_value: "50",
+        measured_unit: "USDC",
+        measured_metric: "volume",
+      }],
+    };
+    setData(view);
+    const result = PINNERS.claims();
+    expect(result).not.toBeNull();
+    // context must contain the HTML-escaped form, not raw tags
+    expect(result.context).toContain("&lt;script&gt;");
+    expect(result.context).not.toContain("<script>");
   });
 });
 
