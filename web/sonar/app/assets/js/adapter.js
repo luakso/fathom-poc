@@ -31,6 +31,7 @@ export function reshape(doc){
       methodology_version: doc.methodology_version,
       generated_at: doc.generated_at,
       data_through_day: doc.data_through_day,
+      scope: doc.scope,
     },
     windows: Object.fromEntries(winKeys.map(w => [w, {
       ...d.windows[w],

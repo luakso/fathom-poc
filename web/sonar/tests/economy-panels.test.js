@@ -287,4 +287,24 @@ describe("item 3.3 — rShell renders computed integrity checks", () => {
     // 22,767,310 is the total = verified + excluded
     expect(html).toContain("22,767,310");
   });
+
+  it("shell renders the artifact scope from meta.scope when present", () => {
+    const viewWithScope = { ...baseView, meta: { ...baseView.meta, scope: "verified-x402" } };
+    setData(viewWithScope);
+    setIssues(checkIntegrity(viewWithScope));
+    rShell();
+    const html = document.getElementById("shell").innerHTML;
+    expect(html).toContain("verified-x402");
+    expect(html).not.toContain("x402-attributed");
+  });
+
+  it("shell falls back to 'verified-x402' when meta.scope is absent", () => {
+    // baseView.meta has no scope field — the fallback must fire
+    setData(baseView);
+    setIssues(checkIntegrity(baseView));
+    rShell();
+    const html = document.getElementById("shell").innerHTML;
+    expect(html).toContain("verified-x402");
+    expect(html).not.toContain("x402-attributed");
+  });
 });

@@ -150,7 +150,7 @@ export function rShell(){
   }).join("");
   $("#shell").innerHTML = `
     <div><span class="ps">$</span> <span class="cmd">jq '.scope, .methodology_version, .data_through_day' dist/economy.json</span></div>
-    <div class="out">x402-attributed · v${data.meta.methodology_version} · ${data.meta.data_through_day}</div>
+    <div class="out">${data.meta.scope || "verified-x402"} · v${data.meta.methodology_version} · ${data.meta.data_through_day}</div>
     ${lines}
     <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} ${glyph}<span class="cursor" style="margin-left:6px"></span></div>`;
 }
