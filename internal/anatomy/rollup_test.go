@@ -5,6 +5,7 @@ package anatomy_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -139,4 +140,46 @@ func TestRollup_EdgeAndDayConservation(t *testing.T) {
 		WHERE facilitator='0xkfac' AND counterparty_role='payer' AND counterparty='0xp1'`)
 	require.Equal(t, int64(3), n)
 	require.Equal(t, "10.000000", vol)
+}
+
+func TestRollup_PricePointCapAndDistinctTotal(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	allowFacilitator(t, ctx, db, "0xkfac")
+	// One payer, 70 distinct amounts (0.01 .. 0.70), one payment each, plus a
+	// dominant amount 0.99 paid 5 times (must be rank 1).
+	for i := 1; i <= 70; i++ {
+		seedPaymentAt(t, ctx, db, fmt.Sprintf("0xpp%02d", i), 0,
+			"2026-06-01T08:00:00Z", "0xhot", "0xkfac", "0xsink",
+			fmt.Sprintf("0.%02d", i))
+	}
+	for i := 0; i < 5; i++ {
+		seedPaymentAt(t, ctx, db, fmt.Sprintf("0xdom%d", i), 0,
+			"2026-06-01T09:00:00Z", "0xhot", "0xkfac", "0xsink", "0.99")
+	}
+
+	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
+
+	// Capped at 64 rows for the hot payer partition.
+	var rows int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT count(*) FROM entity_price_point_v1
+		WHERE address='0xhot' AND role='payer' AND facilitator_known`).Scan(&rows))
+	require.Equal(t, 64, rows)
+
+	// The honesty figure counts ALL 71 distinct amounts, not just stored ones.
+	var total int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT DISTINCT total_distinct_amounts FROM entity_price_point_v1
+		WHERE address='0xhot' AND role='payer' AND facilitator_known`).Scan(&total))
+	require.Equal(t, int64(71), total)
+
+	// Rank 1 is the most frequent amount.
+	var top string
+	var topCount int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT amount_usdc::text, txn_count FROM entity_price_point_v1
+		WHERE address='0xhot' AND role='payer' AND facilitator_known AND amount_rank=1`).
+		Scan(&top, &topCount))
+	require.Equal(t, "0.990000", top)
+	require.Equal(t, int64(5), topCount)
 }

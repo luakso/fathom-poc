@@ -62,17 +62,52 @@ CROSS JOIN LATERAL (VALUES
 GROUP BY p.chain, r.address, r.role,
          (p.block_timestamp AT TIME ZONE 'UTC')::date, p.facilitator_known`
 
+// rebuildEntityPricePointSQL: per-(address, role, lens) amount histogram,
+// capped at the 64 most frequent amounts. total_distinct_amounts is
+// denormalized onto every stored row so "single price point" claims stay
+// honest even when the tail is truncated.
+const rebuildEntityPricePointSQL = `
+TRUNCATE entity_price_point_v1;
+INSERT INTO entity_price_point_v1
+    (chain, address, role, facilitator_known, amount_usdc, txn_count,
+     amount_rank, total_distinct_amounts, methodology_version)
+SELECT chain, address, role, facilitator_known, amount_usdc, txn_count,
+       amount_rank, total_distinct_amounts, methodology_version
+FROM (
+    SELECT chain, address, role, facilitator_known, amount_usdc, txn_count,
+           methodology_version,
+           row_number() OVER (
+               PARTITION BY chain, address, role, facilitator_known
+               ORDER BY txn_count DESC, amount_usdc
+           ) AS amount_rank,
+           count(*) OVER (
+               PARTITION BY chain, address, role, facilitator_known
+           ) AS total_distinct_amounts
+    FROM (
+        SELECT p.chain, r.address, r.role, p.facilitator_known, p.amount_usdc,
+               count(*) AS txn_count, min(p.methodology_version) AS methodology_version
+        FROM payment_x402_v1 p
+        CROSS JOIN LATERAL (VALUES
+            (p.payer, 'payer'), (p.payee, 'payee'), (p.facilitator, 'facilitator')
+        ) AS r(address, role)
+        GROUP BY p.chain, r.address, r.role, p.facilitator_known, p.amount_usdc
+    ) amounts
+) ranked
+WHERE amount_rank <= 64`
+
 // rollupStatements run in order inside one transaction. Later tasks append
 // price points, leaderboard, and the meta stamp.
 var rollupStatements = []struct{ name, sql string }{
 	{"entity_edge_v1", rebuildEntityEdgeSQL},
 	{"facilitator_edge_v1", rebuildFacilitatorEdgeSQL},
 	{"entity_day_v1", rebuildEntityDaySQL},
+	{"entity_price_point_v1", rebuildEntityPricePointSQL},
 }
 
 // rollupTables is everything Rollup rebuilds; ANALYZE runs on each after commit.
 var rollupTables = []string{
 	"entity_edge_v1", "facilitator_edge_v1", "entity_day_v1",
+	"entity_price_point_v1",
 }
 
 // Rollup rebuilds all anatomy entity tables from payment_x402_v1 in one
