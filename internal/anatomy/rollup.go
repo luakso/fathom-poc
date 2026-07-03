@@ -95,7 +95,7 @@ func Rollup(ctx context.Context, pool *pgxpool.Pool, labels []ManualLabel) error
 		}
 	}
 	if err := replaceManualSignals(ctx, tx, labels); err != nil {
-		return err
+		return fmt.Errorf("rollup manual signals: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit rollup: %w", err)
