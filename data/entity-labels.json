@@ -1,0 +1,11 @@
+{
+  "labels": [
+    {
+      "chain": "base",
+      "address": "0xa9dd77c96f2c68f7502cbcbe7f0b8ec54d072315",
+      "label": "api.tollbit.com",
+      "url": "https://tollbit.com",
+      "note": "content-licensing API payee; dominant counterparty of the 0x5b2b12 fleet payer"
+    }
+  ]
+}
