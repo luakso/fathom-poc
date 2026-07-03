@@ -197,6 +197,42 @@ FROM (
 ) per_min
 GROUP BY day, membership`
 
+// payerCohortsSQL computes the new vs returning payer breakdown per window (item 6.5).
+// "New" payer: their first ever verified payment (facilitator_known) falls within the window.
+// "Returning": they have at least one verified payment before the window start.
+// The "all" window is intentionally excluded — it is degenerate (every payer is "new"
+// relative to time zero) and would produce a meaningless 100% new split.
+// global_first anchors on ALL verified history, not just the window, so a payer whose
+// first payment was a decade ago is always "returning" regardless of the window size.
+const payerCohortsSQL = `
+TRUNCATE metrics_payer_cohorts_v1;
+WITH anchor AS (
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d
+    FROM payment_x402_v1 WHERE facilitator_known
+),
+global_first AS (
+    SELECT payer, min((block_timestamp AT TIME ZONE 'UTC')::date) AS first_day
+    FROM payment_x402_v1 WHERE facilitator_known
+    GROUP BY payer
+)
+INSERT INTO metrics_payer_cohorts_v1
+    (window_name, new_payers, returning_payers,
+     new_payer_volume_usdc, returning_payer_volume_usdc, methodology_version)
+SELECT
+    w.window_name,
+    count(DISTINCT p.payer) FILTER (WHERE g.first_day >= a.d - (w.days - 1)) AS new_payers,
+    count(DISTINCT p.payer) FILTER (WHERE g.first_day <  a.d - (w.days - 1)) AS returning_payers,
+    COALESCE(sum(p.amount_usdc) FILTER (WHERE g.first_day >= a.d - (w.days - 1)), 0) AS new_payer_volume_usdc,
+    COALESCE(sum(p.amount_usdc) FILTER (WHERE g.first_day <  a.d - (w.days - 1)), 0) AS returning_payer_volume_usdc,
+    min(p.methodology_version)
+FROM payment_x402_v1 p
+JOIN global_first g ON g.payer = p.payer
+CROSS JOIN anchor a
+CROSS JOIN (VALUES ('7d', 7), ('30d', 30)) AS w(window_name, days)
+WHERE p.facilitator_known
+  AND (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+GROUP BY w.window_name`
+
 // rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
 // back and the previous tables stay live.
@@ -210,6 +246,7 @@ var rebuildStatements = []struct {
 	{"gas_daily", economyGasDailySQL},
 	{"velocity_daily", economyVelocityDailySQL},
 	{"active_entities_daily", activeEntitiesDailySQL},
+	{"payer_cohorts", payerCohortsSQL},
 }
 
 // Rebuild fully recomputes every metrics table from payment_x402_v1 in a

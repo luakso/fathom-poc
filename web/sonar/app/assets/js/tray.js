@@ -109,9 +109,19 @@ export const PINNERS = {
     // Show counts from the last complete day (exclude the partial edge day).
     const complete = ae.filter(p => p.complete);
     const ref = complete.length ? complete[complete.length-1] : ae[ae.length-1];
+    // 6.5: append 7d new-payer% when the artifact carries cohort data.
+    const cohorts = data.payer_cohorts;
+    let cohortCtx = "";
+    if (cohorts && cohorts["7d"]) {
+      const c = cohorts["7d"];
+      const nv = num(c.new_payer_volume_usdc), rv = num(c.returning_payer_volume_usdc);
+      const tot = nv + rv || 1;
+      const np = (100 * nv / tot).toFixed(1);
+      cohortCtx = ` · 7d: ${np}% new-payer volume`;
+    }
     return { title:"ACTIVE WALLETS",
       value:`${fmtInt(ref.payer_count)} payers · ${fmtInt(ref.payee_count)} payees`,
-      context:`${ref.day} · distinct wallets from verified payments`,
+      context:`${ref.day} · distinct wallets from verified payments${cohortCtx}`,
       denom:"distinct paying and receiving wallets per day · verified payments",
       series: ae.map(p => p.payer_count) }; },
 };

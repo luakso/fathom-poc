@@ -5,6 +5,7 @@ package metrics_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/lukostrobl/fathom/internal/metrics"
@@ -232,7 +233,7 @@ func TestBuildEconomy_LargestPaymentPerWindow(t *testing.T) {
 	require.Equal(t, "1000.000000", *tp.LargestPaymentUSDC,
 		"all-window must find the Jan $1000 known payment; unknown $9999 must not win")
 
-	// "7d" window (2026-05-30 → 2026-06-05): only the Jun $50 is in range.
+	// "7d" window (2026-05-30 to 2026-06-05): only the Jun $50 is in range.
 	tp7 := page.TypicalPayment["7d"]
 	require.NotNil(t, tp7.LargestPaymentUSDC, "7d-window largest must be non-nil")
 	require.Equal(t, "50.000000", *tp7.LargestPaymentUSDC,
@@ -248,9 +249,9 @@ func TestBuildEconomy_CostDailySeries(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	allowlist(t, ctx, db, "0xfac1")
 
-	// Day 1 (known): $10 vol, 1e15 wei = $2 cost → 2/10*100 = 20.0000¢/$
-	// Day 2 (known): $100 vol, 1e15 wei = $2 cost → 2/100*100 = 2.0000¢/$
-	// Day 2 (unknown): large amount — excluded from gas table's known rows.
+	// Day 1 (known): $10 vol, 1e15 wei = $2 cost -> 2/10*100 = 20.0000 cents per dollar
+	// Day 2 (known): $100 vol, 1e15 wei = $2 cost -> 2/100*100 = 2.0000 cents per dollar
+	// Day 2 (unknown): large amount, excluded from gas table's known rows.
 	seedGasPayments(t, ctx, db, []seedGasRow{
 		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "10.00", "1000000000000000"},
 		{"0xb", 0, "2026-06-02T10:00:00Z", "0xfac1", "0xp2", "0xs1", "100.00", "1000000000000000"},
@@ -267,10 +268,70 @@ func TestBuildEconomy_CostDailySeries(t *testing.T) {
 	require.Equal(t, "2026-06-01", cd[0].Day)
 	require.True(t, cd[0].Complete, "first day is complete")
 	require.Equal(t, "20.0000", cd[0].CentsPerDollar,
-		"day 1: $2 gas / $10 vol * 100 = 20¢/$")
+		"day 1: $2 gas / $10 vol * 100 = 20 cents per dollar")
 
 	require.Equal(t, "2026-06-02", cd[1].Day)
 	require.False(t, cd[1].Complete, "last (edge) day must be marked incomplete")
 	require.Equal(t, "2.0000", cd[1].CentsPerDollar,
-		"day 2: $2 gas / $100 vol * 100 = 2¢/$ (unknown $50 payment excluded)")
+		"day 2: $2 gas / $100 vol * 100 = 2 cents per dollar (unknown $50 payment excluded)")
+}
+
+// TestRebuild_PayerCohorts_Classification verifies item 6.5:
+//   - Payers whose first verified payment falls within the window are "new".
+//   - Payers whose first verified payment predates the window are "returning".
+//   - Unverified payments do not count toward a payer's first-day.
+//   - Conservation holds: new_vol + ret_vol == verified window volume.
+//   - No "all" key is stored (the window is degenerate for cohort analysis).
+func TestRebuild_PayerCohorts_Classification(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 0xold: verified 2026-01-01 AND 2026-06-05 -> first_verified = 2026-01-01 -> RETURNING for both windows.
+	// 0xnew: verified 2026-06-04 -> first_verified = 2026-06-04 -> NEW for both windows.
+	// 0xpartial: unverified 2026-01-01 (via 0xfac2, not allowlisted) + verified 2026-06-03 -> first_verified = 2026-06-03 -> NEW for both windows.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xtx-old-jan", 0, "2026-01-01T10:00:00Z", "0xfac1", "0xold", "0xs1", "10.00"},
+		{"0xtx-old-jun", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xold", "0xs1", "5.00"},
+		{"0xtx-new-jun", 0, "2026-06-04T10:00:00Z", "0xfac1", "0xnew", "0xs2", "3.00"},
+		{"0xtx-prt-jan", 0, "2026-01-01T12:00:00Z", "0xfac2", "0xpartial", "0xs3", "2.00"}, // unverified
+		{"0xtx-prt-jun", 0, "2026-06-03T10:00:00Z", "0xfac1", "0xpartial", "0xs3", "4.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// max verified day = 2026-06-05.
+	// 7d lb = 2026-06-05 - 6 = 2026-05-30.
+	// 30d lb = 2026-06-05 - 29 = 2026-04-07.
+
+	page, err := metrics.BuildEconomy(ctx, pool, mustTime(t, "2026-06-05T00:00:00Z"))
+	require.NoError(t, err)
+
+	require.NotNil(t, page.PayerCohorts, "PayerCohorts must be populated after rollup")
+	_, hasAll := page.PayerCohorts["all"]
+	require.False(t, hasAll, "PayerCohorts must not contain the 'all' window")
+	require.Contains(t, page.PayerCohorts, "7d")
+	require.Contains(t, page.PayerCohorts, "30d")
+
+	// 7d window: 0xold is returning ($5), 0xnew and 0xpartial are new ($3+$4=$7).
+	c7 := page.PayerCohorts["7d"]
+	require.Equal(t, int64(2), c7.NewPayers, "7d: 0xnew + 0xpartial are new")
+	require.Equal(t, int64(1), c7.ReturningPayers, "7d: only 0xold is returning")
+	require.Equal(t, "7.000000", c7.NewPayerVolumeUSDC, "7d: new vol = $3 + $4")
+	require.Equal(t, "5.000000", c7.ReturningPayerVolumeUSDC, "7d: returning vol = $5")
+
+	// 30d window: same classification because all first-verified days are unchanged.
+	c30 := page.PayerCohorts["30d"]
+	require.Equal(t, int64(2), c30.NewPayers, "30d: 0xnew + 0xpartial are new")
+	require.Equal(t, int64(1), c30.ReturningPayers, "30d: only 0xold is returning")
+
+	// Conservation: new_vol + ret_vol must equal the verified window volume.
+	for _, wn := range []string{"7d", "30d"} {
+		c := page.PayerCohorts[wn]
+		windowVol := page.Windows[wn].VolumeUSDC
+		newVol, err2 := decimal.NewFromString(c.NewPayerVolumeUSDC)
+		require.NoError(t, err2)
+		retVol, err3 := decimal.NewFromString(c.ReturningPayerVolumeUSDC)
+		require.NoError(t, err3)
+		sum := newVol.Add(retVol).StringFixed(6)
+		require.Equal(t, windowVol, sum,
+			"window %s: new_vol + ret_vol must equal verified window volume", wn)
+	}
 }

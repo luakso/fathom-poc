@@ -69,6 +69,9 @@ export function reshape(doc){
     // 6.1 active wallets daily series; absent in pre-6.1 artifacts (old-artifact
     // tolerance: panel renders a "not in this artifact" state, not a crash).
     active_entities: d.active_entities || null,
+    // 6.5 new vs returning payer cohort breakdown; absent in pre-6.5 artifacts
+    // (old-artifact tolerance: panel and pinner skip cohort context when null).
+    payer_cohorts: d.payer_cohorts || null,
   };
 }
 

@@ -5,7 +5,7 @@ import { $, $$ } from "./dom.js";
 import { state, setData, setWinLabel, setIssues } from "./state.js";
 import { loadEconomy, winLabels } from "./adapter.js";
 import { rDaily, rMonthly, rVelocity, rActiveWallets, rGasCostDaily } from "./charts.js";
-import { rOverview, rShape, rPrice, rGas, rClaims, rShell } from "./panels.js";
+import { rOverview, rShape, rPrice, rGas, rClaims, rPayerCohorts, rShell } from "./panels.js";
 import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
 /* ————— small-screen gate ————— */
@@ -40,7 +40,7 @@ function fatal(err){
 
 /* ————— render orchestration ————— */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
-const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rShell(); };
+const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rPayerCohorts(); rShell(); };
 
 function setWin(w){
   state.win = w;

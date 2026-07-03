@@ -150,6 +150,34 @@ export function rClaims(){
   }).join("");
 }
 
+/* ———————— 9b PAYER COHORTS (6.5) ———————— */
+// Renders two-segment volume bars (new vs returning) for the 7d and 30d windows.
+// Writes into #ae-cohort; renders nothing when payer_cohorts is absent (old-artifact tolerance).
+export function rPayerCohorts(){
+  const el = $("#ae-cohort");
+  if (!el) return;
+  const cohorts = data.payer_cohorts;
+  if (!cohorts) { el.innerHTML = ""; return; }
+  const rows = ["7d", "30d"].map(wn => {
+    const c = cohorts[wn];
+    if (!c) return "";
+    const nv = num(c.new_payer_volume_usdc);
+    const rv = num(c.returning_payer_volume_usdc);
+    const tot = nv + rv || 1;
+    const np = (100 * nv / tot).toFixed(1);
+    const rp = (100 * rv / tot).toFixed(1);
+    return `<div class="cohort-row">
+      <span class="cohort-lbl">${wn}</span>
+      <div class="cohort-bar">
+        <span class="seg" style="width:${np}%;background:var(--agentic)" title="new payers ${np}% of volume"><b>new</b></span>
+        <span class="seg" style="width:${rp}%;background:var(--dim)" title="returning payers ${rp}% of volume"><b>returning</b></span>
+      </div>
+      <span class="cohort-pct c-ag">${np}% new</span>
+    </div>`;
+  }).join("");
+  el.innerHTML = rows;
+}
+
 /* ———————— LOG ———————— */
 export function rShell(){
   const w = data.windows.all;

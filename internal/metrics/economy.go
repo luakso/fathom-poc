@@ -505,6 +505,44 @@ func buildGasCostDailySeries(slices []gasSlice) []GasCostDailyPoint {
 	return series
 }
 
+// PayerCohort is the new vs returning payer breakdown for one window (item 6.5).
+// "New" means the payer's first ever verified payment falls within the window.
+// "Returning" means at least one verified payment predates the window start.
+// Volume strings are 6 dp USDC decimals; new_vol + ret_vol == window verified volume.
+type PayerCohort struct {
+	NewPayers                int64  `json:"new_payers"`
+	ReturningPayers          int64  `json:"returning_payers"`
+	NewPayerVolumeUSDC       string `json:"new_payer_volume_usdc"`
+	ReturningPayerVolumeUSDC string `json:"returning_payer_volume_usdc"`
+}
+
+// buildPayerCohorts reads the precomputed payer cohort table. Returns nil (not
+// an empty map) when the table is empty, so the omitempty tag on EconomyPage
+// suppresses the field from the artifact for rollups that predated this table.
+func buildPayerCohorts(ctx context.Context, q Querier) (map[string]PayerCohort, error) {
+	rows, err := q.Query(ctx, `
+		SELECT window_name, new_payers, returning_payers,
+		       new_payer_volume_usdc::text, returning_payer_volume_usdc::text
+		FROM metrics_payer_cohorts_v1`)
+	if err != nil {
+		return nil, fmt.Errorf("payer cohorts: %w", err)
+	}
+	defer rows.Close()
+	var out map[string]PayerCohort
+	for rows.Next() {
+		var name string
+		var c PayerCohort
+		if err := rows.Scan(&name, &c.NewPayers, &c.ReturningPayers, &c.NewPayerVolumeUSDC, &c.ReturningPayerVolumeUSDC); err != nil {
+			return nil, fmt.Errorf("payer cohorts scan: %w", err)
+		}
+		if out == nil {
+			out = make(map[string]PayerCohort)
+		}
+		out[name] = c
+	}
+	return out, rows.Err()
+}
+
 // buildActiveEntities reads metrics_active_entities_daily_v2 up to and including
 // asOf's day and marks the newest (edge) day Complete=false — the same convention
 // as the daily economy series.
