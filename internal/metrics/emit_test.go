@@ -383,6 +383,58 @@ func TestEmit_ActiveEntitiesSeries(t *testing.T) {
 	require.Equal(t, int64(1), pt2.PayeeCount)
 }
 
+// TestEmit_PriceBreadthSection verifies that economy.json carries the
+// price_point_breadth section with the correct shape: an array of series
+// where each series has amount_usdc and a daily array, the newest day is
+// marked complete=false, and all days are bounded by data_through_day.
+func TestEmit_PriceBreadthSection(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Two payments on different days to the same price point so the series has 2 entries.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-07T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.001"},
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.001"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		DataThroughDay string `json:"data_through_day"`
+		Data           struct {
+			PriceBreadth []struct {
+				AmountUSDC string `json:"amount_usdc"`
+				Series     []struct {
+					Day        string `json:"day"`
+					PayeeCount int64  `json:"payee_count"`
+					Complete   bool   `json:"complete"`
+				} `json:"series"`
+			} `json:"price_point_breadth"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Equal(t, "2026-06-08", doc.DataThroughDay)
+
+	// price_point_breadth must be present
+	require.NotEmpty(t, doc.Data.PriceBreadth, "price_point_breadth section must be present")
+	series := doc.Data.PriceBreadth[0]
+	require.Equal(t, "0.001000", series.AmountUSDC)
+
+	// Two-day series: Jun 7 (complete) and Jun 8 (incomplete = edge day)
+	require.Len(t, series.Series, 2)
+	require.Equal(t, "2026-06-07", series.Series[0].Day)
+	require.True(t, series.Series[0].Complete, "Jun 7 is not the newest day — must be complete")
+	require.Equal(t, int64(1), series.Series[0].PayeeCount, "Jun 7 has 1 distinct payee")
+
+	require.Equal(t, "2026-06-08", series.Series[1].Day)
+	require.False(t, series.Series[1].Complete, "Jun 8 is the newest (data_through_day) — must be incomplete")
+	require.Equal(t, int64(1), series.Series[1].PayeeCount, "Jun 8 has 1 distinct payee")
+}
+
 // TestEmit_FacilitatorsWindows verifies that facilitators.json carries window
 // measures (7d and 30d) on each row, matching the same anchoring as economy.json.
 func TestEmit_FacilitatorsWindows(t *testing.T) {

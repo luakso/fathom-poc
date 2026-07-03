@@ -80,6 +80,23 @@ export function rShape(){
 
 /* ———————— 6 PRICE POINTS ———————— */
 
+// sparklineSVG: tiny inline SVG polyline of payee counts over time.
+// Uses the velocity-chart SVG idiom (reused, not invented). Width 60×16.
+function sparklineSVG(series){
+  if (!series || series.length < 2) return '<span style="color:var(--faint);font-size:.75em">—</span>';
+  const counts = series.map(d => d.payee_count);
+  const mx = Math.max(...counts) || 1;
+  const mn = Math.min(...counts);
+  const range = mx - mn || 1;
+  const W = 60, H = 16;
+  const pts = counts.map((v, i) => {
+    const x = (i * (W - 2) / (counts.length - 1) + 1).toFixed(1);
+    const y = (H - 1 - ((v - mn) / range) * (H - 2)).toFixed(1);
+    return `${x},${y}`;
+  }).join(" ");
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:inline-block;vertical-align:middle"><polyline points="${pts}" fill="none" stroke="var(--agentic)" stroke-width="1.5"/></svg>`;
+}
+
 export function rPrice(){
   const pts = data.price_points[state.win];
   $("#pp-win").textContent = "· " + winLabel[state.win];
@@ -87,18 +104,27 @@ export function rPrice(){
     $("#pptable").innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no verified payments in this window</td></tr></tbody>`;
     return;
   }
+  // 6.7: look up price_breadth series for sparklines; tolerate absence (older artifacts).
+  const breadth = data.price_breadth || null;
+  const hasBreadth = !!breadth;
   const maxS = Math.max(...pts.map(p => num(p.txn_share_pct))) || 1;
   const TAG = { menu:`<span class="tag menu">MENU</span>`, market:`<span class="tag market">MARKET</span>`, mixed:`<span class="tag mixed">—</span>` };
+  const breadthHead = hasBreadth ? "<th>payees trend</th>" : "";
   $("#pptable").innerHTML = `
-    <thead><tr><th>amount</th><th style="text-align:left">share of verified tx</th><th>tx</th><th>payees</th><th>read</th></tr></thead>
+    <thead><tr><th>amount</th><th style="text-align:left">share of verified tx</th><th>tx</th><th>payees</th>${breadthHead}<th>read</th></tr></thead>
     <tbody>${pts.map(p => {
       const s = num(p.txn_share_pct), w = Math.max(1.5, 100*s/maxS);
       const tag = TAG[priceRead(p)];
+      let sparkCell = "";
+      if (hasBreadth){
+        const bs = breadth.find(b => b.amount_usdc === p.amount_usdc);
+        sparkCell = `<td>${sparklineSVG(bs ? bs.series : null)}</td>`;
+      }
       return `<tr><td style="font-weight:700">${fmtAmt(p.amount_usdc)}</td>
         <td style="text-align:left;min-width:140px"><span style="display:inline-block;vertical-align:middle;height:9px;width:${w}px;max-width:60%;background:var(--agentic)"></span> <span style="color:var(--dim)">${s.toFixed(1)}%</span></td>
         <td>${fmtInt(p.txn_count)}</td>
         <td${p.payee_count<10?' style="color:var(--contam);font-weight:700"':""}>${fmtInt(p.payee_count)}</td>
-        <td>${tag}</td></tr>`;
+        ${sparkCell}<td>${tag}</td></tr>`;
     }).join("")}</tbody>`;
 }
 

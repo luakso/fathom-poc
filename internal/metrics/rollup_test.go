@@ -622,3 +622,100 @@ func TestRebuild_ActiveEntitiesIdempotent(t *testing.T) {
 		`SELECT count(*) FROM metrics_active_entities_daily_v2`).Scan(&n))
 	require.Equal(t, int64(1), n, "second rebuild must not double-count rows")
 }
+
+// TestRebuildPriceBreadth_PerDayAndTopN proves the price-breadth rollup:
+//
+//	(a) counts distinct payees per (day, amount), not raw payment counts
+//	(b) restricts to the top-12 all-window amounts (amounts outside top-12 are absent)
+func TestRebuildPriceBreadth_PerDayAndTopN(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+
+	// Seed two amounts: $0.001 (more payments → ranks higher) and $1.00 (fewer).
+	// Day 1 for $0.001: payments to 0xp1, 0xp2, 0xp1 (repeat) → 2 distinct payees.
+	// Day 2 for $0.001: payment to 0xp3                        → 1 distinct payee.
+	// Day 2 for $1.00:  payment to 0xp4                        → 1 distinct payee.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.001"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xp2", "0xs1", "0.001"},
+		{"0xc", 0, "2026-06-01T12:00:00Z", "0xfac1", "0xp1", "0xs1", "0.001"}, // repeated payee
+		{"0xd", 0, "2026-06-02T10:00:00Z", "0xfac1", "0xp3", "0xs1", "0.001"},
+		{"0xe", 0, "2026-06-02T11:00:00Z", "0xfac1", "0xp4", "0xs2", "1.000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// (a) Per-day distinct payee count for $0.001
+	dbRows, err := db.QueryContext(ctx, `
+		SELECT day::text, payee_count
+		FROM metrics_price_point_daily_v1
+		WHERE amount_usdc = 0.001
+		ORDER BY day`)
+	require.NoError(t, err)
+	defer dbRows.Close()
+
+	type dayRow struct {
+		day   string
+		count int64
+	}
+	var got []dayRow
+	for dbRows.Next() {
+		var r dayRow
+		require.NoError(t, dbRows.Scan(&r.day, &r.count))
+		got = append(got, r)
+	}
+	require.NoError(t, dbRows.Err())
+	require.Len(t, got, 2)
+	require.Equal(t, "2026-06-01", got[0].day)
+	require.Equal(t, int64(2), got[0].count, "day 1 has 2 distinct payees for $0.001 (repeated 0xp1 not double-counted)")
+	require.Equal(t, "2026-06-02", got[1].day)
+	require.Equal(t, int64(1), got[1].count, "day 2 has 1 distinct payee for $0.001")
+
+	// (b) $1.00 also appears (it's in the top-12 of a 2-amount dataset)
+	var oneCount int
+	err = db.QueryRowContext(ctx, `
+		SELECT count(*) FROM metrics_price_point_daily_v1 WHERE amount_usdc = 1.000000`).Scan(&oneCount)
+	require.NoError(t, err)
+	require.Equal(t, 1, oneCount, "$1.00 should appear with 1 day row")
+}
+
+// TestRebuildPriceBreadth_TopNExclusion verifies that amounts ranked beyond 12 in
+// the all-window price points are NOT included in metrics_price_point_daily_v1.
+func TestRebuildPriceBreadth_TopNExclusion(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+
+	// Seed 13 distinct amounts — each with a different txn count so ranks are deterministic.
+	// The 13th amount (lowest txn count) must NOT appear in the breadth table.
+	var rows []seedRow
+	for i := 0; i < 13; i++ {
+		// i=0 → 13 payments ($13 ranks highest), i=12 → 1 payment ($1 ranks lowest among these)
+		count := 13 - i
+		for j := 0; j < count; j++ {
+			rows = append(rows, seedRow{
+				txHash:      fmt.Sprintf("0x%04x%04x", i, j),
+				logIndex:    0,
+				ts:          "2026-06-01T10:00:00Z",
+				facilitator: "0xfac1",
+				payer:       "0xpayer",
+				payee:       fmt.Sprintf("0xpayee%d", j),
+				amountUSDC:  fmt.Sprintf("%d.000000", i+1),
+			})
+		}
+	}
+	seedPayments(t, ctx, db, rows)
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// Only 12 distinct amounts should appear in the breadth table.
+	var distinctAmounts int
+	err := db.QueryRowContext(ctx,
+		`SELECT count(DISTINCT amount_usdc) FROM metrics_price_point_daily_v1`).Scan(&distinctAmounts)
+	require.NoError(t, err)
+	require.Equal(t, 12, distinctAmounts, "only top-12 amounts must appear in breadth table")
+
+	// The amount ranked 13th ($1) must be absent.
+	var absCount int
+	err = db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_price_point_daily_v1 WHERE amount_usdc = 1.000000`).Scan(&absCount)
+	require.NoError(t, err)
+	require.Equal(t, 0, absCount, "13th-ranked amount must not appear in breadth table")
+}

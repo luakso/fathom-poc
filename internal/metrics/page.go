@@ -75,6 +75,7 @@ type EconomyPage struct {
 	Excluded       ExcludedTotals            `json:"excluded"`
 	ActiveEntities []ActiveEntitiesPoint     `json:"active_entities"`
 	PayerCohorts   map[string]PayerCohort    `json:"payer_cohorts,omitempty"`
+	PriceBreadth   []PriceBreadthSeries      `json:"price_point_breadth,omitempty"`
 }
 
 // lowerBound returns the inclusive lower day (YYYY-MM-DD) for a window, or ""
@@ -192,6 +193,9 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 		return EconomyPage{}, err
 	}
 	if page.PayerCohorts, err = buildPayerCohorts(ctx, q); err != nil {
+		return EconomyPage{}, err
+	}
+	if page.PriceBreadth, err = buildPriceBreadth(ctx, q, asOf); err != nil {
 		return EconomyPage{}, err
 	}
 	return page, nil
@@ -321,6 +325,22 @@ type FacilitatorsPage struct {
 	Totals Measure          `json:"totals"`
 }
 
+// PriceBreadthDaily is one day's payee count for one price-point amount.
+// Complete mirrors the DailyPoint convention: false only for the newest day.
+type PriceBreadthDaily struct {
+	Day        string `json:"day"`
+	PayeeCount int64  `json:"payee_count"`
+	Complete   bool   `json:"complete"`
+}
+
+// PriceBreadthSeries is the daily payee-count history for one price point,
+// ordered by day ascending. Series covers all history up to the asOf bound;
+// the newest day's Complete is false. Absent for price points with no payments.
+type PriceBreadthSeries struct {
+	AmountUSDC string              `json:"amount_usdc"`
+	Series     []PriceBreadthDaily `json:"series"`
+}
+
 // BuildFacilitators ranks facilitators by all-time verified volume and attaches
 // 7d and 30d window measures so the UI can show momentum. The ranking and
 // all-window totals are computed over all verified (known) rows up to and
@@ -402,4 +422,58 @@ func BuildFacilitators(ctx context.Context, q Querier, asOf time.Time) (Facilita
 		VolumeUSDC: totalVol.StringFixed(x402.USDCDecimals),
 	}
 	return page, nil
+}
+
+// buildPriceBreadth reads the per-day payee counts for the top-12 all-window
+// price points from metrics_price_point_daily_v1, bounded above by asOf. The
+// newest day is marked Complete=false (same convention as DailySeries). Returns
+// an empty slice when the table has no rows (pre-rollup or pre-migration state).
+func buildPriceBreadth(ctx context.Context, q Querier, asOf time.Time) ([]PriceBreadthSeries, error) {
+	maxDay := asOf.Format(dayFormat)
+	rows, err := q.Query(ctx, `
+		SELECT pb.amount_usdc::text, pb.day::text, pb.payee_count
+		FROM metrics_price_point_daily_v1 pb
+		JOIN metrics_price_points_v2 pp
+		    ON pp.amount_usdc = pb.amount_usdc AND pp.window_name = 'all'
+		WHERE pb.day <= $1::date
+		ORDER BY pp.rank, pb.day`, maxDay)
+	if err != nil {
+		return nil, fmt.Errorf("price breadth read: %w", err)
+	}
+	defer rows.Close()
+
+	var order []string
+	type seriesAccum struct{ points []PriceBreadthDaily }
+	byAmount := map[string]*seriesAccum{}
+
+	for rows.Next() {
+		var amount, day string
+		var count int64
+		if err := rows.Scan(&amount, &day, &count); err != nil {
+			return nil, fmt.Errorf("scan price breadth: %w", err)
+		}
+		sa, ok := byAmount[amount]
+		if !ok {
+			sa = &seriesAccum{}
+			byAmount[amount] = sa
+			order = append(order, amount)
+		}
+		sa.points = append(sa.points, PriceBreadthDaily{
+			Day:        day,
+			PayeeCount: count,
+			Complete:   day != maxDay,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("price breadth read: %w", err)
+	}
+
+	result := make([]PriceBreadthSeries, 0, len(order))
+	for _, amount := range order {
+		result = append(result, PriceBreadthSeries{
+			AmountUSDC: amount,
+			Series:     byAmount[amount].points,
+		})
+	}
+	return result, nil
 }

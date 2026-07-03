@@ -72,6 +72,9 @@ export function reshape(doc){
     // 6.5 new vs returning payer cohort breakdown; absent in pre-6.5 artifacts
     // (old-artifact tolerance: panel and pinner skip cohort context when null).
     payer_cohorts: d.payer_cohorts || null,
+    // 6.7 per-day payee counts for top-12 price points; absent in pre-6.7 artifacts
+    // (old-artifact tolerance: sparklines are omitted, not a crash).
+    price_breadth: d.price_point_breadth || null,
   };
 }
 

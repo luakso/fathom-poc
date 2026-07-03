@@ -77,8 +77,25 @@ export const PINNERS = {
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;
     const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
+    // 6.7: append payee trend for the top price point when breadth data is available.
+    // Compares first vs last complete-day payee count with a ±20% threshold.
+    let trendCtx = "";
+    if (data.price_breadth){
+      const bs = data.price_breadth.find(b => b.amount_usdc === p.amount_usdc);
+      if (bs && bs.series){
+        const complete = bs.series.filter(d => d.complete !== false);
+        if (complete.length >= 2){
+          const first = complete[0].payee_count, last = complete[complete.length-1].payee_count;
+          const change = first > 0 ? (last - first) / first : null;
+          if (change !== null){
+            const trend = change >= 0.2 ? "widening" : change <= -0.2 ? "narrowing" : "flat";
+            trendCtx = ` · payees trend: ${trend}`;
+          }
+        }
+      }
+    }
     return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
+      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}${trendCtx}`,
       denom:"verified payments · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
     if (!g.txn_count) return null;

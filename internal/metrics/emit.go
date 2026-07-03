@@ -141,6 +141,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 		    UNION ALL SELECT methodology_version FROM metrics_mechanics_selector_v2
 		    UNION ALL SELECT methodology_version FROM metrics_active_entities_daily_v2
 		    UNION ALL SELECT methodology_version FROM metrics_payer_cohorts_v1
+		    UNION ALL SELECT methodology_version FROM metrics_price_point_daily_v1
 		) versions`).Scan(&day, &versions, &minVersion); err != nil {
 		return "", 0, fmt.Errorf("cube stamp: %w", err)
 	}

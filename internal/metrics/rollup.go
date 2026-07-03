@@ -234,6 +234,30 @@ WHERE p.facilitator_known
   AND (p.block_timestamp AT TIME ZONE 'UTC')::date <= a.d
 GROUP BY w.window_name`
 
+// priceBreadthDailySQL computes per-day distinct payee counts for the top-12
+// all-window price points (item 6.7). The top-N restriction piggybacks on the
+// rank already computed in metrics_price_points_v2 by the preceding price_points
+// statement — both run inside the same REPEATABLE READ transaction so they see
+// an identical snapshot. Restricted to verified (facilitator_known) payments.
+const priceBreadthDailySQL = `
+TRUNCATE metrics_price_point_daily_v1;
+WITH top_amounts AS (
+    SELECT amount_usdc
+    FROM metrics_price_points_v2
+    WHERE window_name = 'all' AND rank <= 12
+)
+INSERT INTO metrics_price_point_daily_v1
+    (day, amount_usdc, payee_count, methodology_version)
+SELECT
+    (p.block_timestamp AT TIME ZONE 'UTC')::date AS day,
+    p.amount_usdc,
+    count(DISTINCT p.payee)  AS payee_count,
+    min(p.methodology_version)
+FROM payment_x402_v1 p
+JOIN top_amounts ta ON ta.amount_usdc = p.amount_usdc
+WHERE p.facilitator_known
+GROUP BY 1, 2`
+
 // rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
 // back and the previous tables stay live.
@@ -244,6 +268,7 @@ var rebuildStatements = []struct {
 	{"cube", rebuildCubeSQL},
 	{"window_stats", economyWindowStatsSQL},
 	{"price_points", economyPricePointsSQL},
+	{"price_breadth_daily", priceBreadthDailySQL},
 	{"gas_daily", economyGasDailySQL},
 	{"velocity_daily", economyVelocityDailySQL},
 	{"active_entities_daily", activeEntitiesDailySQL},
