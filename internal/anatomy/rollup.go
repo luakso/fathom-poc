@@ -95,6 +95,53 @@ FROM (
 ) ranked
 WHERE amount_rank <= 64`
 
+// rebuildEntityLeaderboardSQL: per-(window, role, lens) top-500 union across
+// the three sort metrics. Windows anchor to max(data day), not wall clock
+// (dashboard convention). lens is a first-class dimension because rankings
+// are not mergeable across facilitator_known. The base unpivot is
+// windows x roles x lens-expansion of the view; temp_file_limit guards the
+// sort spill.
+const rebuildEntityLeaderboardSQL = `
+TRUNCATE entity_leaderboard_v1;
+WITH anchor AS (
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
+), agg AS (
+    SELECT w.window_name, r.role, l.lens, r.address,
+           count(*)                    AS txn_count,
+           sum(p.amount_usdc)          AS volume_usdc,
+           count(DISTINCT r.counterparty) AS distinct_counterparties,
+           min(p.block_timestamp)      AS first_seen,
+           max(p.block_timestamp)      AS last_seen,
+           min(p.methodology_version)  AS methodology_version
+    FROM payment_x402_v1 p
+    CROSS JOIN anchor a
+    CROSS JOIN (VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_name, days)
+    CROSS JOIN LATERAL (VALUES
+        (p.payer, 'payer', p.payee), (p.payee, 'payee', p.payer)
+    ) AS r(address, role, counterparty)
+    CROSS JOIN LATERAL (VALUES ('all'), ('known')) AS l(lens)
+    WHERE (w.days = 0
+       OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1))
+      AND (l.lens = 'all' OR p.facilitator_known)
+    GROUP BY w.window_name, r.role, l.lens, r.address
+), ranked AS (
+    SELECT *,
+        row_number() OVER (PARTITION BY window_name, role, lens
+                           ORDER BY volume_usdc DESC, address) AS rv,
+        row_number() OVER (PARTITION BY window_name, role, lens
+                           ORDER BY txn_count DESC, address) AS rt,
+        row_number() OVER (PARTITION BY window_name, role, lens
+                           ORDER BY distinct_counterparties DESC, address) AS rc
+    FROM agg
+)
+INSERT INTO entity_leaderboard_v1
+    (window_name, role, lens, address, txn_count, volume_usdc,
+     distinct_counterparties, first_seen, last_seen, methodology_version)
+SELECT window_name, role, lens, address, txn_count, volume_usdc,
+       distinct_counterparties, first_seen, last_seen, methodology_version
+FROM ranked
+WHERE rv <= 500 OR rt <= 500 OR rc <= 500`
+
 // rollupStatements run in order inside one transaction. Later tasks append
 // price points, leaderboard, and the meta stamp.
 var rollupStatements = []struct{ name, sql string }{
@@ -102,12 +149,13 @@ var rollupStatements = []struct{ name, sql string }{
 	{"facilitator_edge_v1", rebuildFacilitatorEdgeSQL},
 	{"entity_day_v1", rebuildEntityDaySQL},
 	{"entity_price_point_v1", rebuildEntityPricePointSQL},
+	{"entity_leaderboard_v1", rebuildEntityLeaderboardSQL},
 }
 
 // rollupTables is everything Rollup rebuilds; ANALYZE runs on each after commit.
 var rollupTables = []string{
 	"entity_edge_v1", "facilitator_edge_v1", "entity_day_v1",
-	"entity_price_point_v1",
+	"entity_price_point_v1", "entity_leaderboard_v1",
 }
 
 // Rollup rebuilds all anatomy entity tables from payment_x402_v1 in one

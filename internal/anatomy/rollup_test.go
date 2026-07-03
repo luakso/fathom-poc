@@ -142,6 +142,51 @@ func TestRollup_EdgeAndDayConservation(t *testing.T) {
 	require.Equal(t, "10.000000", vol)
 }
 
+func TestRollup_LeaderboardWindowsAndLens(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedRollupFixture(t, ctx, db)
+	// Fixture max day = 2026-06-03, so the 7d window covers all fixture days
+	// (05-28..06-03). Add one older payment outside it.
+	seedPaymentAt(t, ctx, db, "0xold", 0, "2026-05-01T08:00:00Z", "0xp1", "0xkfac", "0xe1", "100.00")
+
+	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
+
+	// 'all' window, known lens, payer p1: t1+t2+t3+old = 4 txns / $110.
+	var txns, cps int64
+	var vol string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count, volume_usdc::text, distinct_counterparties
+		FROM entity_leaderboard_v1
+		WHERE window_name='all' AND role='payer' AND lens='known' AND address='0xp1'`).
+		Scan(&txns, &vol, &cps))
+	require.Equal(t, int64(4), txns)
+	require.Equal(t, "110.000000", vol)
+	require.Equal(t, int64(2), cps) // e1, e2
+
+	// 7d window excludes the old payment.
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count, volume_usdc::text FROM entity_leaderboard_v1
+		WHERE window_name='7d' AND role='payer' AND lens='known' AND address='0xp1'`).
+		Scan(&txns, &vol))
+	require.Equal(t, int64(3), txns)
+	require.Equal(t, "10.000000", vol)
+
+	// lens='all' merges both facilitators: payee e1 = t1+t3+t4+old.
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT txn_count, volume_usdc::text FROM entity_leaderboard_v1
+		WHERE window_name='all' AND role='payee' AND lens='all' AND address='0xe1'`).
+		Scan(&txns, &vol))
+	require.Equal(t, int64(4), txns)
+	require.Equal(t, "114.000000", vol)
+
+	// p2 never appears under the known lens (both its payments are unknown-fac).
+	var n int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT count(*) FROM entity_leaderboard_v1
+		WHERE lens='known' AND role='payer' AND address='0xp2'`).Scan(&n))
+	require.Equal(t, 0, n)
+}
+
 func TestRollup_PricePointCapAndDistinctTotal(t *testing.T) {
 	ctx, db, pool := setupAnatomy(t)
 	allowFacilitator(t, ctx, db, "0xkfac")
