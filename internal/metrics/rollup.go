@@ -231,6 +231,7 @@ CROSS JOIN anchor a
 CROSS JOIN (VALUES ('7d', 7), ('30d', 30)) AS w(window_name, days)
 WHERE p.facilitator_known
   AND (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+  AND (p.block_timestamp AT TIME ZONE 'UTC')::date <= a.d
 GROUP BY w.window_name`
 
 // rebuildStatements run in order inside the one rebuild transaction. Each is

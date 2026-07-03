@@ -39,6 +39,9 @@ function fatal(err){
 }
 
 /* ————— render orchestration ————— */
+/* WIN_PANELS re-render on window switch; the rest render once per data load
+   (rPayerCohorts/rActiveWallets draw all windows at once — if one ever becomes
+   window-sensitive, move it into WIN_PANELS). */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
 const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rPayerCohorts(); rShell(); };
 
