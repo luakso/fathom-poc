@@ -233,13 +233,25 @@ func seedMechanicsPayments(t *testing.T, ctx context.Context, db *sql.DB, rows [
 	t.Helper()
 	for _, r := range rows {
 		var mf, mp, va, vb, gl any
-		if r.maxFee != "" { mf = r.maxFee }
-		if r.maxPriority != "" { mp = r.maxPriority }
-		if r.validAfter != "" { va = r.validAfter }
-		if r.validBefore != "" { vb = r.validBefore }
-		if r.gasLimit != "" { gl = r.gasLimit }
+		if r.maxFee != "" {
+			mf = r.maxFee
+		}
+		if r.maxPriority != "" {
+			mp = r.maxPriority
+		}
+		if r.validAfter != "" {
+			va = r.validAfter
+		}
+		if r.validBefore != "" {
+			vb = r.validBefore
+		}
+		if r.gasLimit != "" {
+			gl = r.gasLimit
+		}
 		txValue := r.txValue
-		if txValue == "" { txValue = "0" }
+		if txValue == "" {
+			txValue = "0"
+		}
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO payments (
 				chain, tx_hash, log_index, block_number, block_timestamp,

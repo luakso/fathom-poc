@@ -130,3 +130,9 @@ anatomy:
     @set -a; . ./.env; set +a; \
         APP_ENV=local DATABASE__URL="$DB_URL_HOST" \
         go run ./cmd/anatomy --addr :8090
+
+# Rebuild the anatomy entity tables from payment_x402_v1 (offline, idempotent, minutes)
+anatomy-rollup:
+    @set -a; . ./.env; set +a; \
+        APP_ENV=local DATABASE__URL="$DB_URL_HOST" \
+        go run ./cmd/anatomy rollup
