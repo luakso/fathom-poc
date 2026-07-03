@@ -12,12 +12,22 @@ import (
 // methodology change (and a matching view/table version bump).
 // Used by the meta stamp in Task 6; defined here so it is visible to all
 // rollup helpers in this package.
-const anatomyMethodologyVersion = 1 //nolint:unused
+const anatomyMethodologyVersion = 1
 
 // rollupTempFileLimit guards the distinct-count and window sorts (publisher
 // convention; superuser-only GUC - the local/prod user is the bootstrap
 // superuser).
 const rollupTempFileLimit = "30GB"
+
+// stampMetaSQL records what the rollup saw; NULL data_max_day on an empty DB.
+const stampMetaSQL = `
+INSERT INTO anatomy_meta (id, data_max_day, built_at, methodology_version)
+SELECT 1, max((block_timestamp AT TIME ZONE 'UTC')::date), now(), $1
+FROM payment_x402_v1
+ON CONFLICT (id) DO UPDATE SET
+    data_max_day = EXCLUDED.data_max_day,
+    built_at = EXCLUDED.built_at,
+    methodology_version = EXCLUDED.methodology_version`
 
 // rebuildEntityEdgeSQL: one scan; TRUNCATE+INSERT keeps it idempotent.
 const rebuildEntityEdgeSQL = `
@@ -179,6 +189,9 @@ func Rollup(ctx context.Context, pool *pgxpool.Pool, labels []ManualLabel) error
 	}
 	if err := replaceManualSignals(ctx, tx, labels); err != nil {
 		return fmt.Errorf("rollup manual signals: %w", err)
+	}
+	if _, err := tx.Exec(ctx, stampMetaSQL, anatomyMethodologyVersion); err != nil {
+		return fmt.Errorf("stamp anatomy_meta: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit rollup: %w", err)

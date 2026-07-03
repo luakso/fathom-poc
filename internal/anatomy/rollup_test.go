@@ -228,3 +228,71 @@ func TestRollup_PricePointCapAndDistinctTotal(t *testing.T) {
 	require.Equal(t, "0.990000", top)
 	require.Equal(t, int64(5), topCount)
 }
+
+func TestRollup_MetaStampAndManualLabels(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedRollupFixture(t, ctx, db)
+
+	labels := []anatomy.ManualLabel{{
+		Chain: "base", Address: "0xe2", Label: "api.example.com",
+		URL: "https://example.com", Note: "seeded in test",
+	}}
+	require.NoError(t, anatomy.Rollup(ctx, pool, labels))
+
+	// Meta stamped with the fixture's max data day.
+	var maxDay string
+	var version int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT data_max_day::text, methodology_version FROM anatomy_meta WHERE id=1`).
+		Scan(&maxDay, &version))
+	require.Equal(t, "2026-06-03", maxDay)
+	require.Equal(t, 1, version)
+
+	// Manual label landed and resolves through the identity view.
+	var src, label string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT source, label FROM entity_identity_v1
+		WHERE chain='base' AND address='0xe2'`).Scan(&src, &label))
+	require.Equal(t, "manual", src)
+	require.Equal(t, "api.example.com", label)
+
+	// Re-running with a changed label set replaces, never accumulates.
+	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
+	var n int
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM entity_signal WHERE source='manual'`).Scan(&n))
+	require.Equal(t, 0, n)
+}
+
+// tableChecksum aggregates an entire table into one comparable string by
+// hashing all rows in their text form. The table name is a test-internal
+// constant, never user input, so fmt.Sprintf interpolation is safe here.
+func tableChecksum(t *testing.T, ctx context.Context, db *sql.DB, table string) string {
+	t.Helper()
+	var sum string
+	require.NoError(t, db.QueryRowContext(ctx, fmt.Sprintf(
+		`SELECT COALESCE(md5(string_agg(t::text, '|' ORDER BY t::text)), 'empty') FROM %s t`,
+		table,
+	)).Scan(&sum))
+	return sum
+}
+
+func TestRollup_Idempotent(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedRollupFixture(t, ctx, db)
+
+	tables := []string{
+		"entity_edge_v1", "facilitator_edge_v1", "entity_day_v1",
+		"entity_price_point_v1", "entity_leaderboard_v1",
+	}
+	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
+	first := map[string]string{}
+	for _, tbl := range tables {
+		first[tbl] = tableChecksum(t, ctx, db, tbl)
+	}
+	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
+	for _, tbl := range tables {
+		require.Equal(t, first[tbl], tableChecksum(t, ctx, db, tbl),
+			"table %s changed on identical re-run", tbl)
+	}
+}
