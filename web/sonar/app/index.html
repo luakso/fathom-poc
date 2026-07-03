@@ -162,8 +162,16 @@
         <div class="denom">distinct paying and receiving wallets per day · new = first verified payment within window · verified payments · last day may be partial</div>
       </section>
 
+      <!-- 10 FACILITATORS -->
+      <section class="panel span12" id="p12" style="animation-delay:.32s">
+        <div class="ptitle"><span class="no">10</span> FACILITATORS <span class="chip">who settles the payments</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="facilitators">⊞ pin</button></div>
+        <div id="fac-body"><!-- js --></div>
+        <div class="denom">who settled the payments · verified payments only · momentum = last 7 days' share of the last 30</div>
+      </section>
+
       <!-- LOG -->
-      <section class="panel span5" id="p10" style="animation-delay:.29s">
+      <section class="panel span5" id="p10" style="animation-delay:.35s">
         <div class="ptitle"><span class="no">~</span> VERIFY LOG <span class="chip">runs in your browser</span></div>
         <div class="shell" id="shell"></div>
       </section>
@@ -175,7 +183,7 @@
   <div class="statusbar">
     <span><span class="key">w</span> window</span>
     <span><span class="key">m</span> metric</span>
-    <span><span class="key">1-9</span> panel</span>
+    <span><span class="key">1-9,0</span> panel</span>
     <span><span class="key">p</span> pin</span>
     <span><span class="key">r</span> report</span>
     <span><span class="key">?</span> help</span>
@@ -219,7 +227,7 @@
     <div class="hk">
       <b>w</b><span>cycle window 7D → 30D → ALL</span>
       <b>m</b><span>flip every TX/USD toggle</span>
-      <b>1–9</b><span>jump to panel</span>
+      <b>1–9,0</b><span>jump to panel (0 = facilitators)</span>
       <b>p</b><span>pin focused panel to the report tray</span>
       <b>r</b><span>open / close report tray</span>
       <b>l</b><span>daily tape: linear ↔ log</span>

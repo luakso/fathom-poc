@@ -134,6 +134,20 @@ export function checkIntegrity(view){
   return checks;
 }
 
+// loadFacilitators: fetch facilitators.json and return its raw data object.
+// Throws Error on any failure — caller must catch and treat as non-fatal.
+export async function loadFacilitators(){
+  let res;
+  try { res = await fetch("./facilitators.json", { cache:"no-cache" }); }
+  catch (e){ throw new Error("network error fetching facilitators: " + e.message); }
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching facilitators.json`);
+  let doc;
+  try { doc = await res.json(); }
+  catch (e){ throw new Error("facilitators.json is not valid JSON: " + e.message); }
+  if (!doc || !doc.data) throw new Error("facilitators.json missing expected fields (data)");
+  return doc.data;
+}
+
 // loadEconomy: fetch + parse + reshape. Throws Error with a readable message
 // on any failure; the caller owns the error screen.
 export async function loadEconomy(){

@@ -72,7 +72,7 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 		return err
 	}
 
-	fac, err := BuildFacilitators(ctx, tx)
+	fac, err := BuildFacilitators(ctx, tx, asOf)
 	if err != nil {
 		return fmt.Errorf("build facilitators: %w", err)
 	}

@@ -3,7 +3,7 @@ import { $, $$ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, escHtml, BANDDEF } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { tapeSlice } from "./charts.js";
-import { state, data, winLabel } from "./state.js";
+import { state, data, winLabel, facData } from "./state.js";
 
 const pins = [];
 let selPin = 0;
@@ -104,6 +104,20 @@ export const PINNERS = {
     return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
       context:`"${escHtml(c.claim_text)}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
+  facilitators(){
+    if (!facData || !facData.rows || !facData.rows.length) return null;
+    const r = facData.rows[0];
+    const hasWindows = !!(r.windows && r.windows["7d"] && r.windows["30d"]);
+    if (!hasWindows) return null;
+    const shortAddr = a => String(a).length > 10 ? String(a).slice(0,6) + "…" + String(a).slice(-4) : a;
+    const v7  = num(r.windows["7d"].volume_usdc);
+    const v30 = num(r.windows["30d"].volume_usdc);
+    const momentum = v30 > 0 ? (100 * v7 / v30).toFixed(0) + "%" : "—";
+    const topN = facData.rows.slice(0, 3).map(x => `${shortAddr(x.facilitator)} ${fmtMoney(x.volume_usdc)}`).join(" · ");
+    return { title:"FACILITATORS",
+      value:`${shortAddr(r.facilitator)} · ${fmtMoney(r.volume_usdc)} all-time`,
+      context:`top facilitators: ${topN} · 7d momentum ${momentum} of 30d`,
+      denom:"who settled the payments · verified payments only · momentum = last 7 days' share of the last 30" }; },
   active_wallets(){ const ae = data.active_entities;
     if (!ae || !ae.length) return null;
     // Show counts from the last complete day (exclude the partial edge day).

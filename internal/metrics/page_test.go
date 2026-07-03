@@ -59,7 +59,8 @@ func TestBuildFacilitators_TopN(t *testing.T) {
 	})
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	page, err := metrics.BuildFacilitators(ctx, pool)
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
+	page, err := metrics.BuildFacilitators(ctx, pool, asOf)
 	require.NoError(t, err)
 	// Only fac1 (allowlisted/known) appears; fac2 is excluded by the HAVING filter.
 	require.Len(t, page.Rows, 1)
@@ -110,7 +111,8 @@ func TestBuildFacilitators_VerifiedOnly(t *testing.T) {
 			('2026-06-08','base','0xfac2','unknown','small',1,1,3.000000,3.000000)`)
 	require.NoError(t, err)
 
-	page, err := metrics.BuildFacilitators(ctx, pool)
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
+	page, err := metrics.BuildFacilitators(ctx, pool, asOf)
 	require.NoError(t, err)
 	require.Len(t, page.Rows, 1)
 	require.Equal(t, "0xfac1", page.Rows[0].Facilitator)
@@ -134,7 +136,7 @@ func TestBuildFacilitators_TotalsConservation(t *testing.T) {
 
 	// asOf must equal cubeMaxDay (2026-06-08).
 	asOf := mustTime(t, "2026-06-08T00:00:00Z")
-	fac, err := metrics.BuildFacilitators(ctx, pool)
+	fac, err := metrics.BuildFacilitators(ctx, pool, asOf)
 	require.NoError(t, err)
 	econ, err := metrics.BuildEconomy(ctx, pool, asOf)
 	require.NoError(t, err)
@@ -179,8 +181,62 @@ func TestBuildFacilitators_NoRowCap(t *testing.T) {
 	seedPayments(t, ctx, db, rows)
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	page, err := metrics.BuildFacilitators(ctx, pool)
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
+	page, err := metrics.BuildFacilitators(ctx, pool, asOf)
 	require.NoError(t, err)
 	require.Len(t, page.Rows, 101, "all 101 facilitators must appear; LIMIT 100 must be removed")
 	require.Equal(t, int64(101), page.Totals.TxnCount, "totals must reflect all 101 rows")
+}
+
+// TestBuildFacilitators_WindowMeasures proves that:
+//   - 7d and 30d windowed measures are computed correctly per row
+//   - only 'known' rows are counted within each window
+//   - the anchor is asOf and lowerBound matches BuildEconomy's convention
+//   - an 'unknown' row on a day after asOf is excluded from all windows and totals
+func TestBuildFacilitators_WindowMeasures(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+
+	// asOf = Jun 8, 2026.
+	//   7d lower bound  = Jun 8 - 6 = Jun 2  (rows >= Jun 2 and <= Jun 8)
+	//   30d lower bound = Jun 8 - 29 = May 10 (rows >= May 10 and <= Jun 8)
+	//
+	// Inserted rows:
+	//   fac1 Jun 8  known   10 txns  $100  → in 7d AND in 30d AND all-window
+	//   fac1 May 15 known    5 txns  $50   → NOT in 7d (May 15 < Jun 2), in 30d, in all-window
+	//   fac1 Jan 1  known    3 txns  $30   → NOT in 7d, NOT in 30d (Jan 1 < May 10), in all-window
+	//   fac2 Jun 9  unknown  1 txn   $99   → excluded by membership='known' filter AND by day > asOf
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO metrics_daily_v2
+		    (day, chain, facilitator, membership, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
+		VALUES
+		    ('2026-06-08','base','0xfac1','known',  'small',1,10,100.000000,10.000000),
+		    ('2026-05-15','base','0xfac1','known',  'small',1, 5, 50.000000,10.000000),
+		    ('2026-01-01','base','0xfac1','known',  'small',1, 3, 30.000000,10.000000),
+		    ('2026-06-09','base','0xfac2','unknown','small',1, 1, 99.000000, 1.000000)`)
+	require.NoError(t, err)
+
+	asOf := mustTime(t, "2026-06-08T00:00:00Z")
+	page, err := metrics.BuildFacilitators(ctx, pool, asOf)
+	require.NoError(t, err)
+
+	// Only fac1 appears (fac2 is unknown and excluded by HAVING + day bound).
+	require.Len(t, page.Rows, 1)
+	r := page.Rows[0]
+	require.Equal(t, "0xfac1", r.Facilitator)
+	require.True(t, r.FacilitatorKnown)
+
+	// All-window: all three known rows of fac1 (Jun 9 fac2 excluded by both filters).
+	require.Equal(t, int64(18), r.TxnCount, "all-window txn count must sum all three known rows")
+	require.Equal(t, "180.000000", r.VolumeUSDC, "all-window volume must sum $100+$50+$30")
+
+	// 7d window: only Jun 8 row (May 15 is before lb=Jun 2).
+	require.NotNil(t, r.Windows)
+	w7 := r.Windows["7d"]
+	require.Equal(t, int64(10), w7.TxnCount, "7d must include only Jun 8 row")
+	require.Equal(t, "100.000000", w7.VolumeUSDC, "7d volume must be $100")
+
+	// 30d window: Jun 8 + May 15 (Jan 1 is before lb=May 10).
+	w30 := r.Windows["30d"]
+	require.Equal(t, int64(15), w30.TxnCount, "30d must include Jun 8 + May 15")
+	require.Equal(t, "150.000000", w30.VolumeUSDC, "30d volume must be $150")
 }

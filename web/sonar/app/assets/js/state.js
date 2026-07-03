@@ -14,3 +14,8 @@ export function setWinLabel(l){ winLabel = l; }
 // Integrity check results from checkIntegrity(); consumed by rShell.
 export let issues = [];
 export function setIssues(i){ issues = i; }
+
+// Secondary facilitators artifact; null when the fetch failed or hasn't run yet.
+// rFacilitators renders an absent-state when this is null.
+export let facData = null;
+export function setFacData(d){ facData = d; }

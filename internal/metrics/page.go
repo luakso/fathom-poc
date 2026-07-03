@@ -301,12 +301,16 @@ func buildExcluded(ctx context.Context, q Querier, asOf time.Time) (ExcludedTota
 	return ex, nil
 }
 
-// FacilitatorRow is one facilitator's all-window totals. facilitator_known is a
-// deterministic property of the address (allowlist membership), not a per-row vote.
+// FacilitatorRow is one facilitator's all-window totals plus windowed measures.
+// facilitator_known is a deterministic property of the address (allowlist membership),
+// not a per-row vote. Windows carries the 7d and 30d verified measures; it is always
+// present in artifacts built after item 6.6 — never nil, so old-artifact readers
+// must tolerate its presence.
 type FacilitatorRow struct {
-	Facilitator      string `json:"facilitator"`
-	FacilitatorKnown bool   `json:"facilitator_known"`
-	Measure
+	Facilitator      string             `json:"facilitator"`
+	FacilitatorKnown bool               `json:"facilitator_known"`
+	Measure                             // all-window: txn_count and volume_usdc
+	Windows          map[string]Measure `json:"windows"` // "7d" and "30d" windowed measures
 }
 
 // FacilitatorsPage is the Facilitators page payload (top facilitators by volume).
@@ -317,25 +321,36 @@ type FacilitatorsPage struct {
 	Totals Measure          `json:"totals"`
 }
 
-// BuildFacilitators ranks facilitators by all-time volume. The ranking is
-// all-window for Phase 1a; windowed rankings can add an asOf parameter when
-// they exist. facilitator_known is a deterministic allowlist property —
-// bool_or over the membership column is true iff any of the facilitator's
-// cube cells are 'known'.
+// BuildFacilitators ranks facilitators by all-time verified volume and attaches
+// 7d and 30d window measures so the UI can show momentum. The ranking and
+// all-window totals are computed over all verified (known) rows up to and
+// including asOf's day; the windowed measures use the same lowerBound anchoring
+// convention as BuildEconomy (7d = asOf minus 6 days, inclusive; 30d = asOf
+// minus 29 days, inclusive). facilitator_known is bool_or over the membership
+// column — true iff the facilitator has at least one known cube row.
 //
 // Every allowlisted facilitator with at least one verified (known) payment
 // appears — there is intentionally no row cap. Totals is computed as the
 // in-Go sum of the rows so the artifact is self-checking.
-func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error) {
+func BuildFacilitators(ctx context.Context, q Querier, asOf time.Time) (FacilitatorsPage, error) {
+	lb7 := lowerBound(asOf, "7d")
+	lb30 := lowerBound(asOf, "30d")
+
 	rows, err := q.Query(ctx, `
 		SELECT facilitator,
 		       bool_or(membership = 'known') AS facilitator_known,
-		       sum(txn_count) FILTER (WHERE membership = 'known'),
-		       sum(volume_usdc) FILTER (WHERE membership = 'known')::text
+		       COALESCE(sum(txn_count)   FILTER (WHERE membership = 'known'), 0)::bigint,
+		       COALESCE(sum(volume_usdc) FILTER (WHERE membership = 'known'), 0)::text,
+		       COALESCE(sum(txn_count)   FILTER (WHERE membership = 'known' AND day >= $2::date), 0)::bigint,
+		       COALESCE(sum(volume_usdc) FILTER (WHERE membership = 'known' AND day >= $2::date), 0)::text,
+		       COALESCE(sum(txn_count)   FILTER (WHERE membership = 'known' AND day >= $3::date), 0)::bigint,
+		       COALESCE(sum(volume_usdc) FILTER (WHERE membership = 'known' AND day >= $3::date), 0)::text
 		FROM metrics_daily_v2
+		WHERE day <= $1::date
 		GROUP BY facilitator
 		HAVING bool_or(membership = 'known')
-		ORDER BY sum(volume_usdc) FILTER (WHERE membership = 'known') DESC, facilitator`)
+		ORDER BY sum(volume_usdc) FILTER (WHERE membership = 'known') DESC, facilitator`,
+		asOf.Format(dayFormat), lb7, lb30)
 	if err != nil {
 		return FacilitatorsPage{}, fmt.Errorf("facilitators query: %w", err)
 	}
@@ -346,8 +361,14 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 	var totalVol decimal.Decimal
 	for rows.Next() {
 		var r FacilitatorRow
-		var volStr string
-		if err := rows.Scan(&r.Facilitator, &r.FacilitatorKnown, &r.TxnCount, &volStr); err != nil {
+		var volStr, vol7Str, vol30Str string
+		var txns7, txns30 int64
+		if err := rows.Scan(
+			&r.Facilitator, &r.FacilitatorKnown,
+			&r.TxnCount, &volStr,
+			&txns7, &vol7Str,
+			&txns30, &vol30Str,
+		); err != nil {
 			return FacilitatorsPage{}, fmt.Errorf("scan facilitator row: %w", err)
 		}
 		vol, err := decimal.NewFromString(volStr)
@@ -355,6 +376,20 @@ func BuildFacilitators(ctx context.Context, q Querier) (FacilitatorsPage, error)
 			return FacilitatorsPage{}, fmt.Errorf("parse facilitator volume %q: %w", volStr, err)
 		}
 		r.VolumeUSDC = vol.StringFixed(x402.USDCDecimals)
+
+		vol7, err := decimal.NewFromString(vol7Str)
+		if err != nil {
+			return FacilitatorsPage{}, fmt.Errorf("parse facilitator 7d volume %q: %w", vol7Str, err)
+		}
+		vol30, err := decimal.NewFromString(vol30Str)
+		if err != nil {
+			return FacilitatorsPage{}, fmt.Errorf("parse facilitator 30d volume %q: %w", vol30Str, err)
+		}
+		r.Windows = map[string]Measure{
+			"7d":  {TxnCount: txns7, VolumeUSDC: vol7.StringFixed(x402.USDCDecimals)},
+			"30d": {TxnCount: txns30, VolumeUSDC: vol30.StringFixed(x402.USDCDecimals)},
+		}
+
 		totalTxns += r.TxnCount
 		totalVol = totalVol.Add(vol)
 		page.Rows = append(page.Rows, r)

@@ -2,7 +2,7 @@
 import { $ } from "./dom.js";
 import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, priceRead, claimVerdict, escHtml } from "./format.js";
 import { USD_TOLERANCE } from "./adapter.js";
-import { state, data, winLabel, issues } from "./state.js";
+import { state, data, winLabel, issues, facData } from "./state.js";
 
 /* ———————— 1 OVERVIEW ———————— */
 function fmtExcluded(ex) {
@@ -79,6 +79,7 @@ export function rShape(){
 }
 
 /* ———————— 6 PRICE POINTS ———————— */
+
 export function rPrice(){
   const pts = data.price_points[state.win];
   $("#pp-win").textContent = "· " + winLabel[state.win];
@@ -176,6 +177,46 @@ export function rPayerCohorts(){
     </div>`;
   }).join("");
   el.innerHTML = rows;
+}
+
+/* ———————— 10 FACILITATORS ———————— */
+// Shortens an Ethereum address to 0xabcd…1234 for table display.
+function shortAddr(addr){ return String(addr).length > 10 ? String(addr).slice(0,6) + "…" + String(addr).slice(-4) : addr; }
+
+// rFacilitators renders the panel from the secondary facilitators.json fetch.
+// If facData is null (fetch failed) or windows are absent (old artifact), it
+// renders an explicit absent-state — the rest of the page is unaffected.
+export function rFacilitators(){
+  const el = $("#fac-body");
+  if (!el) return;
+  if (!facData || !facData.rows || !facData.rows.length){
+    el.innerHTML = `<div style="color:var(--faint);padding:14px 0">facilitator data unavailable — check that dist/facilitators.json was emitted</div>`;
+    return;
+  }
+  const hasWindows = !!(facData.rows[0].windows && facData.rows[0].windows["7d"] && facData.rows[0].windows["30d"]);
+  if (!hasWindows){
+    el.innerHTML = `<div style="color:var(--faint);padding:14px 0">facilitator window data absent — re-emit after rolling up</div>`;
+    return;
+  }
+  const show = facData.rows.slice(0, 8);
+  const more = facData.rows.length - 8;
+  const momentum = r => {
+    const v7  = num(r.windows["7d"].volume_usdc);
+    const v30 = num(r.windows["30d"].volume_usdc);
+    return v30 > 0 ? (100 * v7 / v30).toFixed(0) + "%" : "—";
+  };
+  el.innerHTML = `<table class="t" style="width:100%">
+    <thead><tr><th>facilitator</th><th>all tx</th><th>all volume</th><th>7d volume</th><th>momentum</th></tr></thead>
+    <tbody>${show.map(r => `<tr>
+      <td style="font-family:monospace;font-size:.85em">${shortAddr(r.facilitator)}</td>
+      <td>${fmtCount(r.txn_count)}</td>
+      <td>${fmtMoney(r.volume_usdc)}</td>
+      <td>${fmtMoney(r.windows["7d"].volume_usdc)}</td>
+      <td style="color:var(--dim)">${momentum(r)}</td>
+    </tr>`).join("")}
+    ${more > 0 ? `<tr><td colspan="5" style="color:var(--faint);padding-top:4px">…${fmtInt(more)} more facilitators</td></tr>` : ""}
+    </tbody>
+  </table>`;
 }
 
 /* ———————— LOG ———————— */

@@ -2,10 +2,10 @@
 // switching, panel tools, keyboard, resize. Render functions live in
 // charts.js / panels.js / tray.js.
 import { $, $$ } from "./dom.js";
-import { state, setData, setWinLabel, setIssues } from "./state.js";
-import { loadEconomy, winLabels } from "./adapter.js";
+import { state, setData, setWinLabel, setIssues, setFacData } from "./state.js";
+import { loadEconomy, loadFacilitators, winLabels } from "./adapter.js";
 import { rDaily, rMonthly, rVelocity, rActiveWallets, rGasCostDaily } from "./charts.js";
-import { rOverview, rShape, rPrice, rGas, rClaims, rPayerCohorts, rShell } from "./panels.js";
+import { rOverview, rShape, rPrice, rGas, rClaims, rPayerCohorts, rShell, rFacilitators } from "./panels.js";
 import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
 /* ————— small-screen gate ————— */
@@ -43,7 +43,7 @@ function fatal(err){
    (rPayerCohorts/rActiveWallets draw all windows at once — if one ever becomes
    window-sensitive, move it into WIN_PANELS). */
 const WIN_PANELS = () => { rOverview(); rShape(); rPrice(); rGas(); rDaily(); };
-const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rPayerCohorts(); rShell(); };
+const ALL_PANELS = () => { WIN_PANELS(); rMonthly(); rVelocity(); rClaims(); rActiveWallets(); rGasCostDaily(); rPayerCohorts(); rFacilitators(); rShell(); };
 
 function setWin(w){
   state.win = w;
@@ -107,6 +107,12 @@ function wire(){
         state.focused = p.id;
         $$(".panel").forEach(x => x.classList.toggle("focused", x === p)); }
     }
+    if (e.key === "0"){
+      const p = $("#p12");
+      if (p){ p.scrollIntoView({behavior:"smooth", block:"center"});
+        state.focused = p.id;
+        $$(".panel").forEach(x => x.classList.toggle("focused", x === p)); }
+    }
     if (e.key === "p"){
       const btn = $("#"+state.focused+" .pin-it");
       if (btn) addPin(btn.dataset.pin);
@@ -147,13 +153,24 @@ function applyMeta(view, issues){
   // parsed. applyMeta() overwrites it on success; fatal() clears it on error.
   const cons = document.getElementById("st-cons");
   if (cons) cons.textContent = "loading verified payments...";
-  let loaded;
-  try { loaded = await loadEconomy(); }
-  catch (err){ fatal(err); return; }
-  const { view, issues } = loaded;
+
+  // economy.json is critical (fatal on failure); facilitators.json is optional
+  // — a failed fetch renders an absent-state in panel 10 but does not block boot.
+  const [econResult, facResult] = await Promise.allSettled([
+    loadEconomy(),
+    loadFacilitators(),
+  ]);
+
+  if (econResult.status === "rejected"){ fatal(econResult.reason); return; }
+  const { view, issues } = econResult.value;
+
   setData(view);
   setIssues(issues);
   setWinLabel(winLabels(view));
+  // facData stays null if the facilitators fetch failed — rFacilitators shows
+  // an absent-state.  No fatal call; the rest of the page is fully functional.
+  if (facResult.status === "fulfilled") setFacData(facResult.value);
+
   maybeGate(view);
   applyMeta(view, issues);
   wire();

@@ -382,3 +382,41 @@ func TestEmit_ActiveEntitiesSeries(t *testing.T) {
 	require.Equal(t, int64(1), pt2.PayerCount)
 	require.Equal(t, int64(1), pt2.PayeeCount)
 }
+
+// TestEmit_FacilitatorsWindows verifies that facilitators.json carries window
+// measures (7d and 30d) on each row, matching the same anchoring as economy.json.
+func TestEmit_FacilitatorsWindows(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp1", "0xs1", "2.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "facilitators.json"))
+	require.NoError(t, err)
+	var doc struct {
+		Data struct {
+			Rows []struct {
+				Facilitator string `json:"facilitator"`
+				TxnCount    int64  `json:"txn_count"`
+				VolumeUSDC  string `json:"volume_usdc"`
+				Windows     map[string]struct {
+					TxnCount   int64  `json:"txn_count"`
+					VolumeUSDC string `json:"volume_usdc"`
+				} `json:"windows"`
+			} `json:"rows"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Len(t, doc.Data.Rows, 1)
+	r := doc.Data.Rows[0]
+	require.Equal(t, "0xfac1", r.Facilitator)
+	require.NotNil(t, r.Windows)
+	// The payment is on Jun 8 = the data edge, which is within the 7d window.
+	require.Equal(t, int64(1), r.Windows["7d"].TxnCount, "7d window must include the Jun 8 payment")
+	require.Equal(t, int64(1), r.Windows["30d"].TxnCount, "30d window must include the Jun 8 payment")
+}
