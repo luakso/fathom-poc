@@ -130,9 +130,9 @@ export const PINNERS = {
     const v7  = num(r.windows["7d"].volume_usdc);
     const v30 = num(r.windows["30d"].volume_usdc);
     const momentum = v30 > 0 ? (100 * v7 / v30).toFixed(0) + "%" : "—";
-    const topN = facData.rows.slice(0, 3).map(x => `${shortAddr(x.facilitator)} ${fmtMoney(x.volume_usdc)}`).join(" · ");
+    const topN = facData.rows.slice(0, 3).map(x => `${escHtml(shortAddr(x.facilitator))} ${fmtMoney(x.volume_usdc)}`).join(" · ");
     return { title:"FACILITATORS",
-      value:`${shortAddr(r.facilitator)} · ${fmtMoney(r.volume_usdc)} all-time`,
+      value:`${escHtml(shortAddr(r.facilitator))} · ${fmtMoney(r.volume_usdc)} all-time`,
       context:`top facilitators: ${topN} · 7d momentum ${momentum} of 30d`,
       denom:"who settled the payments · verified payments only · momentum = last 7 days' share of the last 30" }; },
   active_wallets(){ const ae = data.active_entities;

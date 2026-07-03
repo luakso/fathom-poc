@@ -234,7 +234,7 @@ export function rFacilitators(){
   el.innerHTML = `<table class="t" style="width:100%">
     <thead><tr><th>facilitator</th><th>all tx</th><th>all volume</th><th>7d volume</th><th>momentum</th></tr></thead>
     <tbody>${show.map(r => `<tr>
-      <td style="font-family:monospace;font-size:.85em">${shortAddr(r.facilitator)}</td>
+      <td style="font-family:monospace;font-size:.85em">${escHtml(shortAddr(r.facilitator))}</td>
       <td>${fmtCount(r.txn_count)}</td>
       <td>${fmtMoney(r.volume_usdc)}</td>
       <td>${fmtMoney(r.windows["7d"].volume_usdc)}</td>
