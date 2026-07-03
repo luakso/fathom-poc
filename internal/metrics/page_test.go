@@ -193,6 +193,8 @@ func TestBuildFacilitators_NoRowCap(t *testing.T) {
 //   - only 'known' rows are counted within each window
 //   - the anchor is asOf and lowerBound matches BuildEconomy's convention
 //   - an 'unknown' row on a day after asOf is excluded from all windows and totals
+//   - an 'unknown' row INSIDE the 7d window (on/before asOf) is excluded by the
+//     membership filter alone, not merely by the date bound
 func TestBuildFacilitators_WindowMeasures(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 
@@ -201,10 +203,11 @@ func TestBuildFacilitators_WindowMeasures(t *testing.T) {
 	//   30d lower bound = Jun 8 - 29 = May 10 (rows >= May 10 and <= Jun 8)
 	//
 	// Inserted rows:
-	//   fac1 Jun 8  known   10 txns  $100  → in 7d AND in 30d AND all-window
-	//   fac1 May 15 known    5 txns  $50   → NOT in 7d (May 15 < Jun 2), in 30d, in all-window
-	//   fac1 Jan 1  known    3 txns  $30   → NOT in 7d, NOT in 30d (Jan 1 < May 10), in all-window
-	//   fac2 Jun 9  unknown  1 txn   $99   → excluded by membership='known' filter AND by day > asOf
+	//   fac1 Jun 8  known    10 txns  $100  → in 7d AND in 30d AND all-window
+	//   fac1 May 15 known     5 txns  $50   → NOT in 7d (May 15 < Jun 2), in 30d, in all-window
+	//   fac1 Jan 1  known     3 txns  $30   → NOT in 7d, NOT in 30d (Jan 1 < May 10), in all-window
+	//   fac1 Jun 8  unknown   7 txns  $70   → excluded by membership='known' filter (date is inside 7d window)
+	//   fac2 Jun 9  unknown   1 txn   $99   → excluded by membership='known' filter AND by day > asOf
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO metrics_daily_v2
 		    (day, chain, facilitator, membership, amount_band, methodology_version, txn_count, volume_usdc, max_amount_usdc)
@@ -212,6 +215,7 @@ func TestBuildFacilitators_WindowMeasures(t *testing.T) {
 		    ('2026-06-08','base','0xfac1','known',  'small',1,10,100.000000,10.000000),
 		    ('2026-05-15','base','0xfac1','known',  'small',1, 5, 50.000000,10.000000),
 		    ('2026-01-01','base','0xfac1','known',  'small',1, 3, 30.000000,10.000000),
+		    ('2026-06-08','base','0xfac1','unknown','small',1, 7, 70.000000, 7.000000),
 		    ('2026-06-09','base','0xfac2','unknown','small',1, 1, 99.000000, 1.000000)`)
 	require.NoError(t, err)
 
