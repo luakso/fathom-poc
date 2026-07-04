@@ -139,3 +139,31 @@ func TestServer_SolanaRejected(t *testing.T) {
 	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/tx/solana/abc123", nil))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
+
+type fakeEntity struct {
+	e   anatomy.Entity
+	err error
+}
+
+func (f fakeEntity) Entity(_ context.Context, _, _ string) (anatomy.Entity, error) {
+	return f.e, f.err
+}
+
+func TestServer_EntityOK(t *testing.T) {
+	addr := "0x1234567890123456789012345678901234567890"
+	fe := fakeEntity{e: anatomy.Entity{Chain: "base", Address: addr, Roles: []string{"payer"}}}
+	srv := anatomy.NewServer(anatomy.Providers{Entity: fe}, testAssets(), slog.Default())
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/base/entity/"+addr, nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), addr)
+}
+
+func TestServer_EntityNotFound(t *testing.T) {
+	fe := fakeEntity{err: anatomy.ErrNotFound}
+	srv := anatomy.NewServer(anatomy.Providers{Entity: fe}, testAssets(), slog.Default())
+	rec := httptest.NewRecorder()
+	addr := "0x1234567890123456789012345678901234567890"
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/base/entity/"+addr, nil))
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}

@@ -95,11 +95,36 @@ type Meta struct {
 	Totals             map[string]LensTotals `json:"totals"` // keys: "known", "all"
 }
 
-// Stub types filled in by Tasks 4-7 (fields added there; declaring them now
-// lets the provider seam land in one piece).
+// LensSummary is one lens's aggregate for one role.
+type LensSummary struct {
+	TxnCount               int64  `json:"txnCount"`
+	VolumeUSDC             string `json:"volumeUsdc"`
+	FirstDay               string `json:"firstDay,omitempty"`
+	LastDay                string `json:"lastDay,omitempty"`
+	ActiveDays             int64  `json:"activeDays"`
+	DistinctCounterparties int64  `json:"distinctCounterparties"`
+}
 
-// Entity is the EntityProvider payload for one address (Task 4).
-type Entity struct{}
+// IdentitySignal is one row of provenance from entity_signal / the view.
+type IdentitySignal struct {
+	Source    string `json:"source"`
+	Kind      string `json:"kind"`
+	Value     string `json:"value"`
+	URL       string `json:"url,omitempty"`
+	FetchedAt string `json:"fetchedAt,omitempty"`
+}
+
+// Entity is the /entity/{addr} header payload. Summaries carry BOTH lenses so
+// the UI lens toggle never refetches (spec §5).
+type Entity struct {
+	Chain       string                            `json:"chain"`
+	Address     string                            `json:"address"`
+	Label       string                            `json:"label,omitempty"`
+	LabelSource string                            `json:"labelSource,omitempty"`
+	Roles       []string                          `json:"roles"`
+	Signals     []IdentitySignal                  `json:"signals,omitempty"`
+	Summaries   map[string]map[string]LensSummary `json:"summaries"` // role -> lens -> summary
+}
 
 // Neighbors is the NeighborProvider payload for one address (Task 5).
 type Neighbors struct{}
