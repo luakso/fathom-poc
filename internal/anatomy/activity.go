@@ -131,7 +131,10 @@ func (p *PgEntity) fillPricePoints(ctx context.Context, chain, addr, role, lens 
 		return fmt.Errorf("price points: %w", err)
 	}
 	if knownOnly && partTotal > 0 {
-		rf.TotalDistinctAmounts = &partTotal
+		// total_distinct_amounts is a partition-level constant (same on every
+		// row), so the last scanned value is the partition's total.
+		total := partTotal
+		rf.TotalDistinctAmounts = &total
 	}
 	return nil
 }
