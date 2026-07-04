@@ -276,7 +276,7 @@ var rebuildStatements = []struct {
 }
 
 // Rebuild fully recomputes every metrics table from payment_x402_v1 in a
-// single transaction. prices is the curated monthly ETH/USD reference (already
+// single transaction. prices is the curated weekly ETH/USD reference (already
 // validated by LoadETHPrices); it is staged into a temp table so the gas SQL
 // can join it, and coverage is checked against payments BEFORE any TRUNCATE.
 func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
