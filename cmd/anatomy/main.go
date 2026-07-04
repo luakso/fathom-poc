@@ -112,7 +112,8 @@ func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Log
 			Meta:      anatomy.NewPgMeta(pool),
 			Entity:    pgEntity,
 			Neighbors: pgEntity,
-			// Tasks 6-8 add Activity, Lists, Leaderboard to pgEntity.
+			Activity:  pgEntity,
+			// Tasks 7-8 add Lists, Leaderboard to pgEntity.
 		},
 		anatomyweb.Assets(),
 		logger,

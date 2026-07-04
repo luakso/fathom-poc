@@ -155,11 +155,44 @@ type Neighbors struct {
 	SettledPayees *NeighborList `json:"settledPayees,omitempty"` // it settles to these payees
 }
 
-// Timeline is the ActivityProvider timeline payload (Task 6).
-type Timeline struct{}
+// DayPoint is one day of one role's activity (sparse; client densifies).
+type DayPoint struct {
+	Day        string `json:"day"`
+	TxnCount   int64  `json:"txnCount"`
+	VolumeUSDC string `json:"volumeUsdc"`
+}
 
-// Fingerprint is the ActivityProvider fingerprint payload (Task 6).
-type Fingerprint struct{}
+// Timeline groups sparse day series per role.
+type Timeline struct {
+	Address string                `json:"address"`
+	Lens    string                `json:"lens"`
+	Roles   map[string][]DayPoint `json:"roles"`
+}
+
+// PricePoint is one amount bucket from entity_price_point_v1.
+type PricePoint struct {
+	AmountUSDC string `json:"amountUsdc"`
+	TxnCount   int64  `json:"txnCount"`
+}
+
+// RoleFingerprint is the behavior read for one role under one lens.
+type RoleFingerprint struct {
+	ActiveDays           int64        `json:"activeDays"`
+	SpanDays             int64        `json:"spanDays"`
+	MedianTxnsPerDay     int64        `json:"medianTxnsPerDay"`
+	TopDayShare          string       `json:"topDayShare"` // "0.041000"
+	PricePoints          []PricePoint `json:"pricePoints"`
+	TotalDistinctAmounts *int64       `json:"totalDistinctAmounts"` // null when lens=all (not derivable from capped partitions)
+	Top1Share            string       `json:"top1Share"`
+	Top3Share            string       `json:"top3Share"`
+}
+
+// Fingerprint is the ActivityProvider fingerprint payload.
+type Fingerprint struct {
+	Address string                     `json:"address"`
+	Lens    string                     `json:"lens"`
+	Roles   map[string]RoleFingerprint `json:"roles"`
+}
 
 // CounterpartyQuery parameterises a counterparty list request (Task 7).
 type CounterpartyQuery struct {
