@@ -203,8 +203,14 @@ type CounterpartyQuery struct {
 	Offset int
 }
 
-// CounterpartyPage is the ListProvider counterparty page payload (Task 7).
-type CounterpartyPage struct{}
+// CounterpartyPage is the ListProvider counterparty page payload.
+type CounterpartyPage struct {
+	Address string        `json:"address"`
+	Role    string        `json:"role"`
+	Lens    string        `json:"lens"`
+	Total   int64         `json:"total"`
+	Rows    []NeighborRow `json:"rows"` // same row shape as neighbors
+}
 
 // PaymentQuery parameterises a payment list request (Task 7).
 type PaymentQuery struct {
@@ -214,8 +220,27 @@ type PaymentQuery struct {
 	Before string
 }
 
-// PaymentPage is the ListProvider payment page payload (Task 7).
-type PaymentPage struct{}
+// PaymentRow is one row in a PaymentPage.
+type PaymentRow struct {
+	TxHash           string `json:"txHash"`
+	LogIndex         int64  `json:"logIndex"`
+	BlockNumber      int64  `json:"blockNumber"`
+	BlockTimestamp   string `json:"blockTimestamp"`
+	Payer            string `json:"payer"`
+	Payee            string `json:"payee"`
+	Facilitator      string `json:"facilitator"`
+	AmountUSDC       string `json:"amountUsdc"`
+	FacilitatorKnown bool   `json:"facilitatorKnown"`
+}
+
+// PaymentPage is the ListProvider payment page payload.
+type PaymentPage struct {
+	Address string       `json:"address"`
+	Role    string       `json:"role"`
+	Lens    string       `json:"lens"`
+	Rows    []PaymentRow `json:"rows"`
+	Next    string       `json:"next,omitempty"` // cursor for the next page
+}
 
 // Leaderboard is the LeaderboardProvider payload (Task 8).
 type Leaderboard struct{}
