@@ -29,9 +29,12 @@ ON CONFLICT (id) DO UPDATE SET
     built_at = EXCLUDED.built_at,
     methodology_version = EXCLUDED.methodology_version`
 
-// rebuildEntityEdgeSQL: one scan; TRUNCATE+INSERT keeps it idempotent.
+// rebuildEntityEdgeSQL: one scan; DELETE+INSERT keeps it idempotent AND MVCC-visible:
+// TRUNCATE takes ACCESS EXCLUSIVE for the whole rollup transaction (~40 min on real data),
+// which would block the live API reads this table now serves; DELETE lets readers see the
+// pre-rollup snapshot until commit.
 const rebuildEntityEdgeSQL = `
-TRUNCATE entity_edge_v1;
+DELETE FROM entity_edge_v1;
 INSERT INTO entity_edge_v1
     (chain, payer, payee, facilitator_known, txn_count, volume_usdc,
      first_seen, last_seen, methodology_version)
@@ -44,8 +47,12 @@ GROUP BY chain, payer, payee, facilitator_known`
 // rebuildFacilitatorEdgeSQL: LATERAL VALUES unpivots each payment into a
 // payer-side and a payee-side counterparty row (facilitators are not part of
 // entity_edge_v1, so facilitator nodes stay expandable via this table).
+// DELETE+INSERT keeps it idempotent AND MVCC-visible:
+// TRUNCATE takes ACCESS EXCLUSIVE for the whole rollup transaction (~40 min on real data),
+// which would block the live API reads this table now serves; DELETE lets readers see the
+// pre-rollup snapshot until commit.
 const rebuildFacilitatorEdgeSQL = `
-TRUNCATE facilitator_edge_v1;
+DELETE FROM facilitator_edge_v1;
 INSERT INTO facilitator_edge_v1
     (chain, facilitator, counterparty_role, counterparty, facilitator_known,
      txn_count, volume_usdc, first_seen, last_seen, methodology_version)
@@ -57,8 +64,12 @@ CROSS JOIN LATERAL (VALUES (p.payer, 'payer'), (p.payee, 'payee')) AS r(address,
 GROUP BY p.chain, p.facilitator, r.role, r.address, p.facilitator_known`
 
 // rebuildEntityDaySQL: one scan; each payment lands once per role slice.
+// DELETE+INSERT keeps it idempotent AND MVCC-visible:
+// TRUNCATE takes ACCESS EXCLUSIVE for the whole rollup transaction (~40 min on real data),
+// which would block the live API reads this table now serves; DELETE lets readers see the
+// pre-rollup snapshot until commit.
 const rebuildEntityDaySQL = `
-TRUNCATE entity_day_v1;
+DELETE FROM entity_day_v1;
 INSERT INTO entity_day_v1
     (chain, address, role, day, facilitator_known, txn_count, volume_usdc,
      methodology_version)
@@ -76,8 +87,12 @@ GROUP BY p.chain, r.address, r.role,
 // capped at the 64 most frequent amounts. total_distinct_amounts is
 // denormalized onto every stored row so "single price point" claims stay
 // honest even when the tail is truncated.
+// DELETE+INSERT keeps it idempotent AND MVCC-visible:
+// TRUNCATE takes ACCESS EXCLUSIVE for the whole rollup transaction (~40 min on real data),
+// which would block the live API reads this table now serves; DELETE lets readers see the
+// pre-rollup snapshot until commit.
 const rebuildEntityPricePointSQL = `
-TRUNCATE entity_price_point_v1;
+DELETE FROM entity_price_point_v1;
 INSERT INTO entity_price_point_v1
     (chain, address, role, facilitator_known, amount_usdc, txn_count,
      amount_rank, total_distinct_amounts, methodology_version)
@@ -111,8 +126,12 @@ WHERE amount_rank <= 64`
 // are not mergeable across facilitator_known. The base unpivot is
 // windows x roles x lens-expansion of the view; temp_file_limit guards the
 // sort spill.
+// DELETE+INSERT keeps it idempotent AND MVCC-visible:
+// TRUNCATE takes ACCESS EXCLUSIVE for the whole rollup transaction (~40 min on real data),
+// which would block the live API reads this table now serves; DELETE lets readers see the
+// pre-rollup snapshot until commit.
 const rebuildEntityLeaderboardSQL = `
-TRUNCATE entity_leaderboard_v1;
+DELETE FROM entity_leaderboard_v1;
 WITH anchor AS (
     SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
 ), agg AS (
@@ -171,7 +190,9 @@ var rollupTables = []string{
 // Rollup rebuilds all anatomy entity tables from payment_x402_v1 in one
 // REPEATABLE READ transaction (all artifacts share one snapshot), replaces the
 // manual identity signals from the curated label file, and ANALYZEs the
-// rebuilt tables. Idempotent; safe to re-run after any backfill.
+// rebuilt tables. Idempotent and non-blocking for concurrent readers (DELETE, not TRUNCATE);
+// safe to re-run after any backfill. Autovacuum reclaims the dead tuples; ANALYZE below
+// refreshes stats.
 func Rollup(ctx context.Context, pool *pgxpool.Pool, labels []ManualLabel) error {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
