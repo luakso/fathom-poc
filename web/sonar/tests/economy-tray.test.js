@@ -116,7 +116,7 @@ describe("item 1.1 — economy tray.js genThread footer text", () => {
     addPinFn    = m.addPin;
     genThreadFn = m.genThread;
     clearPinsFn = m._clearPins;
-    if (clearPinsFn) clearPinsFn();
+    clearPinsFn();
   });
 
   it("genThread must not contain 'no row dropped'", () => {
@@ -147,7 +147,7 @@ describe("item 1.2 — daily pinner peak follows active metric", () => {
     const m = await import("../app/assets/js/tray.js");
     PINNERS   = m.PINNERS;
     clearPins = m._clearPins;
-    if (clearPins) clearPins();
+    clearPins();
   });
 
   it("tx mode: headline contains the tx-peak count and its day", () => {
@@ -187,7 +187,7 @@ describe("item 1.3 — overview pinner series: sliced window and volume column",
     const m = await import("../app/assets/js/tray.js");
     PINNERS   = m.PINNERS;
     clearPins = m._clearPins;
-    if (clearPins) clearPins();
+    clearPins();
   });
 
   it("7d window: series has 7 points from the trailing volume column", () => {
@@ -223,7 +223,7 @@ describe("item 1.6 — price-point pin share is one-decimal, matching the panel"
     const m = await import("../app/assets/js/tray.js");
     PINNERS   = m.PINNERS;
     clearPins = m._clearPins;
-    if (clearPins) clearPins();
+    clearPins();
   });
 
   it("pin context share string uses one decimal (matches panel rendering)", () => {

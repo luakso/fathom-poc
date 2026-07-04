@@ -7,6 +7,31 @@ import { state, data, winLabel, facData } from "./state.js";
 
 const pins = [];
 let selPin = 0;
+
+/* ——— localStorage persistence ——— */
+const pinsKey = () => {
+  const ga = data?.meta?.generated_at;
+  return ga ? `fathom.pins.${ga}` : null;
+};
+function savePins(){
+  const key = pinsKey();
+  if (!key) return;
+  try { localStorage.setItem(key, JSON.stringify(pins)); } catch(e){}
+}
+/** Load persisted pins for the current artifact's generated_at. Silently ignores other keys. */
+export function _loadPins(){
+  const key = pinsKey();
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const loaded = JSON.parse(raw);
+    if (!Array.isArray(loaded)) return;
+    pins.length = 0;
+    loaded.forEach(p => pins.push(p));
+    selPin = Math.min(selPin, Math.max(0, pins.length - 1));
+  } catch(e){}
+}
 function overviewPinDenom() {
   const defn = "A verified payment is a USDC payment settled on Base by a known x402 facilitator.";
   const ex = data.excluded;
@@ -159,8 +184,12 @@ export const PINNERS = {
 export function addPin(key){
   const gen = PINNERS[key]; if (!gen) return;
   const pin = gen(); if (!pin) return; // panel has nothing pinnable in this window
-  pins.push({ key, win:state.win, ...pin });
-  selPin = pins.length-1;
+  const newPin = { key, win:state.win, ...pin };
+  // Dedupe: replace any existing pin for the same panel+window combo.
+  const idx = pins.findIndex(p => p.key === key && p.win === state.win);
+  if (idx >= 0){ pins[idx] = newPin; selPin = idx; }
+  else { pins.push(newPin); selPin = pins.length-1; }
+  savePins();
   rTray(); rCard();
   $("#pincount").textContent = pins.length;
   const panel = $(`[data-pin="${key}"]`)?.closest(".panel");
@@ -170,7 +199,7 @@ export function rTray(){
   $("#pincount").textContent = pins.length;
   $("#pinlist").innerHTML = pins.length ? pins.map((p,i) => `
     <div class="pinitem ${i===selPin?"sel":""}" data-i="${i}">
-      <div class="t"><span>⊞ ${p.title}</span><button data-del="${i}" title="remove">✕</button></div>
+      <div class="t"><span>⊞ ${p.title}</span>${p.win ? `<span class="chip">${p.win}</span>` : ""}<button data-del="${i}" title="remove">✕</button></div>
       <div class="v">${p.value}</div>
       <div class="c">${p.context}</div>
     </div>`).join("")
@@ -268,8 +297,13 @@ function wrapText(ctx, text, x, y, maxW, lh){
   ctx.fillText(line.trim(), x, yy);
 }
 
-/** Reset pin state between tests — not used in production. */
-export function _clearPins(){ pins.length = 0; selPin = 0; }
+/** Reset pin state and clear localStorage — test helper and production cleanup. */
+export function _clearPins(){
+  pins.length = 0;
+  selPin = 0;
+  const key = pinsKey();
+  if (key) try { localStorage.removeItem(key); } catch(e){}
+}
 
 const tray = () => $("#tray");
 export function toggleTray(force){
@@ -277,6 +311,7 @@ export function toggleTray(force){
   if (tray().classList.contains("open")){ rTray(); rCard(); }
 }
 export function initTray(){
+  _loadPins();
   $("#traytoggle").addEventListener("click", () => toggleTray());
   $("#trayclose").addEventListener("click", () => toggleTray(false));
   $("#regen").addEventListener("click", genThread);
