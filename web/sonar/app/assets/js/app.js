@@ -187,11 +187,13 @@ function applyMeta(view, issues){
 
   _view = view;
   maybeGate(view);
-  // gate-continue: set opt-out flag once.
+  // gate-continue: set opt-out flag. Registered once at boot; handler is
+  // idempotent so it works correctly after the gate is re-enabled via the
+  // help overlay (which clears the flag and allows the gate to reopen).
   $("#gate-continue").addEventListener("click", () => {
     localStorage.setItem(GATE_KEY, "1");
     $("#gate").classList.remove("open");
-  }, { once: true });
+  });
   // gate-reenable: clear opt-out flag so next resize re-evaluates the gate.
   const reenableEl = document.getElementById("gate-reenable");
   if (reenableEl) {
