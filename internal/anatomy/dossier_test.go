@@ -242,6 +242,42 @@ func TestDossier_UnknownFacilitatorNoLabel(t *testing.T) {
 	require.Equal(t, "false", fac.Fields["selfSettled"])
 }
 
+func TestDossier_TruncatesAt128Events(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	for i := 0; i < 130; i++ {
+		seedPayment(t, ctx, db, "0xbig", i, "0xpayer", "0xfac", "0xpayee", "0.10")
+	}
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xbig")
+	require.NoError(t, err)
+	require.True(t, g.Truncated)
+	events := 0
+	for _, n := range g.Nodes {
+		if n.Kind == anatomy.NodeEvent {
+			events++
+		}
+	}
+	require.Equal(t, 128, events)
+}
+
+func TestDossier_FacilitatorLabelFromIdentityView(t *testing.T) {
+	ctx, db, pool := setupAnatomy(t)
+	seedPayment(t, ctx, db, "0xtxl", 0, "0xpayer", "0xlfac", "0xpayee", "1.00")
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO entity_signal (chain, address, source, kind, value)
+		VALUES ('base', '0xlfac', 'manual', 'label', 'ManualFacLabel')`)
+	require.NoError(t, err)
+	g, err := anatomy.NewPgDossier(pool).Dossier(ctx, "base", "0xtxl")
+	require.NoError(t, err)
+	var fac *anatomy.Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "addr:0xlfac" {
+			fac = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, fac)
+	require.Equal(t, "ManualFacLabel", fac.Fields["entityLabel"])
+}
+
 func TestDossier_SelfSettledFlag(t *testing.T) {
 	ctx, db, pool := setupAnatomy(t)
 	// Direct insert so self_settled is true (seedPaymentFull defaults it false).

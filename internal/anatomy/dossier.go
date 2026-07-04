@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// dossierEventCap is the maximum number of events per tx dossier.
+// Batch settlements can carry 100+ transfer logs; we cap to keep graph rendering snappy.
+const dossierEventCap = 128
+
 // PgDossier builds dossier graphs from the payment_x402_v1 view.
 type PgDossier struct{ pool *pgxpool.Pool }
 
@@ -73,13 +77,13 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 		       self_settled, facilitator_known, facilitator, payer, payee,
 		       (SUM(amount_usdc) OVER ())::text AS paid_total,
 		       (gas_cost_wei + COALESCE(l1_fee,0))::text AS total_fee_wei,
-		       (SELECT min(fa.label) FROM facilitator_allowlist fa
-		          WHERE fa.chain = v.chain AND fa.address = v.facilitator
-		            AND fa.since_version <= 1 AND (fa.until_version IS NULL OR fa.until_version > 1)
+		       (SELECT i.label FROM entity_identity_v1 i
+		          WHERE i.chain = v.chain AND i.address = v.facilitator
 		       ) AS facilitator_label
 		FROM payment_x402_v1 v
 		WHERE v.chain = $1 AND v.tx_hash = $2
-		ORDER BY log_index`, chain, txHash)
+		ORDER BY log_index
+		LIMIT 129`, chain, txHash)
 	if err != nil {
 		return Graph{}, fmt.Errorf("query dossier: %w", err)
 	}
@@ -109,7 +113,14 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 	if len(rs) == 0 {
 		return Graph{}, ErrNotFound
 	}
-	return buildGraph(chain, txHash, rs), nil
+	truncated := false
+	if len(rs) > dossierEventCap {
+		rs = rs[:dossierEventCap]
+		truncated = true
+	}
+	g := buildGraph(chain, txHash, rs)
+	g.Truncated = truncated
+	return g, nil
 }
 
 // deref returns the pointed-to string, or "" if nil.

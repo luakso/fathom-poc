@@ -112,14 +112,9 @@ func TestServer_Tx500(t *testing.T) {
 	require.Equal(t, "internal error", body["error"])
 }
 
-func TestServer_SolanaTxOK(t *testing.T) {
-	d := fakeDossier{g: anatomy.Graph{Chain: "solana", TxHash: "5xkjABC"}}
-	srv := newTestServer(d, fakeStats{})
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/solana/5xkjABCDEFGHIJKLMNOP", nil)
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	require.Equal(t, http.StatusOK, rr.Code)
-	var g anatomy.Graph
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &g))
-	require.Equal(t, "solana", g.Chain)
+func TestServer_SolanaRejected(t *testing.T) {
+	srv := newTestServer(fakeDossier{}, fakeStats{})
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/tx/solana/abc123", nil))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }

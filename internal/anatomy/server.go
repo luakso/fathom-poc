@@ -11,7 +11,9 @@ import (
 )
 
 var (
-	validChains = map[string]bool{"base": true, "solana": true}
+	// validChains restricts the API to chains with real data.
+	// Solana support returns when its data is real (spec §9).
+	validChains = map[string]bool{"base": true}
 	evmHashRe   = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 )
 

@@ -63,6 +63,9 @@ type Graph struct {
 	TxHash string `json:"txHash"`
 	Nodes  []Node `json:"nodes"`
 	Edges  []Edge `json:"edges"`
+	// Truncated is set when the tx had more events than the dossier cap (128)
+	// and the graph shows only the first 128 by log_index.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Stats is the StatsProvider payload for one address.
