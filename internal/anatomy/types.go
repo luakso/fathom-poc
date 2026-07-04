@@ -242,5 +242,23 @@ type PaymentPage struct {
 	Next    string       `json:"next,omitempty"` // cursor for the next page
 }
 
+// LeaderboardRow is one entity in a ranked leaderboard slice.
+type LeaderboardRow struct {
+	Rank                   int    `json:"rank"`
+	Address                string `json:"address"`
+	Label                  string `json:"label,omitempty"`
+	TxnCount               int64  `json:"txnCount"`
+	VolumeUSDC             string `json:"volumeUsdc"`
+	DistinctCounterparties int64  `json:"distinctCounterparties"`
+	FirstSeen              string `json:"firstSeen"`
+	LastSeen               string `json:"lastSeen"`
+}
+
 // Leaderboard is the LeaderboardProvider payload (Task 8).
-type Leaderboard struct{}
+type Leaderboard struct {
+	Role   string           `json:"role"`
+	Window string           `json:"window"`
+	Lens   string           `json:"lens"`
+	Sort   string           `json:"sort"`
+	Rows   []LeaderboardRow `json:"rows"`
+}
