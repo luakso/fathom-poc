@@ -107,11 +107,12 @@ func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Log
 	pgEntity := anatomy.NewPgEntity(pool)
 	srv := anatomy.NewServer(
 		anatomy.Providers{
-			Dossier: anatomy.NewPgDossier(pool),
-			Stats:   anatomy.NewPgStats(pool),
-			Meta:    anatomy.NewPgMeta(pool),
-			Entity:  pgEntity,
-			// Tasks 5-8 add Neighbors, Activity, Lists, Leaderboard to pgEntity.
+			Dossier:   anatomy.NewPgDossier(pool),
+			Stats:     anatomy.NewPgStats(pool),
+			Meta:      anatomy.NewPgMeta(pool),
+			Entity:    pgEntity,
+			Neighbors: pgEntity,
+			// Tasks 6-8 add Activity, Lists, Leaderboard to pgEntity.
 		},
 		anatomyweb.Assets(),
 		logger,

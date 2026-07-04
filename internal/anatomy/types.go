@@ -126,8 +126,34 @@ type Entity struct {
 	Summaries   map[string]map[string]LensSummary `json:"summaries"` // role -> lens -> summary
 }
 
-// Neighbors is the NeighborProvider payload for one address (Task 5).
-type Neighbors struct{}
+// NeighborRow is one counterparty/facilitator node candidate.
+type NeighborRow struct {
+	Address    string `json:"address"`
+	Label      string `json:"label,omitempty"`
+	TxnCount   int64  `json:"txnCount"`
+	VolumeUSDC string `json:"volumeUsdc"`
+	Share      string `json:"share"` // fraction of the list total, "0.415000"
+	FirstSeen  string `json:"firstSeen"`
+	LastSeen   string `json:"lastSeen"`
+}
+
+// NeighborList carries one direction's top rows plus the honest total count.
+type NeighborList struct {
+	Total int64         `json:"total"` // distinct counterparties in this direction under the lens
+	Rows  []NeighborRow `json:"rows"`
+}
+
+// Neighbors is the canvas feed for one address (spec §5): counterparties per
+// direction plus the facilitators that settle for it. Empty lists are omitted.
+type Neighbors struct {
+	Address       string        `json:"address"`
+	Lens          string        `json:"lens"`
+	Payees        *NeighborList `json:"payees,omitempty"`        // whom it pays
+	Payers        *NeighborList `json:"payers,omitempty"`        // who pays it
+	Facilitators  *NeighborList `json:"facilitators,omitempty"`  // who settles for it
+	SettledPayers *NeighborList `json:"settledPayers,omitempty"` // it settles for these payers
+	SettledPayees *NeighborList `json:"settledPayees,omitempty"` // it settles to these payees
+}
 
 // Timeline is the ActivityProvider timeline payload (Task 6).
 type Timeline struct{}
