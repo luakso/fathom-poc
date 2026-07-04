@@ -2,6 +2,7 @@ package anatomy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -25,13 +26,18 @@ func NewPgMeta(pool *pgxpool.Pool) *PgMeta { return &PgMeta{pool: pool} }
 
 // Meta returns the latest rollup metadata. Returns ErrNotFound when no rollup
 // has been run yet (anatomy_meta has no rows).
+// Concurrent /api/meta calls on a cache miss are serialized by the mutex;
+// acceptable for this internal tool where rollup is rare and callers are few.
 func (p *PgMeta) Meta(ctx context.Context) (Meta, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	var m Meta
 	var builtAt string
 	err := p.pool.QueryRow(ctx, `
 		SELECT COALESCE(data_max_day::text, ''), built_at::text, methodology_version
 		FROM anatomy_meta WHERE id = 1`).Scan(&m.DataMaxDay, &builtAt, &m.MethodologyVersion)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return Meta{}, ErrNotFound
 	}
 	if err != nil {
@@ -39,8 +45,6 @@ func (p *PgMeta) Meta(ctx context.Context) (Meta, error) {
 	}
 	m.BuiltAt = builtAt
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.key == builtAt {
 		return p.cached, nil
 	}
