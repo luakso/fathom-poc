@@ -7,6 +7,7 @@ import { state, data, winLabel, facData } from "./state.js";
 
 const pins = [];
 let selPin = 0;
+let threadDirty = false; // true once the user has hand-edited the textarea
 
 /* ——— localStorage persistence ——— */
 const pinsKey = () => {
@@ -301,6 +302,7 @@ function wrapText(ctx, text, x, y, maxW, lh){
 export function _clearPins(){
   pins.length = 0;
   selPin = 0;
+  threadDirty = false;
   const key = pinsKey();
   if (key) try { localStorage.removeItem(key); } catch(e){}
 }
@@ -308,14 +310,17 @@ export function _clearPins(){
 const tray = () => $("#tray");
 export function toggleTray(force){
   tray().classList.toggle("open", force);
-  if (tray().classList.contains("open")){ rTray(); rCard(); }
+  if (tray().classList.contains("open")){
+    rTray(); rCard();
+    if (pins.length && !threadDirty) genThread();
+  }
 }
 export function initTray(){
   _loadPins();
   $("#traytoggle").addEventListener("click", () => toggleTray());
   $("#trayclose").addEventListener("click", () => toggleTray(false));
-  $("#regen").addEventListener("click", genThread);
-  $("#thread").addEventListener("input", rCount);
+  $("#regen").addEventListener("click", () => { threadDirty = false; genThread(); });
+  $("#thread").addEventListener("input", () => { threadDirty = true; rCount(); });
   $("#copythread").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("#thread").value); $("#copythread").textContent = "COPIED ✓";
       setTimeout(() => $("#copythread").textContent = "COPY", 1200); } catch(e){}
