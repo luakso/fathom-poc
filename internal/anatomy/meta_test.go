@@ -15,7 +15,8 @@ func TestMeta_TotalsAndStamp(t *testing.T) {
 	seedRollupFixture(t, ctx, db)
 	require.NoError(t, anatomy.Rollup(ctx, pool, nil))
 
-	m, err := anatomy.NewPgMeta(pool).Meta(ctx)
+	pgm := anatomy.NewPgMeta(pool)
+	m, err := pgm.Meta(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "2026-06-03", m.DataMaxDay)
 	require.Equal(t, 1, m.MethodologyVersion)
@@ -24,8 +25,8 @@ func TestMeta_TotalsAndStamp(t *testing.T) {
 	require.Equal(t, int64(5), m.Totals["all"].TxnCount)
 	require.Equal(t, "28.000000", m.Totals["all"].VolumeUSDC)
 
-	// Cached: a second call returns the same without error.
-	m2, err := anatomy.NewPgMeta(pool).Meta(ctx)
+	// Cached: a second call on the same instance exercises the in-memory cache.
+	m2, err := pgm.Meta(ctx)
 	require.NoError(t, err)
 	require.Equal(t, m, m2)
 }
