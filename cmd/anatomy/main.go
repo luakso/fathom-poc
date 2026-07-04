@@ -115,7 +115,8 @@ func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Log
 		Handler:           srv,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	go func() { //nolint:gosec // shutdown requires a fresh context after signal ctx is cancelled
+	// shutdown requires a fresh context after signal ctx is cancelled
+	go func() { //nolint:gosec // G118: signal ctx is cancelled before shutdown
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
