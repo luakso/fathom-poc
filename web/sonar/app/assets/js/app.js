@@ -10,6 +10,7 @@ import { addPin, toggleTray, initTray, rCard } from "./tray.js";
 
 /* ————— small-screen gate ————— */
 const GATE_KEY = "fathom.smallScreenOk";
+let _view = null; // stored at boot for use in resize handler
 export function buildGateHtml(view){
   const w = view.windows.all;
   const payees = ((view.concentration.windows.all || {}).payee || {}).total_entities || 0;
@@ -20,13 +21,15 @@ export function buildGateHtml(view){
     <div>${payeesStr}<small>PAYEES</small></div>`;
 }
 function maybeGate(view){
-  if (window.innerWidth >= 980 || localStorage.getItem(GATE_KEY) === "1") return;
-  $("#gate-nums").innerHTML = buildGateHtml(view);
-  $("#gate").classList.add("open");
-  $("#gate-continue").addEventListener("click", () => {
-    localStorage.setItem(GATE_KEY, "1");
+  if (localStorage.getItem(GATE_KEY) === "1"){ $("#gate").classList.remove("open"); return; }
+  if (window.innerWidth < 980){
+    if (!$("#gate").classList.contains("open")){
+      $("#gate-nums").innerHTML = buildGateHtml(view);
+      $("#gate").classList.add("open");
+    }
+  } else {
     $("#gate").classList.remove("open");
-  });
+  }
 }
 
 /* ————— error screen ————— */
@@ -123,7 +126,7 @@ function wire(){
   });
 
   let rsz;
-  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); rActiveWallets(); rGasCostDaily(); }, 150); });
+  addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { rDaily(); rVelocity(); rActiveWallets(); rGasCostDaily(); maybeGate(_view); }, 150); });
 }
 
 /* ————— status bar + banner from integrity results ————— */
@@ -182,7 +185,21 @@ function applyMeta(view, issues){
   // an absent-state.  No fatal call; the rest of the page is fully functional.
   if (facResult.status === "fulfilled") setFacData(facResult.value);
 
+  _view = view;
   maybeGate(view);
+  // gate-continue: set opt-out flag once.
+  $("#gate-continue").addEventListener("click", () => {
+    localStorage.setItem(GATE_KEY, "1");
+    $("#gate").classList.remove("open");
+  }, { once: true });
+  // gate-reenable: clear opt-out flag so next resize re-evaluates the gate.
+  const reenableEl = document.getElementById("gate-reenable");
+  if (reenableEl) {
+    reenableEl.addEventListener("click", e => {
+      e.preventDefault();
+      localStorage.removeItem(GATE_KEY);
+    });
+  }
   applyMeta(view, issues);
   wire();
   ALL_PANELS();
