@@ -321,22 +321,15 @@ describe("8.3 — price pinner ↔ panel share equivalence", () => {
     expect(document.getElementById("pptable").innerHTML).toContain(expectedAmt);
   });
 
-  // BUG: price pinner formats txn_count with fmtCount ("3.0k") but the panel
-  // table uses fmtInt ("3,000"). They are NOT the same string. Skipping the
-  // panel-side assertion; the pinner-only check still runs in the test above.
-  it.skip("pin.value contains same txn_count format as panel tx column [BUG: pinner=fmtCount, panel=fmtInt]", async () => {
+  it("pin.value contains same txn_count format as panel tx column", async () => {
     const { rPrice } = await import("../app/assets/js/panels.js");
     rPrice();
     const pin = PINNERS.price();
     const p = FIX.price_points.all[0];
-    // Panel: fmtInt(txn_count); pinner value: fmtCount(txn_count) — these differ
-    const panelCount = fmtInt(p.txn_count);   // "3,000"
-    const pinnerCount = fmtCount(p.txn_count); // "3.0k"
-    // These strings are NOT equal — document the divergence:
-    expect(pinnerCount).not.toBe(panelCount);
-    // The shared test would be:
+    // Panel and pinner must both format txn_count with fmtInt — character-identical.
+    const panelCount = fmtInt(p.txn_count);
     expect(document.getElementById("pptable").innerHTML).toContain(panelCount);
-    expect(pin.value).toContain(pinnerCount);
+    expect(pin.value).toContain(panelCount);
   });
 });
 

@@ -120,7 +120,7 @@ export const PINNERS = {
         }
       }
     }
-    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
+    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtInt(p.txn_count),
       context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}${trendCtx}`,
       denom:"verified payments · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
