@@ -279,6 +279,12 @@ func (h *handler) payments(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "malformed before cursor")
 		return
 	}
+	// Parse the cursor in the handler to catch int64 overflow before dispatch.
+	// The provider parses again as a second line of defence.
+	if _, _, _, _, cursorErr := parseCursor(before); cursorErr != nil {
+		writeErr(w, http.StatusBadRequest, "malformed cursor")
+		return
+	}
 
 	if h.p.Lists == nil {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -342,13 +348,15 @@ func (h *handler) leaderboard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_ = limit // Task 8 trims the Leaderboard rows to this limit
 
 	if h.p.Leaderboard == nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	lb, err := h.p.Leaderboard.Leaderboard(r.Context(), chain, role, window, lens, sort)
+	if err == nil && len(lb.Rows) > limit {
+		lb.Rows = lb.Rows[:limit]
+	}
 	h.respond(w, lb, err)
 }
 

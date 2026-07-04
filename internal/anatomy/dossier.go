@@ -64,7 +64,9 @@ type dossierRow struct {
 
 // Dossier implements DossierProvider.
 func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, error) {
-	rows, err := p.pool.Query(ctx, `
+	// Fetch dossierEventCap+1 rows so we can detect truncation (package constant,
+	// not user input — safe to interpolate directly into the query string).
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		SELECT log_index, block_number, block_timestamp::text, block_hash,
 		       tx_type, tx_nonce, transaction_index::text,
 		       called_contract, method_selector, gas_used, gas_limit::text,
@@ -83,7 +85,7 @@ func (p *PgDossier) Dossier(ctx context.Context, chain, txHash string) (Graph, e
 		FROM payment_x402_v1 v
 		WHERE v.chain = $1 AND v.tx_hash = $2
 		ORDER BY log_index
-		LIMIT 129`, chain, txHash)
+		LIMIT %d`, dossierEventCap+1), chain, txHash)
 	if err != nil {
 		return Graph{}, fmt.Errorf("query dossier: %w", err)
 	}

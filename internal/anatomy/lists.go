@@ -2,10 +2,15 @@ package anatomy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+// errBadCursor is returned by parseCursor when the cursor string is malformed
+// or contains values that overflow int64.
+var errBadCursor = errors.New("malformed cursor")
 
 // cpSortCols whitelists ORDER BY expressions for the counterparty table.
 // Keys are the public sort names; values are safe SQL (never user input).
@@ -132,19 +137,20 @@ func (p *PgEntity) Payments(ctx context.Context, chain, address string, q Paymen
 }
 
 // parseCursor decodes "blockNumber:txHash:logIndex". Empty cursor = first page.
+// Returns errBadCursor for any malformed or overflowing input.
 func parseCursor(s string) (block int64, hash string, idx int64, use bool, err error) {
 	if s == "" {
 		return 0, "", 0, false, nil
 	}
 	parts := strings.SplitN(s, ":", 3)
 	if len(parts) != 3 {
-		return 0, "", 0, false, fmt.Errorf("malformed cursor")
+		return 0, "", 0, false, errBadCursor
 	}
 	if block, err = strconv.ParseInt(parts[0], 10, 64); err != nil {
-		return 0, "", 0, false, fmt.Errorf("malformed cursor")
+		return 0, "", 0, false, errBadCursor
 	}
 	if idx, err = strconv.ParseInt(parts[2], 10, 64); err != nil {
-		return 0, "", 0, false, fmt.Errorf("malformed cursor")
+		return 0, "", 0, false, errBadCursor
 	}
 	return block, parts[1], idx, true, nil
 }
