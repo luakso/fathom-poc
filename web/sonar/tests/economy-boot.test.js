@@ -84,11 +84,12 @@ describe.runIf(haveArtifacts)("economy page boot assertions (8.5)", () => {
     stubFetch();
   });
 
-  // CORE numbered panels (1 overview .. 7 velocity) are present in any emit,
-  // stale or fresh — always assert real non-empty content.
-  const CORE_PANELS = ["p1","p2","p3","p5","p6","p7","p8"];
+  // CORE numbered panels (1 overview .. 8 claim ledger) are present in any emit,
+  // stale or fresh — always assert real non-empty content. claims.json is
+  // curated and always present, so #p9 (CLAIM LEDGER) belongs here too.
+  const CORE_PANELS = ["p1","p2","p3","p5","p6","p7","p8","p9"];
 
-  it("(a) CORE panels (1-7) have non-empty innerHTML after boot", async () => {
+  it("(a) CORE panels (1-8) have non-empty innerHTML after boot", async () => {
     await import("../app/assets/js/app.js");
     await settle("#shell"); // wait until verify log is populated
 
