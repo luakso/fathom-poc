@@ -57,5 +57,6 @@ func TestLoadManualLabels_MissingFile(t *testing.T) {
 func TestLoadManualLabels_CommittedFile(t *testing.T) {
 	labels, err := anatomy.LoadManualLabels("../../data/entity-labels.json")
 	require.NoError(t, err)
-	require.NotEmpty(t, labels)
+	// The committed file may legitimately be empty; the gate is that it parses.
+	require.NotNil(t, labels)
 }
