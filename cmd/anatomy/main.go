@@ -105,8 +105,12 @@ func run() error {
 
 func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Logger, addr string) error {
 	srv := anatomy.NewServer(
-		anatomy.NewPgDossier(pool),
-		anatomy.NewPgStats(pool),
+		anatomy.Providers{
+			Dossier: anatomy.NewPgDossier(pool),
+			Stats:   anatomy.NewPgStats(pool),
+			Meta:    anatomy.NewPgMeta(pool),
+			// Tasks 4-8 wire the entity providers.
+		},
 		anatomyweb.Assets(),
 		logger,
 	)

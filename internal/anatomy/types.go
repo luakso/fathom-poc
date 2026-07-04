@@ -80,3 +80,58 @@ type Stats struct {
 	FacilitatorKnown       bool   `json:"facilitatorKnown"`
 	Roles                  []Role `json:"roles"`
 }
+
+// LensTotals holds aggregate counts for a single membership lens.
+type LensTotals struct {
+	TxnCount   int64  `json:"txnCount"`
+	VolumeUSDC string `json:"volumeUsdc"`
+}
+
+// Meta is the MetaProvider payload: dataset stamp + lens totals.
+type Meta struct {
+	DataMaxDay         string                `json:"dataMaxDay"`
+	BuiltAt            string                `json:"builtAt"`
+	MethodologyVersion int                   `json:"methodologyVersion"`
+	Totals             map[string]LensTotals `json:"totals"` // keys: "known", "all"
+}
+
+// Stub types filled in by Tasks 4-7 (fields added there; declaring them now
+// lets the provider seam land in one piece).
+
+// Entity is the EntityProvider payload for one address (Task 4).
+type Entity struct{}
+
+// Neighbors is the NeighborProvider payload for one address (Task 5).
+type Neighbors struct{}
+
+// Timeline is the ActivityProvider timeline payload (Task 6).
+type Timeline struct{}
+
+// Fingerprint is the ActivityProvider fingerprint payload (Task 6).
+type Fingerprint struct{}
+
+// CounterpartyQuery parameterises a counterparty list request (Task 7).
+type CounterpartyQuery struct {
+	Role   string
+	Lens   string
+	Sort   string
+	Limit  int
+	Offset int
+}
+
+// CounterpartyPage is the ListProvider counterparty page payload (Task 7).
+type CounterpartyPage struct{}
+
+// PaymentQuery parameterises a payment list request (Task 7).
+type PaymentQuery struct {
+	Role   string
+	Lens   string
+	Limit  int
+	Before string
+}
+
+// PaymentPage is the ListProvider payment page payload (Task 7).
+type PaymentPage struct{}
+
+// Leaderboard is the LeaderboardProvider payload (Task 8).
+type Leaderboard struct{}

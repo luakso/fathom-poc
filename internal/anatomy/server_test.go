@@ -40,7 +40,28 @@ func testAssets() fs.FS {
 }
 
 func newTestServer(d anatomy.DossierProvider, s anatomy.StatsProvider) http.Handler {
-	return anatomy.NewServer(d, s, testAssets(), slog.Default())
+	return anatomy.NewServer(anatomy.Providers{Dossier: d, Stats: s}, testAssets(), slog.Default())
+}
+
+type fakeMeta struct{ m anatomy.Meta }
+
+func (f fakeMeta) Meta(context.Context) (anatomy.Meta, error) { return f.m, nil }
+
+func TestServer_MetaEndpoint(t *testing.T) {
+	srv := anatomy.NewServer(anatomy.Providers{
+		Meta: fakeMeta{anatomy.Meta{DataMaxDay: "2026-06-06", MethodologyVersion: 1}},
+	}, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, slog.Default())
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest("GET", "/api/meta", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"dataMaxDay":"2026-06-06"`)
+}
+
+func TestServer_BadLensRejected(t *testing.T) {
+	srv := anatomy.NewServer(anatomy.Providers{}, fstest.MapFS{}, slog.Default())
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest("GET", "/api/base/entity/0x1234567890123456789012345678901234567890?lens=bogus", nil))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestServer_TxOK(t *testing.T) {
