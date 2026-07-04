@@ -61,8 +61,19 @@ export function rDaily(){
   const area = p + `V${H-padB}H${x(0)}Z`;
   // gridlines
   let grid = "";
-  const gv = log ? [3,4,5,6,7].map(e=>Math.pow(10,e)).filter(v=>v>=vmin&&v<=vmax)
-                 : [1,2,3].map(k=>vmax*k/4);
+  let gv;
+  if (log) {
+    const decades = [3,4,5,6,7].map(e => Math.pow(10,e)).filter(v => v >= vmin && v <= vmax);
+    if (decades.length >= 2) {
+      gv = decades;
+    } else {
+      // Fewer than 2 decade lines visible — fall back to geometric min/mid/max.
+      const logMid = Math.pow(10, (Math.log10(vmin) + Math.log10(vmax)) / 2);
+      gv = [vmin, logMid, vmax];
+    }
+  } else {
+    gv = [1,2,3].map(k => vmax*k/4);
+  }
   gv.forEach(v => { grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-10}" y2="${y(v)}"/>
     <text x="${padL-7}" y="${y(v)+3}" text-anchor="end">${state.dMetric==="tx"?fmtCount(v):fmtMoney(v)}</text>`; });
   // x-axis ticks adapt to the selected slice: month markers for long spans,
@@ -165,10 +176,18 @@ export function rVelocity(){
   const lines = days.map((d,i) => `<line x1="${x(i)}" y1="${H-padB}" x2="${x(i)}" y2="${y(d[1])}" stroke="var(--line-2)" stroke-width="2"/>`).join("");
   const dots = days.map((d,i) => `<rect x="${x(i)-1.4}" y="${y(d[2])-1.4}" width="2.8" height="2.8" fill="var(--agentic)"/>`).join("");
   const pi = peakIndex(days.map(d => d[1]));
+  // Flip the annotation anchor when the label would clip past the right edge.
+  // Estimate text width conservatively at 7.5px per character (monospace).
+  const annotText = `${days[pi][0]} — ${fmtInt(days[pi][1])}/min`;
+  const estAnnotW = annotText.length * 7.5;
+  const flipAnnot = (x(pi) + 10 + estAnnotW) > (W - 8);
+  const annotAttrs = flipAnnot
+    ? `x="${x(pi)-10}" text-anchor="end"`
+    : `x="${x(pi)+10}"`;
   host.innerHTML = `<svg class="ch" viewBox="0 0 ${W} ${H}" height="${H}" id="vsvg">
     ${grid}${lines}${dots}
     <circle cx="${x(pi)}" cy="${y(days[pi][1])}" r="4" fill="none" stroke="var(--contam)" stroke-width="1.3"/>
-    <text x="${x(pi)+10}" y="${y(days[pi][1])+4}" style="fill:var(--contam);font-weight:700">${days[pi][0]} — ${fmtInt(days[pi][1])}/min</text>
+    <text ${annotAttrs} y="${y(days[pi][1])+4}" style="fill:var(--contam);font-weight:700">${annotText}</text>
     ${ticks}
     <line class="ax" x1="${padL}" y1="${H-padB}" x2="${W-8}" y2="${H-padB}"/>
     <rect id="vhover" x="${padL}" y="${padT}" width="${W-padL-8}" height="${H-padT-padB}" fill="transparent"/>

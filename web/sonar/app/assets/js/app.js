@@ -141,8 +141,19 @@ function applyMeta(view, issues){
   cons.textContent = errs.length ? "conservation ✗" : "conservation ✓";
   if (errs.length) cons.style.color = "var(--contam)";
   if (failing.length){
-    $("#banner").textContent = failing.map(i => i.detail || i.msg).join(" · ");
-    $("#banner").classList.add("open");
+    const shown = failing.slice(0, 3);
+    const extra = failing.length - 3;
+    const msgs = shown.map(i => i.detail || i.msg).join(" · ");
+    const moreStr = extra > 0 ? ` …${extra} more` : "";
+    const bannerEl = $("#banner");
+    bannerEl.textContent = msgs + moreStr;
+    const dismiss = document.createElement("button");
+    dismiss.id = "banner-dismiss";
+    dismiss.textContent = "×";
+    dismiss.style.cssText = "margin-left:8px;background:transparent;border:none;color:inherit;cursor:pointer;font:inherit";
+    dismiss.addEventListener("click", () => bannerEl.classList.remove("open"));
+    bannerEl.appendChild(dismiss);
+    bannerEl.classList.add("open");
   }
 }
 
