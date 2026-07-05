@@ -38,7 +38,13 @@ export function Tx() {
         onSelect={(id) => { const p = new URLSearchParams(params); p.set('sel', id); setParams(p) }}
         onFocus={(a) => navigate(`/base/address/${a}${lens === 'all' ? '?lens=all' : ''}`)}
       />
+      {/* key remounts the Drawer whenever the selected node changes so its tab
+          state resets - otherwise selecting an address after the tx node
+          leaves the drawer stuck on the now-absent 'Tx' tab (and vice versa
+          selecting the tx node after an address carries over that address's
+          stale tab/paging state). */}
       <Drawer
+        key={`${sel ?? ''}:${lens}`}
         chain={CHAIN}
         address={selAddr || (q.data?.nodes.find((n) => n.kind === 'address')?.fields.address ?? '')}
         lens={lens}

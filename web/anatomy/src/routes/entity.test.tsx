@@ -35,6 +35,7 @@ function stubFetch() {
       return new Response(JSON.stringify(u.includes('lens=all') ? allNeighbors : knownNeighbors), { status: 200 })
     }
     if (u.includes('/timeline')) return new Response(JSON.stringify({ address: A, lens: 'known', roles: {} }), { status: 200 })
+    if (u.includes('/payments')) return new Response(JSON.stringify({ rows: [] }), { status: 200 })
     return new Response(JSON.stringify(entity), { status: 200 })
   }))
 }
@@ -76,5 +77,19 @@ describe('Entity route', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 })))
     mount()
     await waitFor(() => expect(screen.getByText(/unknown address/i)).toBeTruthy(), { timeout: 3000 })
+  })
+  it('remounts the drawer on re-selection, resetting tab state instead of leaking it across identities', async () => {
+    stubFetch()
+    mount()
+    await waitFor(() => expect(screen.getAllByText(/0xbbbbb…bbbb/).length).toBeGreaterThan(0))
+    // move the drawer off its default tab
+    fireEvent.click(screen.getByRole('button', { name: 'Payments' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Payments' }).className).toContain('active'))
+    // select the counterparty node (B) on the canvas - without the Drawer
+    // key= fix this reuses the same Drawer instance and keeps 'Payments' as
+    // the active tab even though the bound identity changed.
+    fireEvent.click(screen.getAllByText(/0xbbbbb…bbbb/)[0])
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Overview' }).className).toContain('active'))
+    expect(screen.getByRole('button', { name: 'Payments' }).className).not.toContain('active')
   })
 })

@@ -22,8 +22,8 @@ export function columnX(anchor: Rect, dir: Dir, w: number): number {
   return anchor.x
 }
 
-// Column collision only matters against rects whose x-range intersects the
-// new column; pre-filtering keeps the scan linear in column occupancy.
+// Single linear scan over all previously-placed rects (occupied + placed so
+// far in this column), returning the first one the probe overlaps.
 function collider(occupied: Rect[], probe: Rect): Rect | undefined {
   return occupied.find((o) => overlaps(probe, o))
 }

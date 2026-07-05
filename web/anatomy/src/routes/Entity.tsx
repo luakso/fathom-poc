@@ -100,7 +100,11 @@ export function Entity() {
         </div>
       )}
       <Canvas nodes={flow.nodes} edges={flow.edges} selectedId={sel} onSelect={onSelect} onExpand={onExpand} onFocus={onFocus} />
-      <Drawer chain={CHAIN} address={sel} lens={lens} onNavigate={(to) => navigate(to)} />
+      {/* key remounts the Drawer on selection/lens change so its internal tab
+          and per-tab paging state (PaymentsTab cursor, CounterpartiesTab
+          offset, etc.) resets instead of carrying over from the previous
+          bound address. */}
+      <Drawer key={`${sel}:${lens}`} chain={CHAIN} address={sel} lens={lens} onNavigate={(to) => navigate(to)} />
     </div>
   )
 }
