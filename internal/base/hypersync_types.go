@@ -28,7 +28,9 @@ type Stream interface {
 // HyperSyncQuery is the wire shape posted to {base_url}/query.
 //
 // Fields below cover what base-collector needs:
-//   - from_block / to_block:   inclusive block range
+//   - from_block / to_block:   from_block inclusive, to_block EXCLUSIVE
+//     (HyperSync wire convention; BuildBackfillQuery converts the operator's
+//     inclusive range)
 //   - logs:                    address + topic filter (final gate on USDC AuthorizationUsed)
 //   - transactions:            outer-tx sighash allow-list (server-side multi-value filter)
 //   - field_selection:         which columns to ship back; smaller = cheaper
@@ -234,11 +236,13 @@ type HyperSyncBlock struct {
 // join ever stopped delivering companions, the run halts loudly instead of
 // silently losing rows.
 //
-// fromBlock is inclusive; toBlock is inclusive (HyperSync convention).
+// fromBlock and toBlock are both INCLUSIVE (the operator-facing contract).
+// HyperSync's wire to_block is exclusive, so the query carries toBlock+1 —
+// without the conversion the final block of every range is silently skipped.
 func BuildBackfillQuery(fromBlock, toBlock uint64) HyperSyncQuery {
 	return HyperSyncQuery{
 		FromBlock: fromBlock,
-		ToBlock:   toBlock,
+		ToBlock:   toBlock + 1,
 		JoinMode:  "JoinAll",
 		Logs: []LogFilter{
 			{

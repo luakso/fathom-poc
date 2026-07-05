@@ -118,14 +118,22 @@ func (s *httpStream) Next() (HyperSyncBatch, bool, error) {
 		return HyperSyncBatch{}, false, fmt.Errorf("decode batch: %w", err)
 	}
 
-	// Determine the next cursor position.
-	if batch.NextBlock > s.next {
-		s.next = batch.NextBlock
-	} else {
-		// Server didn't advance — treat as terminal to avoid infinite loop.
+	// Determine the next cursor position. toBlock is the EXCLUSIVE wire bound
+	// (see BuildBackfillQuery), so next_block == toBlock means the range is
+	// fully covered.
+	if batch.NextBlock <= s.next {
+		// Server didn't advance while the range is unfinished. Stopping quietly
+		// here would report an arbitrarily large uncovered tail as success, so
+		// halt the stream AND fail loudly; the run is re-invocable from the last
+		// committed cursor once the cause is understood.
 		s.done = true
+		return HyperSyncBatch{}, false, fmt.Errorf(
+			"hypersync did not advance: next_block %d <= cursor %d with to_block %d unreached (archive_height %d)",
+			batch.NextBlock, s.next, s.toBlock, batch.ArchiveHeight,
+		)
 	}
-	if s.next > s.toBlock {
+	s.next = batch.NextBlock
+	if s.next >= s.toBlock {
 		s.done = true
 	}
 	return batch, true, nil

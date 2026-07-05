@@ -22,7 +22,10 @@ func TestHyperSyncQuery_JSONShape(t *testing.T) {
 	require.NoError(t, json.Unmarshal(bs, &got))
 
 	require.Equal(t, float64(40_222_720), got["from_block"])
-	require.Equal(t, float64(40_222_820), got["to_block"])
+	// HyperSync's to_block is EXCLUSIVE on the wire; the operator-facing range
+	// is inclusive, so the builder must send toBlock+1 or the final block of
+	// every backfill range is silently never scanned.
+	require.Equal(t, float64(40_222_821), got["to_block"])
 
 	logs := got["logs"].([]any)
 	require.Len(t, logs, 1)

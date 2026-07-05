@@ -51,8 +51,9 @@ func NewBackfiller(fetcher Fetcher, store *Store, opts ...BackfillerOption) *Bac
 }
 
 // Run streams batches from fromBlock to toBlock (inclusive) and writes them
-// to Store. Returns the first error encountered; ctx cancellation triggers
-// a graceful shutdown between batches (never mid-batch).
+// to Store. Returns the first error encountered; ctx cancellation stops the
+// run between batches (never mid-batch) and returns the cancellation as an
+// error — the range is unfinished, so callers must see a non-zero exit.
 func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 	q := BuildBackfillQuery(fromBlock, toBlock)
 	stream, err := b.fetcher.Stream(q)
@@ -64,8 +65,11 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("backfill: shutdown requested between batches", "err", ctx.Err())
-			return nil
+			// The range is unfinished — surface the cancellation so the process
+			// exits non-zero. Returning nil here made a SIGTERM'd partial run
+			// indistinguishable from success for shell callers.
+			slog.Info("backfill: shutdown requested between batches — range unfinished, resume from the committed cursor")
+			return fmt.Errorf("backfill interrupted: %w", ctx.Err())
 		default:
 		}
 

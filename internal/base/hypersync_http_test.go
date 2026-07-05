@@ -214,14 +214,17 @@ func TestHTTPFetcher_TransportErrorExhaustsRetriesReturnsError(t *testing.T) {
 	require.Equal(t, int32(3), calls.Load(), "initial attempt + 2 retries")
 }
 
-func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {
+// A response that fails to advance next_block while the range is unfinished is
+// an anomaly, not completion: terminating quietly would report an arbitrarily
+// large uncovered tail as success (exit 0). The stream must stop after one call
+// (no infinite loop) AND surface an error so the run fails loudly.
+func TestHTTPFetcher_NonAdvancingServerReturnsError(t *testing.T) {
 	t.Parallel()
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.Header().Set("Content-Type", "application/json")
-		// next_block == from_block → no advance. Without the guard the loop
-		// would re-issue the same query indefinitely.
+		// next_block == from_block → no advance.
 		_, _ = w.Write([]byte(`{"data":[{"logs":[],"transactions":[],"blocks":[]}],"next_block":100}`))
 	}))
 	defer srv.Close()
@@ -230,12 +233,47 @@ func TestHTTPFetcher_StreamEndsIfServerDoesNotAdvanceCursor(t *testing.T) {
 	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
+
+	_, _, err = stream.Next()
+	require.Error(t, err, "no-advance mid-range must be an error, not silent completion")
+	require.Contains(t, err.Error(), "did not advance")
+	require.Equal(t, 1, calls, "non-advancing server must not be re-queried")
+}
+
+// The final block of the operator's inclusive range must actually be fetched:
+// the wire query carries to_block+1 (HyperSync's to_block is exclusive), and
+// the stream terminates cleanly — without a wasted extra request — when the
+// server's next_block reaches that exclusive bound.
+func TestHTTPFetcher_CoversInclusiveFinalBlock(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		body, _ := io.ReadAll(r.Body)
+		var q base.HyperSyncQuery
+		require.NoError(t, json.Unmarshal(body, &q))
+		require.Equal(t, uint64(120), q.ToBlock, "wire to_block must be operator to-block + 1")
+		w.Header().Set("Content-Type", "application/json")
+		// Server scanned through the exclusive bound: block 119 included.
+		_, _ = io.WriteString(w, `{"data":[{"logs":[],"transactions":[],"blocks":[{"number":119,"timestamp":"0x13","hash":"0xd"}]}],"next_block":120}`)
+	}))
+	defer srv.Close()
+
+	f := base.NewHTTPFetcher(srv.URL, "")
+	stream, err := f.Stream(base.BuildBackfillQuery(100, 119))
+	require.NoError(t, err)
+	defer stream.Close()
+
+	var got []base.HyperSyncBatch
 	for {
-		_, ok, err := stream.Next()
+		b, ok, err := stream.Next()
 		require.NoError(t, err)
 		if !ok {
 			break
 		}
+		got = append(got, b)
 	}
-	require.Equal(t, 1, calls, "non-advancing server must terminate stream after one call")
+	require.Len(t, got, 1)
+	require.Equal(t, uint64(119), got[0].MaxBlock(), "final block of the inclusive range must be delivered")
+	require.Equal(t, 1, calls, "next_block == exclusive bound means done — no extra request")
 }
