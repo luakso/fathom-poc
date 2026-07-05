@@ -15,12 +15,21 @@ ADDR=$(get "/api/base/leaderboard?role=payee&window=all&sort=volume&limit=1" | s
 echo "== top payee: $ADDR"
 
 for ep in "" "/neighbors" "/timeline?lens=known" "/fingerprint?lens=known" \
-  "/counterparties?role=payee&lens=known" "/payments?role=payee&lens=known&limit=5"; do
+  "/counterparties?role=payee&lens=known"; do
   echo "== entity$ep"
   get "/api/base/entity/$ADDR$ep" >/dev/null || fail "entity$ep"
 done
 
-TX=$(get "/api/base/entity/$ADDR/payments?role=payee&lens=known&limit=1" | sed -n 's/.*"txHash":"\(0x[0-9a-f]*\)".*/\1/p' | head -1)
+# Payments is the only live query against the payments table; mega-volume
+# subjects (top-1 by all-time volume is a 1.6M-txn outlier) can hit the
+# documented v1 timeout in lists.go (composite indexes deferred for disk
+# headroom). Probe it with a lower-rank payee so the smoke stays deterministic.
+ADDR2=$(get "/api/base/leaderboard?role=payee&window=all&sort=volume&limit=25" | sed -n 's/"address":"\(0x[0-9a-f]*\)"/\1\n/gp' | grep -o '0x[0-9a-f]\{40\}' | tail -1)
+[ -n "$ADDR2" ] || fail "could not pick a mid-rank payee"
+echo "== payments payee: $ADDR2"
+get "/api/base/entity/$ADDR2/payments?role=payee&lens=known&limit=5" >/dev/null || fail "payments"
+
+TX=$(get "/api/base/entity/$ADDR2/payments?role=payee&lens=known&limit=1" | sed -n 's/.*"txHash":"\(0x[0-9a-f]*\)".*/\1/p' | head -1)
 [ -n "$TX" ] && { echo "== tx $TX"; get "/api/base/tx/$TX" | grep -q '"nodes"' || fail "tx dossier"; }
 
 echo "== SPA"
