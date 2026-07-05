@@ -28,6 +28,9 @@ export function Drawer({ chain, address, lens, onNavigate, txNode }: Props) {
     queryKey: ['entity', chain, address],
     queryFn: () => api.entity(chain, address),
     enabled: !txNode || tab !== 'Tx',
+    // Entity.tsx queries the same key with retry:false; keep both observers
+    // agreed so a 404's empty state renders without a nondeterministic retry.
+    retry: false,
   })
   const e = entity.data
   const role = e ? primaryRole(e.roles) : undefined
