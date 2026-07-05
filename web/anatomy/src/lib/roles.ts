@@ -5,6 +5,8 @@ export const ROLE_COLOR: Record<string, string> = {
   payer: '#4fd6e3',
   payee: '#3dd68c',
   facilitator: '#f2c14e',
+  subject: '#4fd6e3',
+  ghost: '#8fa098',
 }
 
 export type PrimaryRole = 'payer' | 'payee' | 'facilitator'

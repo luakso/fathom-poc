@@ -1,4 +1,4 @@
-import { identiconData } from './identicon'
+import { identiconData } from './identiconData'
 
 export function Identicon({ address, size = 40 }: { address: string; size?: number }) {
   const { hue, cells } = identiconData(address)

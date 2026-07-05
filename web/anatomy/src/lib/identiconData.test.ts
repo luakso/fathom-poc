@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { identiconData } from './identicon'
+import { identiconData } from './identiconData'
 
 describe('identiconData', () => {
   const addr = '0x5b2b12aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaf2b1'
