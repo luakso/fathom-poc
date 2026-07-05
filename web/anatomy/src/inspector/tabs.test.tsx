@@ -54,13 +54,13 @@ describe('CounterpartiesTab', () => {
 
 describe('PaymentsTab', () => {
   it('renders payment rows and loads more with the cursor', async () => {
-    const mk = (next?: string) => ({
+    const mk = (next: string | undefined, logIndex: number) => ({
       address: A, role: 'payer', lens: 'known', next,
-      rows: [{ txHash: TX, logIndex: 1, blockNumber: 2, blockTimestamp: '2026-06-06T23:54:00Z', payer: A, payee: B, facilitator: B, amountUsdc: '0.001881', facilitatorKnown: true }],
+      rows: [{ txHash: TX, logIndex, blockNumber: 2, blockTimestamp: '2026-06-06T23:54:00Z', payer: A, payee: B, facilitator: B, amountUsdc: '0.001881', facilitatorKnown: true }],
     })
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(mk('123:1')), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(mk(undefined)), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(mk('123:1', 1)), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(mk(undefined, 2)), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const onNavigate = vi.fn()
     withClient(<PaymentsTab chain="base" address={A} lens="known" onNavigate={onNavigate} defaultRole="payer" />)

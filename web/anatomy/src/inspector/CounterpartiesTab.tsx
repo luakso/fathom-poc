@@ -10,7 +10,7 @@ const SORTS = ['volume', 'txns', 'last_seen'] as const
 type Props = { chain: string; address: string; lens: Lens; onNavigate: (to: string) => void; defaultRole: string }
 
 export function CounterpartiesTab({ chain, address, lens, onNavigate, defaultRole }: Props) {
-  const [role, setRole] = useState(defaultRole === 'facilitator' ? 'facilitator' : defaultRole)
+  const [role, setRole] = useState(defaultRole)
   const [sort, setSort] = useState<string>('volume')
   const [offset, setOffset] = useState(0)
   const q = useQuery({
