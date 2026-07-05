@@ -63,7 +63,7 @@
 
       <!-- 2 DAILY TAPE -->
       <section class="panel span8" id="p2" style="animation-delay:.05s">
-        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">all x402 · <span id="d-range"></span></span></div>
+        <div class="ptitle"><span class="no">2</span> DAILY TAPE <span class="chip">verified payments · <span id="d-range"></span></span></div>
         <div class="ptools">
           <button data-t="d-win" data-v="7d">7D</button>
           <button data-t="d-win" data-v="30d" class="on">30D</button>
@@ -79,24 +79,24 @@
         </div>
         <div class="readout" id="d-readout">hover the tape ▸ crosshair</div>
         <div class="chart-host" id="dailychart"></div>
-        <div class="denom">all x402 traffic over the selected timeframe · <span id="d-edge"></span> = data edge (partial day)</div>
+        <div class="denom">verified payment traffic over the selected timeframe · <span id="d-edge"></span><span id="d-partial-note"> = last day may be partial</span></div>
       </section>
 
       <!-- 3 MONTHLY -->
       <section class="panel span7" id="p3" style="animation-delay:.08s">
-        <div class="ptitle"><span class="no">3</span> MONTHLY · X402 <span class="chip">complete months drive MoM</span></div>
+        <div class="ptitle"><span class="no">3</span> MONTHLY · x402 <span class="chip">complete months drive MoM</span></div>
         <div class="ptools">
           <button data-t="m-metric" data-v="usd" class="on">USD</button>
           <button data-t="m-metric" data-v="tx">TX</button>
           <button class="pin-it" data-pin="monthly">⊞ pin</button>
         </div>
         <div id="monthly"><!-- js --></div>
-        <div class="denom">x402 set · ◌ = partial month (excluded from MoM)</div>
+        <div class="denom">verified payments · ◌ = partial month (excluded from MoM)</div>
       </section>
 
-      <!-- 5 SHAPE -->
+      <!-- 4 SHAPE -->
       <section class="panel span5" id="p5" style="animation-delay:.14s">
-        <div class="ptitle"><span class="no">5</span> PAYMENT SHAPE <span class="chip" id="shp-win"></span></div>
+        <div class="ptitle"><span class="no">4</span> PAYMENT SHAPE <span class="chip" id="shp-win"></span></div>
         <div class="ptools">
           <button data-t="b-metric" data-v="tx" class="on">TX</button>
           <button data-t="b-metric" data-v="usd">USD</button>
@@ -105,51 +105,73 @@
         <div class="row2" id="shp-big"></div>
         <div class="sep"></div>
         <div id="bands"></div>
-        <div class="denom">bands across all x402 payments — the whale band concentrates the dollars · medians per window from their own scan</div>
+        <div class="denom">bands across verified payments — the whale band concentrates the dollars · medians per window from their own scan</div>
       </section>
 
-      <!-- 6 PRICE POINTS -->
+      <!-- 5 PRICE POINTS -->
       <section class="panel span7" id="p6" style="animation-delay:.17s">
-        <div class="ptitle"><span class="no">6</span> PRICE POINTS <span class="chip" id="pp-win"></span></div>
+        <div class="ptitle"><span class="no">5</span> PRICE POINTS <span class="chip" id="pp-win"></span></div>
         <div class="ptools"><button class="pin-it" data-pin="price">⊞ pin</button></div>
         <table class="t" id="pptable"></table>
-        <div class="denom">known-facilitator set · share of window's known tx · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
+        <div class="denom">verified payments · share of window's verified tx · red = fewer than 10 payees · &lt;1k payees → MENU, ≥5k → MARKET · top 12 of 50 published</div>
       </section>
 
-      <!-- 7 GAS -->
+      <!-- 6 GAS -->
       <section class="panel span5" id="p7" style="animation-delay:.20s">
-        <div class="ptitle"><span class="no">7</span> GAS / BREAKEVEN <span class="chip" id="gas-win"></span></div>
+        <div class="ptitle"><span class="no">6</span> GAS / BREAKEVEN <span class="chip" id="gas-win"></span></div>
         <div class="ptools"><button class="pin-it" data-pin="gas">⊞ pin</button></div>
         <div class="bignum c-cm glow" id="gas-pct">—</div>
-        <div class="note" style="margin:2px 0 8px">of known-facilitator payments cost more (L1+L2) than they moved</div>
+        <div class="note" style="margin:2px 0 8px">of verified payments cost more (L1+L2) than they moved</div>
         <div class="blockmeter" id="gas-meter"></div>
         <div class="sep"></div>
         <div id="gas-kv"></div>
         <div class="sep"></div>
         <table class="t" id="gasbands"></table>
-        <div class="denom">gas counted once per tx, apportioned equally within batches · monthly ETH/USD reference · breakeven = apportioned gas USD &gt; amount</div>
+        <div class="sep"></div>
+        <div class="note" style="margin:2px 0 4px">cost per $1 moved · daily (cents)</div>
+        <div class="readout" id="gascost-readout">hover ▸ cents per $1 moved</div>
+        <div class="chart-host" id="gascost-chart"></div>
+        <div class="denom">gas counted once per tx, apportioned equally within batches · weekly ETH/USD reference · breakeven = apportioned gas USD &gt; amount</div>
       </section>
 
-      <!-- 8 VELOCITY -->
+      <!-- 7 VELOCITY -->
       <section class="panel span7" id="p8" style="animation-delay:.23s">
-        <div class="ptitle"><span class="no">8</span> VELOCITY <span class="chip">known-facilitator · per-minute ceiling, daily</span></div>
+        <div class="ptitle"><span class="no">7</span> VELOCITY <span class="chip">verified payments · per-minute ceiling, daily</span></div>
         <div class="ptools"><button class="pin-it" data-pin="velocity">⊞ pin</button></div>
         <div class="readout" id="v-readout">│ = day's max minute · ▪ = p99 of active minutes</div>
         <div class="chart-host" id="velochart"></div>
         <div class="row2" id="velostats" style="margin-top:8px"></div>
-        <div class="denom">known-facilitator set · p99 over active minutes only — idle minutes can't flatter the percentile</div>
+        <div class="denom">verified payments · p99 over active minutes only — idle minutes can't flatter the percentile</div>
       </section>
 
-      <!-- 9 CLAIMS -->
+      <!-- 8 CLAIMS -->
       <section class="panel span7" id="p9" style="animation-delay:.26s">
-        <div class="ptitle"><span class="no">9</span> CLAIM LEDGER <span class="chip">public claims vs measured</span></div>
+        <div class="ptitle"><span class="no">8</span> CLAIM LEDGER <span class="chip">public claims vs measured</span></div>
         <div class="ptools"><button class="pin-it" data-pin="claims">⊞ pin</button></div>
         <div id="claims"></div>
         <div class="denom">curated data/claims.json · join recomputed on every publish · each row names its measured metric</div>
       </section>
 
+      <!-- 9 ACTIVE WALLETS -->
+      <section class="panel span5" id="p11" style="animation-delay:.29s">
+        <div class="ptitle"><span class="no">9</span> ACTIVE WALLETS <span class="chip">distinct paying and receiving wallets per day</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="active_wallets">⊞ pin</button></div>
+        <div class="readout" id="ae-readout">payers (solid) · payees (dashed) · per day</div>
+        <div class="chart-host" id="aechart"></div>
+        <div id="ae-cohort"></div>
+        <div class="denom">distinct paying and receiving wallets per day · new = first verified payment within window · verified payments · last day may be partial</div>
+      </section>
+
+      <!-- 10 FACILITATORS -->
+      <section class="panel span12" id="p12" style="animation-delay:.32s">
+        <div class="ptitle"><span class="no">10</span> FACILITATORS <span class="chip">who settles the payments</span></div>
+        <div class="ptools"><button class="pin-it" data-pin="facilitators">⊞ pin</button></div>
+        <div id="fac-body"><!-- js --></div>
+        <div class="denom">who settled the payments · verified payments only · momentum = last 7 days' share of the last 30</div>
+      </section>
+
       <!-- LOG -->
-      <section class="panel span5" id="p10" style="animation-delay:.29s">
+      <section class="panel span5" id="p10" style="animation-delay:.35s">
         <div class="ptitle"><span class="no">~</span> VERIFY LOG <span class="chip">runs in your browser</span></div>
         <div class="shell" id="shell"></div>
       </section>
@@ -161,7 +183,7 @@
   <div class="statusbar">
     <span><span class="key">w</span> window</span>
     <span><span class="key">m</span> metric</span>
-    <span><span class="key">1-9</span> panel</span>
+    <span><span class="key">1-9,0</span> panel</span>
     <span><span class="key">p</span> pin</span>
     <span><span class="key">r</span> report</span>
     <span><span class="key">?</span> help</span>
@@ -205,7 +227,7 @@
     <div class="hk">
       <b>w</b><span>cycle window 7D → 30D → ALL</span>
       <b>m</b><span>flip every TX/USD toggle</span>
-      <b>1–9</b><span>jump to panel</span>
+      <b>1-9,0</b><span>jump to panel (0 = facilitators)</span>
       <b>p</b><span>pin focused panel to the report tray</span>
       <b>r</b><span>open / close report tray</span>
       <b>l</b><span>daily tape: linear ↔ log</span>
@@ -214,6 +236,7 @@
       <b>?</b><span>this help</span>
     </div>
     <div class="foot">workflow: explore → pin findings → compose thread → download X card. every number from dist/economy.json · denominators stated.</div>
+    <div class="foot"><a href="#" id="gate-reenable" style="color:var(--faint);text-decoration:none">re-enable narrow-screen warning</a></div>
   </div>
 </div>
 

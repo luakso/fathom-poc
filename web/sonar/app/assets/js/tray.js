@@ -1,28 +1,77 @@
 // Report tray: pin findings -> compose thread -> 1200x675 X card.
 import { $, $$ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict } from "./format.js";
+import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, escHtml, BANDDEF } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { tapeSlice } from "./charts.js";
-import { state, data, winLabel } from "./state.js";
+import { state, data, winLabel, facData } from "./state.js";
 
 const pins = [];
 let selPin = 0;
-const PINNERS = {
+let threadDirty = false; // true once the user has hand-edited the textarea
+
+/* ——— localStorage persistence ——— */
+const pinsKey = () => {
+  const ga = data?.meta?.generated_at;
+  return ga ? `fathom.pins.${ga}` : null;
+};
+function savePins(){
+  const key = pinsKey();
+  if (!key) return;
+  try { localStorage.setItem(key, JSON.stringify(pins)); } catch(e){}
+}
+/** Load persisted pins for the current artifact's generated_at. Silently ignores other keys. */
+export function _loadPins(){
+  const key = pinsKey();
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const loaded = JSON.parse(raw);
+    if (!Array.isArray(loaded)) return;
+    pins.length = 0;
+    loaded.forEach(p => pins.push(p));
+    selPin = Math.min(selPin, Math.max(0, pins.length - 1));
+  } catch(e){}
+}
+function overviewPinDenom() {
+  const defn = "A verified payment is a USDC payment settled on Base by a known x402 facilitator.";
+  const ex = data.excluded;
+  if (!ex || !ex.txn_count) return defn;
+  const n = ex.txn_count;
+  const nStr = n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
+  const v = num(ex.volume_usdc);
+  const vStr = v >= 1e9 ? "$"+(v/1e9).toFixed(1)+"B" : v >= 1e6 ? "$"+(v/1e6).toFixed(0)+"M" : "$"+(v/1e3).toFixed(0)+"k";
+  return `${defn} ${nStr} non-verified transfers (${vStr}) excluded.`;
+}
+export const PINNERS = {
   overview(){ const w = data.windows[state.win];
+    const t = data.typical[state.win];
+    // 6.2: append largest payment to context when the artifact carries the field.
+    const largestCtx = t.largest_payment_usdc != null
+      ? ` · largest ${fmtMoney(t.largest_payment_usdc)}`
+      : "";
     return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
-      context:`${fmtCount(w.txn_count)} verified x402 payments · ${fmtMoney(w.volume_usdc)} volume`,
-      denom:"x402 payment = USDC authorization settled by a known facilitator (EIP-3009) on Base · "+winLabel[state.win],
-      series:data.daily.map(d=>d[1]) }; },
+      context:`median ${fmtAmt(t.median_usdc)} typical · avg ${fmtAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments${largestCtx}`,
+      denom:overviewPinDenom()+" · "+winLabel[state.win],
+      series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
-    const peak = slice.reduce((a,b)=> b[1]>a[1]?b:a);
-    return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:fmtInt(peak[1])+" tx/day peak",
+    if (!slice.length) return null;
+    const usd = state.dMetric === "usd";
+    // Exclude incomplete points (d[3] === false) from peak selection.
+    const complete = slice.filter(d => d[3] !== false);
+    const peakPool = complete.length ? complete : slice; // fall back if all incomplete
+    const peak = usd ? peakPool.reduce((a,b)=> b[2]>a[2]?b:a) : peakPool.reduce((a,b)=> b[1]>a[1]?b:a);
+    const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
+    const hasPartial = slice.some(d => d[3] === false);
+    const partialNote = hasPartial ? " · last day partial, excluded from peak" : "";
+    return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:val,
       context:`${peak[0]} · ${state.dMa==="ma7"?"7-day MA":"raw"} · ${state.dScale}`,
-      denom:`x402 settlements, ${slice[0][0]} → ${slice[slice.length-1][0]}`,
-      series:slice.map(d=> state.dMetric==="tx"?d[1]:d[2]) }; },
+      denom:`verified payments, ${slice[0][0]} → ${slice[slice.length-1][0]}${partialNote}`,
+      series:slice.map(d=> usd?d[2]:d[1]) }; },
   monthly(){
     const complete = data.monthly.filter(m => m.complete);
     if (complete.length < 2) return { title:"MONTHLY", value:"insufficient complete months",
-      context:"need two complete months for MoM", denom:"x402 set · complete months",
+      context:"need two complete months for MoM", denom:"verified payments · complete months",
       series: data.monthly.map(m => num(m.volume_usdc)) };
     const prev = complete[complete.length-2], last = complete[complete.length-1];
     const v = m => num(m.volume_usdc);
@@ -33,27 +82,53 @@ const PINNERS = {
     return { title:"MONTHLY",
       value:`${name} $: ${dUsd>0?"+":""}${dUsd.toFixed(0)}% MoM`,
       context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while $ ${dUsd<0?"fell":"rose"} ${fmtMoney(v(prev))}→${fmtMoney(v(last))}`,
-      denom:"x402 set · complete months",
+      denom:"verified payments · complete months",
       series: data.monthly.map(m => num(m.volume_usdc)) };
   },
   shape(){ const t = data.typical[state.win];
     if (!t.txn_count) return null;
+    const b = data.windows[state.win].by_band;
+    const totTx  = BANDDEF.reduce((s,[k]) => s + b[k].txn_count, 0) || 1;
+    const totUsd = BANDDEF.reduce((s,[k]) => s + num(b[k].volume_usdc), 0) || 1;
+    const dustTxPct  = (100 * b.dust.txn_count / totTx).toFixed(1);
+    const dustUsdPct = (100 * num(b.dust.volume_usdc) / totUsd).toFixed(1);
     const xMed = num(t.avg_usdc)/num(t.median_usdc);
+    // 6.3 percentile context: appended when artifact carries p10/p90/p99.
+    const pctCtx = t.p10_usdc != null && t.p90_usdc != null && t.p99_usdc != null
+      ? ` · p10 ${fmtAmt(t.p10_usdc)} → p90 ${fmtAmt(t.p90_usdc)} → p99 ${fmtAmt(t.p99_usdc)}`
+      : "";
     return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median`,
-      denom:"verified x402 set · "+winLabel[state.win] }; },
+      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars${pctCtx}`,
+      denom:"verified payments · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;
     const READ = { menu:"a menu, not a market", market:"a market, not a menu", mixed:"between menu and market" };
-    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtCount(p.txn_count),
-      context:`top amount = ${p.txn_share_pct}% of known-facilitator tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}`,
-      denom:"known-facilitator set · "+winLabel[state.win] }; },
+    // 6.7: append payee trend for the top price point when breadth data is available.
+    // Compares first vs last complete-day payee count with a ±20% threshold.
+    let trendCtx = "";
+    if (data.price_breadth){
+      const bs = data.price_breadth.find(b => b.amount_usdc === p.amount_usdc);
+      if (bs && bs.series){
+        const complete = bs.series.filter(d => d.complete !== false);
+        if (complete.length >= 2){
+          const first = complete[0].payee_count, last = complete[complete.length-1].payee_count;
+          const change = first > 0 ? (last - first) / first : null;
+          if (change !== null){
+            const trend = change >= 0.2 ? "widening" : change <= -0.2 ? "narrowing" : "flat";
+            trendCtx = ` · payees trend: ${trend}`;
+          }
+        }
+      }
+    }
+    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtInt(p.txn_count),
+      context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}${trendCtx}`,
+      denom:"verified payments · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
     if (!g.txn_count) return null;
     const p = 100*g.breakeven_txn_count/g.txn_count;
     return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% cost>value",
-      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
-      denom:"tx-deduped L1+L2 cost, equal apportioning · monthly ETH/USD ref · "+winLabel[state.win] }; },
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments cost more than value · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
+      denom:"tx-deduped L1+L2 cost, equal apportioning · weekly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all;
     const days = data.velocity.verified_daily;
     if (!days.length) return null;
@@ -61,20 +136,61 @@ const PINNERS = {
     const med = medianOf(days.map(d => d[2]));
     return { title:"VELOCITY", value:fmtInt(vw.max_per_min)+"/min peak",
       context:`${days[pi][0]} · body ~${fmtInt(med)}/min p99 — bursts, not drip`,
-      denom:"known-facilitator set · p99 over active minutes",
+      denom:"verified payments · p99 over active minutes",
       series: days.map(d => d[1]) }; },
   claims(){ const c = data.claims[0];
     if (!c) return null;
-    const ratio = num(c.claimed_value)/num(c.measured_value);
-    return { title:"CLAIM LEDGER", value:"×"+ratio.toFixed(1)+" "+claimVerdict(ratio),
-      context:`"${c.claim_text}" → measured ${fmtInt(c.measured_value)}`,
+    const measured = num(c.measured_value);
+    const ratio = measured !== 0 ? num(c.claimed_value) / measured : null;
+    const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
+    const fmt = isUsd ? fmtMoney : fmtInt;
+    return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
+      context:`"${escHtml(c.claim_text)}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
+  facilitators(){
+    if (!facData || !facData.rows || !facData.rows.length) return null;
+    const r = facData.rows[0];
+    const hasWindows = !!(r.windows && r.windows["7d"] && r.windows["30d"]);
+    if (!hasWindows) return null;
+    const shortAddr = a => String(a).length > 10 ? String(a).slice(0,6) + "…" + String(a).slice(-4) : a;
+    const v7  = num(r.windows["7d"].volume_usdc);
+    const v30 = num(r.windows["30d"].volume_usdc);
+    const momentum = v30 > 0 ? (100 * v7 / v30).toFixed(0) + "%" : "—";
+    const topN = facData.rows.slice(0, 3).map(x => `${escHtml(shortAddr(x.facilitator))} ${fmtMoney(x.volume_usdc)}`).join(" · ");
+    return { title:"FACILITATORS",
+      value:`${escHtml(shortAddr(r.facilitator))} · ${fmtMoney(r.volume_usdc)} all-time`,
+      context:`top facilitators: ${topN} · 7d momentum ${momentum} of 30d`,
+      denom:"who settled the payments · verified payments only · momentum = last 7 days' share of the last 30" }; },
+  active_wallets(){ const ae = data.active_entities;
+    if (!ae || !ae.length) return null;
+    // Show counts from the last complete day (exclude the partial edge day).
+    const complete = ae.filter(p => p.complete);
+    const ref = complete.length ? complete[complete.length-1] : ae[ae.length-1];
+    // 6.5: append 7d new-payer% when the artifact carries cohort data.
+    const cohorts = data.payer_cohorts;
+    let cohortCtx = "";
+    if (cohorts && cohorts["7d"]) {
+      const c = cohorts["7d"];
+      const nv = num(c.new_payer_volume_usdc), rv = num(c.returning_payer_volume_usdc);
+      const tot = nv + rv || 1;
+      const np = (100 * nv / tot).toFixed(1);
+      cohortCtx = ` · 7d: ${np}% new-payer volume`;
+    }
+    return { title:"ACTIVE WALLETS",
+      value:`${fmtInt(ref.payer_count)} payers · ${fmtInt(ref.payee_count)} payees`,
+      context:`${ref.day} · distinct wallets from verified payments${cohortCtx}`,
+      denom:"distinct paying and receiving wallets per day · verified payments",
+      series: ae.map(p => p.payer_count) }; },
 };
 export function addPin(key){
   const gen = PINNERS[key]; if (!gen) return;
   const pin = gen(); if (!pin) return; // panel has nothing pinnable in this window
-  pins.push({ key, win:state.win, ...pin });
-  selPin = pins.length-1;
+  const newPin = { key, win:state.win, ...pin };
+  // Dedupe: replace any existing pin for the same panel+window combo.
+  const idx = pins.findIndex(p => p.key === key && p.win === state.win);
+  if (idx >= 0){ pins[idx] = newPin; selPin = idx; }
+  else { pins.push(newPin); selPin = pins.length-1; }
+  savePins();
   rTray(); rCard();
   $("#pincount").textContent = pins.length;
   const panel = $(`[data-pin="${key}"]`)?.closest(".panel");
@@ -84,7 +200,7 @@ export function rTray(){
   $("#pincount").textContent = pins.length;
   $("#pinlist").innerHTML = pins.length ? pins.map((p,i) => `
     <div class="pinitem ${i===selPin?"sel":""}" data-i="${i}">
-      <div class="t"><span>⊞ ${p.title}</span><button data-del="${i}" title="remove">✕</button></div>
+      <div class="t"><span>⊞ ${p.title}</span>${p.win ? `<span class="chip">${p.win}</span>` : ""}<button data-del="${i}" title="remove">✕</button></div>
       <div class="v">${p.value}</div>
       <div class="c">${p.context}</div>
     </div>`).join("")
@@ -104,7 +220,7 @@ export function genThread(){
   if (!pins.length){ $("#thread").value = ""; rCount(); return; }
   const head = `fathom // x402 on Base — data through ${data.meta.data_through_day}\n\n`;
   const body = pins.map(p => `▸ ${p.value} — ${p.context}`).join("\n");
-  const foot = `\n\ndenominators stated. no row dropped — only labeled.`;
+  const foot = `\n\nverified payments only. unverified transfers excluded. denominators stated.`;
   $("#thread").value = head + body + foot;
   rCount();
 }
@@ -116,7 +232,9 @@ export function rCount(){
 }
 /* X card — canvas 1200×675 */
 export function rCard(){
-  const cv = $("#xcard"), ctx = cv.getContext("2d");
+  const cv = $("#xcard"); if (!cv || !cv.getContext) return;
+  let ctx; try { ctx = cv.getContext("2d"); } catch(e){ return; }
+  if (!ctx) return;
   const W = 1200, H = 675;
   ctx.fillStyle = "#070b09"; ctx.fillRect(0,0,W,H);
   // grid
@@ -180,16 +298,29 @@ function wrapText(ctx, text, x, y, maxW, lh){
   ctx.fillText(line.trim(), x, yy);
 }
 
+/** Reset pin state and clear localStorage — test helper and production cleanup. */
+export function _clearPins(){
+  pins.length = 0;
+  selPin = 0;
+  threadDirty = false;
+  const key = pinsKey();
+  if (key) try { localStorage.removeItem(key); } catch(e){}
+}
+
 const tray = () => $("#tray");
 export function toggleTray(force){
   tray().classList.toggle("open", force);
-  if (tray().classList.contains("open")){ rTray(); rCard(); }
+  if (tray().classList.contains("open")){
+    rTray(); rCard();
+    if (pins.length && !threadDirty) genThread();
+  }
 }
 export function initTray(){
+  _loadPins();
   $("#traytoggle").addEventListener("click", () => toggleTray());
   $("#trayclose").addEventListener("click", () => toggleTray(false));
-  $("#regen").addEventListener("click", genThread);
-  $("#thread").addEventListener("input", rCount);
+  $("#regen").addEventListener("click", () => { threadDirty = false; genThread(); });
+  $("#thread").addEventListener("input", () => { threadDirty = true; rCount(); });
   $("#copythread").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("#thread").value); $("#copythread").textContent = "COPIED ✓";
       setTimeout(() => $("#copythread").textContent = "COPY", 1200); } catch(e){}

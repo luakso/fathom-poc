@@ -36,13 +36,13 @@ GROUP BY 1, 2, 3, 4, 5, 6`
 // superuser; under a least-privilege role this SET fails).
 const tempFileLimit = "30GB"
 
-// missingPriceMonthsSQL lists months present in payments but absent from the
-// session's eth_price_monthly temp table. NULL result = full coverage.
-const missingPriceMonthsSQL = `
-SELECT string_agg(m, ', ' ORDER BY m) FROM (
-    SELECT DISTINCT to_char(block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM') AS m FROM payments
+// missingPriceWeeksSQL lists ISO week-starts (YYYY-MM-DD) present in payments
+// but absent from the session's eth_price_weekly temp table. NULL result = full coverage.
+const missingPriceWeeksSQL = `
+SELECT string_agg(w, ', ' ORDER BY w) FROM (
+    SELECT DISTINCT to_char(date_trunc('week', block_timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS w FROM payments
     EXCEPT
-    SELECT month FROM eth_price_monthly
+    SELECT week FROM eth_price_weekly
 ) missing`
 
 // windowsValues enumerates the fixed emit windows for rollup-side anchoring.
@@ -50,30 +50,36 @@ SELECT string_agg(m, ', ' ORDER BY m) FROM (
 // same anchor emit uses, so rollup and emit always agree on what '7d' means.
 const windowsValues = `(VALUES ('7d', 7), ('30d', 30), ('all', 0)) AS w(window_name, days)`
 
-// economyWindowStatsSQL: medians per (window, membership) + the synthetic
-// 'all' membership via GROUPING SETS. Medians are not mergeable from a cube,
-// so they are computed here, once, at scan time. min(methodology_version) is
-// safe only because the v1 view is frozen single-version; emit independently
-// asserts exactly one version across all metrics tables.
+// economyWindowStatsSQL: medians + p10/p90/p99 per (window, membership) + the
+// synthetic 'all' membership via GROUPING SETS. Medians are not mergeable from
+// a cube, so they are computed here, once, at scan time.
+// percentile_disc(ARRAY[...]) issues ONE sort and extracts all four quantiles in
+// a single pass; the subscripted CTE avoids repeating the WITHIN GROUP expression.
+// min(methodology_version) is safe only because the v1 view is frozen single-version.
 const economyWindowStatsSQL = `
 TRUNCATE metrics_window_stats_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1 WHERE facilitator_known
+), raw AS (
+    SELECT
+        w.window_name,
+        COALESCE(CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END, 'all') AS membership,
+        min(p.methodology_version) AS methodology_version,
+        count(*) AS txn_count,
+        percentile_disc(ARRAY[0.1, 0.5, 0.9, 0.99]) WITHIN GROUP (ORDER BY p.amount_usdc) AS percs
+    FROM payment_x402_v1 p
+    CROSS JOIN ` + windowsValues + `
+    CROSS JOIN anchor a
+    WHERE w.days = 0
+       OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+    GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END), ())
 )
 INSERT INTO metrics_window_stats_v2
-    (window_name, membership, methodology_version, txn_count, median_amount_usdc)
-SELECT
-    w.window_name,
-    COALESCE(CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END, 'all'),
-    min(p.methodology_version),
-    count(*),
-    percentile_disc(0.5) WITHIN GROUP (ORDER BY p.amount_usdc)
-FROM payment_x402_v1 p
-CROSS JOIN ` + windowsValues + `
-CROSS JOIN anchor a
-WHERE w.days = 0
-   OR (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
-GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'known' ELSE 'unknown' END), ())`
+    (window_name, membership, methodology_version, txn_count,
+     median_amount_usdc, p10_amount_usdc, p90_amount_usdc, p99_amount_usdc)
+SELECT window_name, membership, methodology_version, txn_count,
+    percs[2], percs[1], percs[3], percs[4]
+FROM raw`
 
 // economyPricePointsSQL: top 50 exact known-facilitator amounts per window,
 // ranked by txn count (ties broken by amount for determinism). payee_count
@@ -83,7 +89,7 @@ GROUP BY w.window_name, GROUPING SETS ((CASE WHEN p.facilitator_known THEN 'know
 const economyPricePointsSQL = `
 TRUNCATE metrics_price_points_v2;
 WITH anchor AS (
-    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d FROM payment_x402_v1 WHERE facilitator_known
 )
 INSERT INTO metrics_price_points_v2
     (window_name, rank, amount_usdc, txn_count, volume_usdc, payee_count, methodology_version)
@@ -118,9 +124,10 @@ WHERE rk <= 50`
 // stored separately (l2_gas_cost_wei, l1_fee_wei); cost_usd and breakeven use the
 // TOTAL (l2 + l1). The apportioned sum conserves the per-tx sum to ~16 significant
 // figures (numeric division; sub-wei drift, far below the 6dp ETH any artifact
-// reports). USD uses the staged monthly reference price; breakeven counts payments
-// whose apportioned total cost in USD exceeds the amount they moved. Membership is
-// tx-level by construction, so apportioning never crosses membership.
+// reports). USD uses the staged weekly reference price (ISO Monday week-start);
+// breakeven counts payments whose apportioned total cost in USD exceeds the
+// amount they moved. Membership is tx-level by construction, so apportioning
+// never crosses membership.
 const economyGasDailySQL = `
 TRUNCATE metrics_gas_daily_v2;
 WITH tx AS (
@@ -148,9 +155,26 @@ SELECT
     sum(p.amount_usdc)
 FROM payment_x402_v1 p
 JOIN tx t USING (chain, tx_hash)
-JOIN eth_price_monthly pr
-  ON pr.month = to_char(p.block_timestamp AT TIME ZONE 'UTC', 'YYYY-MM')
+JOIN eth_price_weekly pr
+  ON pr.week = to_char(date_trunc('week', p.block_timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD')
 GROUP BY 1, 2, 3`
+
+// activeEntitiesDailySQL: verified-only distinct payer + payee counts per
+// calendar day. Distinct counts are NOT additive across cube cells (the same
+// wallet appears in multiple facilitator/band rows), so this is computed
+// directly from payment_x402_v1 rather than derived from the cube.
+const activeEntitiesDailySQL = `
+TRUNCATE metrics_active_entities_daily_v2;
+INSERT INTO metrics_active_entities_daily_v2
+    (day, payer_count, payee_count, methodology_version)
+SELECT
+    (block_timestamp AT TIME ZONE 'UTC')::date AS day,
+    count(DISTINCT payer)           AS payer_count,
+    count(DISTINCT payee)           AS payee_count,
+    min(methodology_version)
+FROM payment_x402_v1
+WHERE facilitator_known
+GROUP BY 1`
 
 // economyVelocityDailySQL: per-minute counts reduced to per-day stats.
 // p99 is over the day's ACTIVE minutes (idle minutes would zero it).
@@ -173,6 +197,67 @@ FROM (
 ) per_min
 GROUP BY day, membership`
 
+// payerCohortsSQL computes the new vs returning payer breakdown per window (item 6.5).
+// "New" payer: their first ever verified payment (facilitator_known) falls within the window.
+// "Returning": they have at least one verified payment before the window start.
+// The "all" window is intentionally excluded — it is degenerate (every payer is "new"
+// relative to time zero) and would produce a meaningless 100% new split.
+// global_first anchors on ALL verified history, not just the window, so a payer whose
+// first payment was a decade ago is always "returning" regardless of the window size.
+const payerCohortsSQL = `
+TRUNCATE metrics_payer_cohorts_v1;
+WITH anchor AS (
+    SELECT max((block_timestamp AT TIME ZONE 'UTC')::date) AS d
+    FROM payment_x402_v1 WHERE facilitator_known
+),
+global_first AS (
+    SELECT payer, min((block_timestamp AT TIME ZONE 'UTC')::date) AS first_day
+    FROM payment_x402_v1 WHERE facilitator_known
+    GROUP BY payer
+)
+INSERT INTO metrics_payer_cohorts_v1
+    (window_name, new_payers, returning_payers,
+     new_payer_volume_usdc, returning_payer_volume_usdc, methodology_version)
+SELECT
+    w.window_name,
+    count(DISTINCT p.payer) FILTER (WHERE g.first_day >= a.d - (w.days - 1)) AS new_payers,
+    count(DISTINCT p.payer) FILTER (WHERE g.first_day <  a.d - (w.days - 1)) AS returning_payers,
+    COALESCE(sum(p.amount_usdc) FILTER (WHERE g.first_day >= a.d - (w.days - 1)), 0) AS new_payer_volume_usdc,
+    COALESCE(sum(p.amount_usdc) FILTER (WHERE g.first_day <  a.d - (w.days - 1)), 0) AS returning_payer_volume_usdc,
+    min(p.methodology_version)
+FROM payment_x402_v1 p
+JOIN global_first g ON g.payer = p.payer
+CROSS JOIN anchor a
+CROSS JOIN (VALUES ('7d', 7), ('30d', 30)) AS w(window_name, days)
+WHERE p.facilitator_known
+  AND (p.block_timestamp AT TIME ZONE 'UTC')::date >= a.d - (w.days - 1)
+  AND (p.block_timestamp AT TIME ZONE 'UTC')::date <= a.d
+GROUP BY w.window_name`
+
+// priceBreadthDailySQL computes per-day distinct payee counts for the top-12
+// all-window price points (item 6.7). The top-N restriction piggybacks on the
+// rank already computed in metrics_price_points_v2 by the preceding price_points
+// statement — both run inside the same REPEATABLE READ transaction so they see
+// an identical snapshot. Restricted to verified (facilitator_known) payments.
+const priceBreadthDailySQL = `
+TRUNCATE metrics_price_point_daily_v1;
+WITH top_amounts AS (
+    SELECT amount_usdc
+    FROM metrics_price_points_v2
+    WHERE window_name = 'all' AND rank <= 12
+)
+INSERT INTO metrics_price_point_daily_v1
+    (day, amount_usdc, payee_count, methodology_version)
+SELECT
+    (p.block_timestamp AT TIME ZONE 'UTC')::date AS day,
+    p.amount_usdc,
+    count(DISTINCT p.payee)  AS payee_count,
+    min(p.methodology_version)
+FROM payment_x402_v1 p
+JOIN top_amounts ta ON ta.amount_usdc = p.amount_usdc
+WHERE p.facilitator_known
+GROUP BY 1, 2`
+
 // rebuildStatements run in order inside the one rebuild transaction. Each is
 // its own TRUNCATE + INSERT, so a failure anywhere rolls the whole generation
 // back and the previous tables stay live.
@@ -183,12 +268,15 @@ var rebuildStatements = []struct {
 	{"cube", rebuildCubeSQL},
 	{"window_stats", economyWindowStatsSQL},
 	{"price_points", economyPricePointsSQL},
+	{"price_breadth_daily", priceBreadthDailySQL},
 	{"gas_daily", economyGasDailySQL},
 	{"velocity_daily", economyVelocityDailySQL},
+	{"active_entities_daily", activeEntitiesDailySQL},
+	{"payer_cohorts", payerCohortsSQL},
 }
 
 // Rebuild fully recomputes every metrics table from payment_x402_v1 in a
-// single transaction. prices is the curated monthly ETH/USD reference (already
+// single transaction. prices is the curated weekly ETH/USD reference (already
 // validated by LoadETHPrices); it is staged into a temp table so the gas SQL
 // can join it, and coverage is checked against payments BEFORE any TRUNCATE.
 func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
@@ -212,11 +300,11 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 	}
 
 	var missing *string
-	if err := tx.QueryRow(ctx, missingPriceMonthsSQL).Scan(&missing); err != nil {
+	if err := tx.QueryRow(ctx, missingPriceWeeksSQL).Scan(&missing); err != nil {
 		return fmt.Errorf("check price coverage: %w", err)
 	}
 	if missing != nil {
-		return fmt.Errorf("eth price file is missing months present in payments: %s", *missing)
+		return fmt.Errorf("eth price file is missing weeks present in payments: %s", *missing)
 	}
 
 	for _, stmt := range rebuildStatements {
@@ -239,25 +327,25 @@ func Rebuild(ctx context.Context, pool *pgxpool.Pool, prices ETHPrices) error {
 	return nil
 }
 
-// stagePrices creates the session-scoped monthly price table the gas SQL joins.
+// stagePrices creates the session-scoped weekly price table the gas SQL joins.
 func stagePrices(ctx context.Context, tx pgx.Tx, prices ETHPrices) error {
 	if _, err := tx.Exec(ctx, `
-		CREATE TEMP TABLE eth_price_monthly (
-			month TEXT PRIMARY KEY,
-			usd   NUMERIC NOT NULL CHECK (usd > 0)
+		CREATE TEMP TABLE eth_price_weekly (
+			week TEXT PRIMARY KEY,
+			usd  NUMERIC NOT NULL CHECK (usd > 0)
 		) ON COMMIT DROP`); err != nil {
 		return fmt.Errorf("create price temp table: %w", err)
 	}
-	months := make([]string, 0, len(prices.Prices))
-	for m := range prices.Prices {
-		months = append(months, m)
+	weeks := make([]string, 0, len(prices.Prices))
+	for w := range prices.Prices {
+		weeks = append(weeks, w)
 	}
-	sort.Strings(months)
-	for _, m := range months {
+	sort.Strings(weeks)
+	for _, w := range weeks {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO eth_price_monthly (month, usd) VALUES ($1, $2)`,
-			m, prices.Prices[m].String()); err != nil {
-			return fmt.Errorf("stage price %s: %w", m, err)
+			`INSERT INTO eth_price_weekly (week, usd) VALUES ($1, $2)`,
+			w, prices.Prices[w].String()); err != nil {
+			return fmt.Errorf("stage price %s: %w", w, err)
 		}
 	}
 	return nil

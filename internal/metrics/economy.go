@@ -21,10 +21,19 @@ type MonthlyPoint struct {
 }
 
 // TypicalPayment answers "what does a typical payment look like" (E7).
+// P10/P90/P99 are omitempty: they are absent in pre-6.3 artifacts (until the
+// next rollup+emit after migration 00019). JS checks for nil before showing
+// the percentile strip.
+// LargestPaymentUSDC (6.2): max over the window's known cube cells, 6 dp.
+// Omitempty so old artifacts stay unchanged; JS checks for nil before rendering.
 type TypicalPayment struct {
-	AvgUSDC    string `json:"avg_usdc"`
-	MedianUSDC string `json:"median_usdc"`
-	TxnCount   int64  `json:"txn_count"`
+	AvgUSDC            string  `json:"avg_usdc"`
+	MedianUSDC         string  `json:"median_usdc"`
+	TxnCount           int64   `json:"txn_count"`
+	P10USDC            *string `json:"p10_usdc,omitempty"`
+	P90USDC            *string `json:"p90_usdc,omitempty"`
+	P99USDC            *string `json:"p99_usdc,omitempty"`
+	LargestPaymentUSDC *string `json:"largest_payment_usdc,omitempty"`
 }
 
 // PricePoint is one row of the agentic price-point spectrum (E8).
@@ -53,11 +62,33 @@ type GasWindow struct {
 	ByBand map[string]GasMeasure `json:"by_band"`
 }
 
+// GasCostDailyPoint is one day of the per-day settlement cost series (6.4).
+// Complete is false for the newest (edge) day — same convention as DailyPoint.
+// CentsPerDollar is cost_usd / volume_usdc * 100, 4 dp. Days with zero verified
+// volume are skipped (undefined cost ratio); the JS adapts to the gap.
+type GasCostDailyPoint struct {
+	Day            string `json:"day"`
+	Complete       bool   `json:"complete"`
+	CentsPerDollar string `json:"cents_per_dollar"`
+}
+
 // GasSection carries the gas windows plus the methodology notes that make the
-// number citable.
+// number citable. CostDaily (6.4) is the full-history daily cost-per-dollar series.
 type GasSection struct {
-	Method  map[string]string    `json:"method"`
-	Windows map[string]GasWindow `json:"windows"`
+	Method    map[string]string    `json:"method"`
+	Windows   map[string]GasWindow `json:"windows"`
+	CostDaily []GasCostDailyPoint  `json:"cost_daily"`
+}
+
+// ActiveEntitiesPoint is one day of the active-wallet daily series (6.1).
+// Payers and payees are counted distinctly over verified payments only;
+// the same wallet on two days is counted once per day, not globally merged.
+// Complete is false for the newest (edge) day — the same convention as DailyPoint.
+type ActiveEntitiesPoint struct {
+	Day        string `json:"day"`      // YYYY-MM-DD
+	Complete   bool   `json:"complete"` // false iff this is the newest (edge) day
+	PayerCount int64  `json:"payer_count"`
+	PayeeCount int64  `json:"payee_count"`
 }
 
 // VelocityStat is the burstiness headline for one window (E12).
@@ -88,7 +119,7 @@ type ClaimResult struct {
 // gasMethodNotes documents how the gas numbers were computed; emitted verbatim.
 var gasMethodNotes = map[string]string{
 	"dedupe":      "both the L2 execution gas and the L1 data fee are tx-level; each is counted once per transaction and apportioned equally across its payments",
-	"price":       "monthly ETH/USD reference prices from data/eth-usd-monthly.json (source cited in the file)",
+	"price":       "weekly ETH/USD reference prices from data/eth-usd-weekly.json (ISO Monday week-start; source cited in the file)",
 	"breakeven":   "payments whose apportioned gas in USD exceeds the amount moved",
 	"granularity": "rolled up from verified (known-facilitator) (day, amount_band) gas rows",
 	"cost":        "true L2 settlement cost = execution gas + L1 data fee",
@@ -141,10 +172,17 @@ func monthlySeries(slices []cubeSlice, asOf time.Time) ([]MonthlyPoint, error) {
 
 // buildTypicalPayment merges cube-side averages with rollup-side medians for
 // verified payments only. windows is the already-built map from BuildEconomy.
+// Every window is pre-initialised so the output always contains all three keys
+// even when a window has no verified rows in metrics_window_stats_v2.
 func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]WindowEconomy) (map[string]TypicalPayment, error) {
+	zero := decimal.Zero.StringFixed(x402.USDCDecimals)
 	out := map[string]TypicalPayment{}
+	for w := range windowDays {
+		out[w] = TypicalPayment{AvgUSDC: zero, MedianUSDC: zero}
+	}
 	rows, err := q.Query(ctx, `
-		SELECT window_name, txn_count, median_amount_usdc::text
+		SELECT window_name, txn_count, median_amount_usdc::text,
+		       p10_amount_usdc::text, p90_amount_usdc::text, p99_amount_usdc::text
 		FROM metrics_window_stats_v2 WHERE membership = 'known'`)
 	if err != nil {
 		return nil, fmt.Errorf("window stats read: %w", err)
@@ -153,27 +191,41 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 	for rows.Next() {
 		var w, median string
 		var txns int64
-		if err := rows.Scan(&w, &txns, &median); err != nil {
+		var p10, p90, p99 *string
+		if err := rows.Scan(&w, &txns, &median, &p10, &p90, &p99); err != nil {
 			return nil, fmt.Errorf("scan window stats: %w", err)
 		}
 		if _, ok := windows[w]; !ok {
 			return nil, fmt.Errorf("window stats read: unknown window_name %q", w)
 		}
-		out[w] = TypicalPayment{AvgUSDC: avgUSDC(windows[w].Measure), MedianUSDC: median, TxnCount: txns}
+		avg, err := avgUSDC(windows[w].Measure)
+		if err != nil {
+			return nil, fmt.Errorf("avg for window %s: %w", w, err)
+		}
+		out[w] = TypicalPayment{
+			AvgUSDC:    avg,
+			MedianUSDC: median,
+			TxnCount:   txns,
+			P10USDC:    p10,
+			P90USDC:    p90,
+			P99USDC:    p99,
+		}
 	}
 	return out, rows.Err()
 }
 
-// avgUSDC divides a Measure's volume by its count, "0.000000" for empty.
-func avgUSDC(m Measure) string {
+// avgUSDC divides a Measure's volume by its count. Returns "0.000000" for an
+// empty measure (TxnCount == 0).  Returns an error if VolumeUSDC is not a
+// valid decimal — callers must not swallow this into a silent zero.
+func avgUSDC(m Measure) (string, error) {
 	if m.TxnCount == 0 {
-		return decimal.Zero.StringFixed(x402.USDCDecimals)
+		return decimal.Zero.StringFixed(x402.USDCDecimals), nil
 	}
 	vol, err := decimal.NewFromString(m.VolumeUSDC)
 	if err != nil {
-		return decimal.Zero.StringFixed(x402.USDCDecimals)
+		return "", fmt.Errorf("avgUSDC: parse volume %q: %w", m.VolumeUSDC, err)
 	}
-	return vol.Div(decimal.NewFromInt(m.TxnCount)).StringFixed(x402.USDCDecimals)
+	return vol.Div(decimal.NewFromInt(m.TxnCount)).StringFixed(x402.USDCDecimals), nil
 }
 
 // buildPricePoints reads the precomputed top-N and attaches the window share.
@@ -295,7 +347,7 @@ func buildGas(ctx context.Context, q Querier, asOf time.Time) (GasSection, error
 		return GasSection{}, fmt.Errorf("gas read: %w", err)
 	}
 
-	sec := GasSection{Method: gasMethodNotes, Windows: map[string]GasWindow{}}
+	sec := GasSection{Method: gasMethodNotes, Windows: map[string]GasWindow{}, CostDaily: buildGasCostDailySeries(slices)}
 	for w := range windowDays {
 		lb := lowerBound(asOf, w)
 		var total gasAccum
@@ -367,17 +419,20 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("claim %s: %w", c.ID, err)
 		}
-		m := page.Windows[window].Measure
+		we, ok := page.Windows[window]
+		if !ok {
+			return nil, fmt.Errorf("claim %s: window %q not present in economy page — rebuild and re-emit", c.ID, window)
+		}
+		m := we.Measure
 		r := ClaimResult{Claim: c}
 		switch kind {
 		case "txns":
 			r.MeasuredValue = strconv.FormatInt(m.TxnCount, 10)
 			r.MeasuredUnit = "transactions"
 		case "volume":
+			// VolumeUSDC from accum.measure() is always a valid decimal string;
+			// no empty-string fallback needed after the ok-check above.
 			r.MeasuredValue = m.VolumeUSDC
-			if r.MeasuredValue == "" {
-				r.MeasuredValue = decimal.Zero.StringFixed(x402.USDCDecimals)
-			}
 			r.MeasuredUnit = "USDC"
 		default:
 			return nil, fmt.Errorf("claim %s: unhandled kind %q", c.ID, kind)
@@ -385,4 +440,138 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// windowLargestPayments computes the per-window largest individual payment from
+// the already-loaded verified cube slices. For each window, it takes the max
+// of each cell's max_amount_usdc (populated by the rollup from the payments
+// table), bounded by asOf like all other window measures. Returns nil for a
+// window with no verified rows (window value absent in the result map).
+func windowLargestPayments(slices []cubeSlice, asOf time.Time) map[string]*string {
+	out := make(map[string]*string)
+	for w := range windowDays {
+		lb := lowerBound(asOf, w)
+		var wmax decimal.Decimal
+		for _, s := range slices {
+			if lb != "" && s.day < lb {
+				continue
+			}
+			if s.maxAmt.GreaterThan(wmax) {
+				wmax = s.maxAmt
+			}
+		}
+		if wmax.IsPositive() {
+			v := wmax.StringFixed(x402.USDCDecimals)
+			out[w] = &v
+		}
+	}
+	return out
+}
+
+// buildGasCostDailySeries derives a daily cost-per-dollar series from gasSlices,
+// aggregating all bands per day. Days with zero verified volume are skipped
+// (undefined cost ratio). The last day is always marked Complete=false (edge
+// day convention). The series is bounded by the slices themselves, which the
+// caller already restricted to day <= asOf.
+func buildGasCostDailySeries(slices []gasSlice) []GasCostDailyPoint {
+	type dayAcc struct {
+		usd    decimal.Decimal
+		volume decimal.Decimal
+	}
+	dayOrder := []string{}
+	dailyMap := map[string]*dayAcc{}
+	for _, s := range slices {
+		if _, ok := dailyMap[s.day]; !ok {
+			dailyMap[s.day] = &dayAcc{}
+			dayOrder = append(dayOrder, s.day)
+		}
+		dailyMap[s.day].usd = dailyMap[s.day].usd.Add(s.usd)
+		dailyMap[s.day].volume = dailyMap[s.day].volume.Add(s.volume)
+	}
+	series := []GasCostDailyPoint{}
+	for _, day := range dayOrder {
+		acc := dailyMap[day]
+		if !acc.volume.IsPositive() {
+			continue // skip zero-volume days (undefined cost ratio)
+		}
+		cents := acc.usd.Mul(decimal.NewFromInt(100)).Div(acc.volume).StringFixed(4)
+		series = append(series, GasCostDailyPoint{Day: day, Complete: true, CentsPerDollar: cents})
+	}
+	// Mark the edge day incomplete — the same convention as DailyPoint and
+	// ActiveEntitiesPoint: the newest day's block window may still be accumulating.
+	if len(series) > 0 {
+		series[len(series)-1].Complete = false
+	}
+	return series
+}
+
+// PayerCohort is the new vs returning payer breakdown for one window (item 6.5).
+// "New" means the payer's first ever verified payment falls within the window.
+// "Returning" means at least one verified payment predates the window start.
+// Volume strings are 6 dp USDC decimals; new_vol + ret_vol == window verified volume.
+type PayerCohort struct {
+	NewPayers                int64  `json:"new_payers"`
+	ReturningPayers          int64  `json:"returning_payers"`
+	NewPayerVolumeUSDC       string `json:"new_payer_volume_usdc"`
+	ReturningPayerVolumeUSDC string `json:"returning_payer_volume_usdc"`
+}
+
+// buildPayerCohorts reads the precomputed payer cohort table. Returns nil (not
+// an empty map) when the table is empty, so the omitempty tag on EconomyPage
+// suppresses the field from the artifact for rollups that predated this table.
+func buildPayerCohorts(ctx context.Context, q Querier) (map[string]PayerCohort, error) {
+	rows, err := q.Query(ctx, `
+		SELECT window_name, new_payers, returning_payers,
+		       new_payer_volume_usdc::text, returning_payer_volume_usdc::text
+		FROM metrics_payer_cohorts_v1`)
+	if err != nil {
+		return nil, fmt.Errorf("payer cohorts: %w", err)
+	}
+	defer rows.Close()
+	var out map[string]PayerCohort
+	for rows.Next() {
+		var name string
+		var c PayerCohort
+		if err := rows.Scan(&name, &c.NewPayers, &c.ReturningPayers, &c.NewPayerVolumeUSDC, &c.ReturningPayerVolumeUSDC); err != nil {
+			return nil, fmt.Errorf("payer cohorts scan: %w", err)
+		}
+		if out == nil {
+			out = make(map[string]PayerCohort)
+		}
+		out[name] = c
+	}
+	return out, rows.Err()
+}
+
+// buildActiveEntities reads metrics_active_entities_daily_v2 up to and including
+// asOf's day and marks the newest (edge) day Complete=false — the same convention
+// as the daily economy series.
+func buildActiveEntities(ctx context.Context, q Querier, asOf time.Time) ([]ActiveEntitiesPoint, error) {
+	rows, err := q.Query(ctx, `
+		SELECT day::text, payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day <= $1::date
+		ORDER BY day`, asOf.Format(dayFormat))
+	if err != nil {
+		return nil, fmt.Errorf("active entities read: %w", err)
+	}
+	defer rows.Close()
+	series := []ActiveEntitiesPoint{}
+	for rows.Next() {
+		var p ActiveEntitiesPoint
+		p.Complete = true
+		if err := rows.Scan(&p.Day, &p.PayerCount, &p.PayeeCount); err != nil {
+			return nil, fmt.Errorf("scan active entities: %w", err)
+		}
+		series = append(series, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("active entities read: %w", err)
+	}
+	// The newest day is always potentially partial: its block window may still
+	// be accumulating payments.
+	if len(series) > 0 {
+		series[len(series)-1].Complete = false
+	}
+	return series, nil
 }

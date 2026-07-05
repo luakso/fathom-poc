@@ -5,6 +5,7 @@ package metrics_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -123,6 +124,31 @@ func TestRebuild_MembershipConservation(t *testing.T) {
 	require.Equal(t, int64(1), unknown)
 }
 
+// TestRebuild_WindowStatsAnchorKnownOnly verifies that the window-stat rollup
+// anchors its time windows to the newest KNOWN payment day, not the newest day
+// overall. Without this, if the latest day contains only unknown payments, the
+// "7d" window would be anchored too far forward and exclude known payments that
+// should appear in it.
+func TestRebuild_WindowStatsAnchorKnownOnly(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known, Jun 1
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp2", "0xs2", "2.00"}, // unknown, Jun 8 (newer)
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// The known payment is on Jun 1. With the anchor fixed to the last known day:
+	// anchor = Jun 1 → 7d window = [May 26, Jun 1] → includes the Jun 1 payment.
+	// Without the fix: anchor = Jun 8 → 7d = [Jun 2, Jun 8] → Jun 1 payment absent.
+	var knownTxns int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT txn_count FROM metrics_window_stats_v2 WHERE window_name='7d' AND membership='known'`).
+		Scan(&knownTxns))
+	require.Equal(t, int64(1), knownTxns,
+		"7d window stats must anchor to the last known day so the Jun 1 payment is counted")
+}
+
 func TestRebuild_Idempotent(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	seedPayments(t, ctx, db, []seedRow{
@@ -135,26 +161,64 @@ func TestRebuild_Idempotent(t *testing.T) {
 	require.Equal(t, int64(1), total)
 }
 
-func TestRebuild_MissingPriceMonthFailsAndPreservesTables(t *testing.T) {
+func TestRebuild_MissingPriceWeekFailsAndPreservesTables(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
 	seedPayments(t, ctx, db, []seedRow{
+		// 2026-06-01 is a Monday; its week-start is 2026-06-01.
 		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac2", "0xp1", "0xs1", "5.00"},
 	})
 	// First rebuild succeeds and populates the cube.
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
-	// Second rebuild with a price file that lacks 2026-06 must fail BEFORE
-	// truncating anything: the previous generation stays queryable.
+	// Second rebuild with a price file that lacks the 2026-06-01 week must fail
+	// BEFORE truncating anything: the previous generation stays queryable.
 	bad := metrics.ETHPrices{
 		Source: "test", Unit: "USD per ETH",
-		Prices: map[string]decimal.Decimal{"2026-01": decimal.NewFromInt(2000)},
+		Prices: map[string]decimal.Decimal{"2026-01-05": decimal.NewFromInt(2000)},
 	}
 	err := metrics.Rebuild(ctx, pool, bad)
-	require.ErrorContains(t, err, "2026-06")
+	// Error must name the missing week (2026-06-01).
+	require.ErrorContains(t, err, "2026-06-01")
 
 	var n int64
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM metrics_daily_v2`).Scan(&n))
 	require.NotZero(t, n, "failed rebuild must leave the previous cube intact")
+}
+
+// TestRebuild_GasWeekBoundary verifies that two payments in adjacent ISO weeks
+// use different ETH/USD prices for their USD gas cost. Without the week-key join
+// both payments would use the same price and their USD costs would be equal.
+func TestRebuild_GasWeekBoundary(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 2026-06-01 = Monday (week 2026-06-01); 2026-06-08 = Monday (week 2026-06-08).
+	// Use distinct prices: 1000 and 3000 USD/ETH. Both payments have 1e15 wei gas.
+	// cost_usd: week 1 = 1e15 * 1000 / 1e18 = $1.00; week 2 = 1e15 * 3000 / 1e18 = $3.00.
+	weekBoundaryPrices := metrics.ETHPrices{
+		Source: "test", Unit: "USD per ETH",
+		Prices: map[string]decimal.Decimal{
+			"2026-06-01": decimal.NewFromInt(1000),
+			"2026-06-08": decimal.NewFromInt(3000),
+		},
+	}
+	seedGasPayments(t, ctx, db, []seedGasRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "5.00", "1000000000000000"},
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp2", "0xs1", "5.00", "1000000000000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, weekBoundaryPrices))
+
+	var usdW1, usdW2 string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT cost_usd::text FROM metrics_gas_daily_v2 WHERE day='2026-06-01'`).Scan(&usdW1))
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT cost_usd::text FROM metrics_gas_daily_v2 WHERE day='2026-06-08'`).Scan(&usdW2))
+	// $1.00 vs $3.00 — they must differ, proving two prices were applied.
+	require.NotEqual(t, usdW1, usdW2, "gas USD cost must differ across week boundary")
+	// And the ratio must be 1:3 (week-2 price is 3x week-1 price).
+	w1, _ := decimal.NewFromString(usdW1)
+	w2, _ := decimal.NewFromString(usdW2)
+	ratio := w2.Div(w1)
+	require.True(t, ratio.Equal(decimal.NewFromInt(3)), "gas cost ratio must match price ratio (1:3): %s / %s = %s", usdW2, usdW1, ratio)
 }
 
 func TestRebuild_WindowStatsMedians(t *testing.T) {
@@ -462,4 +526,197 @@ func TestRebuild_GasFoldsL1FeeAcrossBatch(t *testing.T) {
 		SELECT l1_fee_wei = 100 FROM metrics_gas_daily_v2
 		WHERE amount_band='small' AND membership='known'`).Scan(&smallL1))
 	require.True(t, smallL1, "small band gets one payment's L1 share (100)")
+}
+
+// TestRebuild_WindowStatsPercentiles verifies that the window stats rollup
+// populates p10/p90/p99 alongside the existing median. Uses a 10-element
+// known distribution so that disc-percentile picks are exact and hand-verifiable.
+func TestRebuild_WindowStatsPercentiles(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// 10 payments at distinct amounts: 0.01, 0.02, ..., 0.10 (all in one day).
+	// disc percentile pick at fraction f over n=10 rows = row at ceil(f*10):
+	//   p10 = ceil(0.1*10)=1 → 0.010000
+	//   p50 = ceil(0.5*10)=5 → 0.050000 (median)
+	//   p90 = ceil(0.9*10)=9 → 0.090000
+	//   p99 = ceil(0.99*10)=10 → 0.100000 (PostgreSQL disc rounds up to last)
+	payments := make([]seedRow, 10)
+	for i := range payments {
+		payments[i] = seedRow{
+			txHash:      fmt.Sprintf("0x%02x", i),
+			logIndex:    0,
+			ts:          "2026-06-05T10:00:00Z",
+			facilitator: "0xfac1",
+			payer:       fmt.Sprintf("0xp%d", i),
+			payee:       "0xs1",
+			amountUSDC:  fmt.Sprintf("0.%02d", i+1),
+		}
+	}
+	seedPayments(t, ctx, db, payments)
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var median, p10, p90, p99 string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT median_amount_usdc::text, p10_amount_usdc::text,
+		       p90_amount_usdc::text, p99_amount_usdc::text
+		FROM metrics_window_stats_v2
+		WHERE window_name='all' AND membership='known'`).Scan(&median, &p10, &p90, &p99))
+
+	require.Equal(t, "0.050000", median, "median (p50) = 5th of 10 amounts = 0.05")
+	require.Equal(t, "0.010000", p10, "p10 = 1st of 10 amounts = 0.01")
+	require.Equal(t, "0.090000", p90, "p90 = 9th of 10 amounts = 0.09")
+	require.Equal(t, "0.100000", p99, "p99 (disc) rounds to last element = 0.10")
+}
+
+// TestRebuild_ActiveEntitiesDaily verifies that metrics_active_entities_daily_v2
+// counts distinct payers and payees per calendar day for verified payments only.
+// Key property: a wallet active on two days is counted ONCE per day, not merged.
+func TestRebuild_ActiveEntitiesDaily(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Day 1: payer P1 → payee S1, payer P2 → payee S1
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"},
+		// Day 2: same payer P1 appears again — must count 1, not 2
+		{"0xc", 0, "2026-06-02T09:00:00Z", "0xfac1", "0xp1", "0xs2", "3.00"},
+		// Unverified payment (unknown facilitator) must be excluded.
+		{"0xd", 0, "2026-06-01T12:00:00Z", "0xfac2", "0xp3", "0xs3", "4.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	var rows int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_active_entities_daily_v2`).Scan(&rows))
+	require.Equal(t, int64(2), rows, "one row per verified day")
+
+	var payers1, payees1 int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day = '2026-06-01'`).Scan(&payers1, &payees1))
+	require.Equal(t, int64(2), payers1, "day 1: 2 distinct payers (P1, P2)")
+	require.Equal(t, int64(1), payees1, "day 1: 1 distinct payee (S1)")
+
+	var payers2, payees2 int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT payer_count, payee_count
+		FROM metrics_active_entities_daily_v2
+		WHERE day = '2026-06-02'`).Scan(&payers2, &payees2))
+	require.Equal(t, int64(1), payers2, "day 2: 1 distinct payer (P1, same wallet as day 1)")
+	require.Equal(t, int64(1), payees2, "day 2: 1 distinct payee (S2)")
+}
+
+// TestRebuild_ActiveEntitiesIdempotent confirms TRUNCATE+INSERT makes the
+// active-entities rebuild safe to re-run without double-counting.
+func TestRebuild_ActiveEntitiesIdempotent(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t))) // second run
+	var n int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_active_entities_daily_v2`).Scan(&n))
+	require.Equal(t, int64(1), n, "second rebuild must not double-count rows")
+}
+
+// TestRebuildPriceBreadth_PerDayAndTopN proves the price-breadth rollup:
+//
+//	(a) counts distinct payees per (day, amount), not raw payment counts
+//	(b) restricts to the top-12 all-window amounts (amounts outside top-12 are absent)
+func TestRebuildPriceBreadth_PerDayAndTopN(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+
+	// Seed two amounts: $0.001 (more payments → ranks higher) and $1.00 (fewer).
+	// Day 1 for $0.001: payments to 0xp1, 0xp2, 0xp1 (repeat) → 2 distinct payees.
+	// Day 2 for $0.001: payment to 0xp3                        → 1 distinct payee.
+	// Day 2 for $1.00:  payment to 0xp4                        → 1 distinct payee.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xs1", "0xp1", "0.001"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xs1", "0xp2", "0.001"},
+		{"0xc", 0, "2026-06-01T12:00:00Z", "0xfac1", "0xs1", "0xp1", "0.001"}, // repeated payee
+		{"0xd", 0, "2026-06-02T10:00:00Z", "0xfac1", "0xs1", "0xp3", "0.001"},
+		{"0xe", 0, "2026-06-02T11:00:00Z", "0xfac1", "0xs2", "0xp4", "1.000000"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// (a) Per-day distinct payee count for $0.001
+	dbRows, err := db.QueryContext(ctx, `
+		SELECT day::text, payee_count
+		FROM metrics_price_point_daily_v1
+		WHERE amount_usdc = 0.001
+		ORDER BY day`)
+	require.NoError(t, err)
+	defer dbRows.Close()
+
+	type dayRow struct {
+		day   string
+		count int64
+	}
+	var got []dayRow
+	for dbRows.Next() {
+		var r dayRow
+		require.NoError(t, dbRows.Scan(&r.day, &r.count))
+		got = append(got, r)
+	}
+	require.NoError(t, dbRows.Err())
+	require.Len(t, got, 2)
+	require.Equal(t, "2026-06-01", got[0].day)
+	require.Equal(t, int64(2), got[0].count, "day 1 has 2 distinct payees for $0.001 (repeated 0xp1 not double-counted)")
+	require.Equal(t, "2026-06-02", got[1].day)
+	require.Equal(t, int64(1), got[1].count, "day 2 has 1 distinct payee for $0.001")
+
+	// (b) $1.00 also appears (it's in the top-12 of a 2-amount dataset)
+	var oneCount int
+	err = db.QueryRowContext(ctx, `
+		SELECT count(*) FROM metrics_price_point_daily_v1 WHERE amount_usdc = 1.000000`).Scan(&oneCount)
+	require.NoError(t, err)
+	require.Equal(t, 1, oneCount, "$1.00 should appear with 1 day row")
+}
+
+// TestRebuildPriceBreadth_TopNExclusion verifies that amounts ranked beyond 12 in
+// the all-window price points are NOT included in metrics_price_point_daily_v1.
+func TestRebuildPriceBreadth_TopNExclusion(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+
+	// Seed 13 distinct amounts — each with a different txn count so ranks are deterministic.
+	// The 13th amount (lowest txn count) must NOT appear in the breadth table.
+	var rows []seedRow
+	for i := 0; i < 13; i++ {
+		// i=0  → amount $1.000000  with 13 payments = rank 1  (in top-12, INCLUDED)
+		// i=12 → amount $13.000000 with  1 payment  = rank 13 (EXCLUDED)
+		count := 13 - i
+		for j := 0; j < count; j++ {
+			rows = append(rows, seedRow{
+				txHash:      fmt.Sprintf("0x%04x%04x", i, j),
+				logIndex:    0,
+				ts:          "2026-06-01T10:00:00Z",
+				facilitator: "0xfac1",
+				payer:       "0xpayer",
+				payee:       fmt.Sprintf("0xpayee%d", j),
+				amountUSDC:  fmt.Sprintf("%d.000000", i+1),
+			})
+		}
+	}
+	seedPayments(t, ctx, db, rows)
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	// Only 12 distinct amounts should appear in the breadth table.
+	var distinctAmounts int
+	err := db.QueryRowContext(ctx,
+		`SELECT count(DISTINCT amount_usdc) FROM metrics_price_point_daily_v1`).Scan(&distinctAmounts)
+	require.NoError(t, err)
+	require.Equal(t, 12, distinctAmounts, "only top-12 amounts must appear in breadth table")
+
+	// The amount ranked 13th ($13.000000, with only 1 payment) must be absent.
+	var absCount int
+	err = db.QueryRowContext(ctx,
+		`SELECT count(*) FROM metrics_price_point_daily_v1 WHERE amount_usdc = 13.000000`).Scan(&absCount)
+	require.NoError(t, err)
+	require.Equal(t, 0, absCount, "13th-ranked amount must not appear in breadth table")
 }

@@ -70,8 +70,8 @@ func run() error {
 	switch cmd {
 	case "rollup":
 		fs := flag.NewFlagSet("rollup", flag.ExitOnError)
-		ethPrices := fs.String("eth-prices", "data/eth-usd-monthly.json",
-			"monthly ETH/USD reference price file (consumed by the gas rollup)")
+		ethPrices := fs.String("eth-prices", "data/eth-usd-weekly.json",
+			"weekly ETH/USD reference price file, keyed by ISO Monday week-start (consumed by the gas rollup)")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func usageText() string {
 
 subcommands:
   rollup --eth-prices FILE   recompute all metrics tables from payment_x402_v1
-                             (default FILE=data/eth-usd-monthly.json)
+                             (default FILE=data/eth-usd-weekly.json)
   emit   --out DIR --claims FILE
                              write dashboard JSON artifacts
                              (defaults DIR=dist, FILE=data/claims.json)

@@ -183,6 +183,12 @@ svg.ch .ax{stroke:var(--line-2)}
 .shell .out{color:var(--dim)}
 .shell .ok{color:var(--agentic);font-weight:700}
 .shell .warn{color:var(--contested)}
+.shell .fail{color:var(--contam);font-weight:700}
+
+/* two-bar layout for shape panel */
+.bbrow{display:flex;align-items:center;gap:10px;margin:6px 0}
+.bblbl{font-size:10px;color:var(--faint);letter-spacing:.06em;width:130px;flex:none;text-transform:uppercase}
+.bbrow .bandbar{flex:1}
 
 /* claims */
 .claimrow{padding:8px 0;border-bottom:1px solid var(--grid)}

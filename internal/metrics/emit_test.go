@@ -42,7 +42,7 @@ func TestEmit_WritesStampedFiles(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(b, &doc))
 	require.Equal(t, 1, doc.MethodologyVersion)
-	require.Equal(t, "x402-attributed", doc.Scope)
+	require.Equal(t, "verified-x402", doc.Scope)
 	require.NotEmpty(t, doc.GeneratedAt)
 	require.Equal(t, "2026-06-08", doc.DataThroughDay)
 	require.Equal(t, int64(1), doc.Data.Windows["all"].TxnCount)
@@ -77,9 +77,9 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	claims := []metrics.Claim{{
-		ID: "c1", Source: "Report", ClaimText: "169M+ payments",
-		ClaimedValue: "169000000", ClaimedUnit: "transactions",
-		MeasuredMetric: "total_txns_all",
+		ID: "c1", Source: "Report", SourceURL: "https://example.com/report",
+		ClaimText: "169M+ payments", ClaimedValue: "169000000", ClaimedUnit: "transactions",
+		MeasuredMetric: "total_txns_all", Lens: "verified x402 payments",
 	}}
 	dir := t.TempDir()
 	require.NoError(t, metrics.Emit(ctx, pool, dir, claims))
@@ -118,6 +118,7 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 				ID            string `json:"id"`
 				MeasuredValue string `json:"measured_value"`
 				MeasuredUnit  string `json:"measured_unit"`
+				Lens          string `json:"lens"`
 			} `json:"claims"`
 		} `json:"data"`
 	}
@@ -139,10 +140,12 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 	require.False(t, doc.Data.MonthlySeries[0].Complete, "single mid-month data day cannot be a complete month")
 	require.Equal(t, "100.00", doc.Data.PricePoints["all"][0].TxnSharePct)
 	require.Equal(t, "transactions", doc.Data.Claims[0].MeasuredUnit)
+	require.Equal(t, "verified x402 payments", doc.Data.Claims[0].Lens, "lens must flow through to emitted claim")
 }
 
 func TestEmit_WritesSiteFiles(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac2") // must be known so cubeStamp finds a verified day
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "2.00"},
 	})
@@ -187,6 +190,7 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 
 func TestEmit_WritesEntityPages(t *testing.T) {
 	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac2") // must be known so cubeStamp finds a verified day
 	seedPayments(t, ctx, db, []seedRow{
 		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp1", "0xs1", "2.00"},
 	})
@@ -214,6 +218,33 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	require.Contains(t, string(idx), `href="payees.html"`)
 	require.Contains(t, string(idx), `href="reliability.html"`)
 	require.Contains(t, string(idx), `href="mechanics.html"`)
+}
+
+// TestEmit_StampsKnownDayWhenNewestDayUnknownOnly verifies that data_through_day
+// reflects the newest KNOWN (verified) payment day, not the newest day overall.
+// If the dataset's newest day contains only unknown-membership rows, the stamp
+// must not advance past the last known day - otherwise the dashboard would claim
+// to cover a day its own verified series never reaches.
+func TestEmit_StampsKnownDayWhenNewestDayUnknownOnly(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"}, // known, Jun 1
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac2", "0xp2", "0xs2", "2.00"}, // unknown, Jun 8 (newer)
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+	var doc struct {
+		DataThroughDay string `json:"data_through_day"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Equal(t, "2026-06-01", doc.DataThroughDay,
+		"data_through_day must be the newest KNOWN day, not the newest unknown day")
 }
 
 func TestEmit_WritesReliability(t *testing.T) {
@@ -260,4 +291,184 @@ func TestEmit_WritesReliability(t *testing.T) {
 	require.NotEmpty(t, doc.Data.Daily)
 	// Cancellation submitter 0xrelayer is not allowlisted → filtered by facilitator_known.
 	require.Empty(t, doc.Data.CancellationAttribution.ByPayer)
+}
+
+// TestEmit_TypicalPaymentPercentiles verifies that economy.json carries
+// p10_usdc/p90_usdc/p99_usdc alongside the existing median in each
+// typical_payment window entry.
+func TestEmit_TypicalPaymentPercentiles(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Three amounts on the anchor day so percentiles are non-trivial.
+	// p10 disc = 1st of 3 = 0.01, median = 2nd = 0.10, p90/p99 disc = 3rd = 5.00.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-05T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.01"},
+		{"0xb", 0, "2026-06-05T11:00:00Z", "0xfac1", "0xp2", "0xs1", "0.10"},
+		{"0xc", 0, "2026-06-05T12:00:00Z", "0xfac1", "0xp3", "0xs1", "5.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		Data struct {
+			TypicalPayment map[string]struct {
+				MedianUSDC string  `json:"median_usdc"`
+				P10USDC    *string `json:"p10_usdc"`
+				P90USDC    *string `json:"p90_usdc"`
+				P99USDC    *string `json:"p99_usdc"`
+			} `json:"typical_payment"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+
+	tp := doc.Data.TypicalPayment["all"]
+	require.Equal(t, "0.100000", tp.MedianUSDC, "median unchanged by percentile addition")
+	require.NotNil(t, tp.P10USDC, "p10_usdc must be present")
+	require.NotNil(t, tp.P90USDC, "p90_usdc must be present")
+	require.NotNil(t, tp.P99USDC, "p99_usdc must be present")
+	require.Equal(t, "0.010000", *tp.P10USDC)
+	require.Equal(t, "5.000000", *tp.P90USDC)
+	require.Equal(t, "5.000000", *tp.P99USDC)
+}
+
+// TestEmit_ActiveEntitiesSeries verifies that economy.json carries an
+// active_entities daily series: day, payer_count, payee_count, and complete.
+// The newest (edge) day must be marked complete=false.
+func TestEmit_ActiveEntitiesSeries(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		// Day 1: 2 payers, 1 payee.
+		{"0xa", 0, "2026-06-01T10:00:00Z", "0xfac1", "0xp1", "0xs1", "1.00"},
+		{"0xb", 0, "2026-06-01T11:00:00Z", "0xfac1", "0xp2", "0xs1", "2.00"},
+		// Day 2 (edge/newest): 1 payer, 1 payee.
+		{"0xc", 0, "2026-06-02T09:00:00Z", "0xfac1", "0xp1", "0xs2", "3.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		Data struct {
+			ActiveEntities []struct {
+				Day        string `json:"day"`
+				Complete   bool   `json:"complete"`
+				PayerCount int64  `json:"payer_count"`
+				PayeeCount int64  `json:"payee_count"`
+			} `json:"active_entities"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Len(t, doc.Data.ActiveEntities, 2, "one point per verified day")
+
+	pt1 := doc.Data.ActiveEntities[0]
+	require.Equal(t, "2026-06-01", pt1.Day)
+	require.True(t, pt1.Complete, "non-edge day must be complete=true")
+	require.Equal(t, int64(2), pt1.PayerCount)
+	require.Equal(t, int64(1), pt1.PayeeCount)
+
+	pt2 := doc.Data.ActiveEntities[1]
+	require.Equal(t, "2026-06-02", pt2.Day)
+	require.False(t, pt2.Complete, "edge (newest) day must be complete=false")
+	require.Equal(t, int64(1), pt2.PayerCount)
+	require.Equal(t, int64(1), pt2.PayeeCount)
+}
+
+// TestEmit_PriceBreadthSection verifies that economy.json carries the
+// price_point_breadth section with the correct shape: an array of series
+// where each series has amount_usdc and a daily array, the newest day is
+// marked complete=false, and all days are bounded by data_through_day.
+func TestEmit_PriceBreadthSection(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	// Two payments on different days to the same price point so the series has 2 entries.
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-07T10:00:00Z", "0xfac1", "0xp1", "0xs1", "0.001"},
+		{"0xb", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp2", "0xs1", "0.001"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
+	require.NoError(t, err)
+
+	var doc struct {
+		DataThroughDay string `json:"data_through_day"`
+		Data           struct {
+			PriceBreadth []struct {
+				AmountUSDC string `json:"amount_usdc"`
+				Series     []struct {
+					Day        string `json:"day"`
+					PayeeCount int64  `json:"payee_count"`
+					Complete   bool   `json:"complete"`
+				} `json:"series"`
+			} `json:"price_point_breadth"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Equal(t, "2026-06-08", doc.DataThroughDay)
+
+	// price_point_breadth must be present
+	require.NotEmpty(t, doc.Data.PriceBreadth, "price_point_breadth section must be present")
+	series := doc.Data.PriceBreadth[0]
+	require.Equal(t, "0.001000", series.AmountUSDC)
+
+	// Two-day series: Jun 7 (complete) and Jun 8 (incomplete = edge day)
+	require.Len(t, series.Series, 2)
+	require.Equal(t, "2026-06-07", series.Series[0].Day)
+	require.True(t, series.Series[0].Complete, "Jun 7 is not the newest day — must be complete")
+	require.Equal(t, int64(1), series.Series[0].PayeeCount, "Jun 7 has 1 distinct payee")
+
+	require.Equal(t, "2026-06-08", series.Series[1].Day)
+	require.False(t, series.Series[1].Complete, "Jun 8 is the newest (data_through_day) — must be incomplete")
+	require.Equal(t, int64(1), series.Series[1].PayeeCount, "Jun 8 has 1 distinct payee")
+}
+
+// TestEmit_FacilitatorsWindows verifies that facilitators.json carries window
+// measures (7d and 30d) on each row, matching the same anchoring as economy.json.
+func TestEmit_FacilitatorsWindows(t *testing.T) {
+	ctx, db, pool := setupMetrics(t)
+	allowlist(t, ctx, db, "0xfac1")
+	seedPayments(t, ctx, db, []seedRow{
+		{"0xa", 0, "2026-06-08T10:00:00Z", "0xfac1", "0xp1", "0xs1", "2.00"},
+	})
+	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
+
+	dir := t.TempDir()
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+
+	b, err := os.ReadFile(filepath.Join(dir, "facilitators.json"))
+	require.NoError(t, err)
+	var doc struct {
+		Data struct {
+			Rows []struct {
+				Facilitator string `json:"facilitator"`
+				TxnCount    int64  `json:"txn_count"`
+				VolumeUSDC  string `json:"volume_usdc"`
+				Windows     map[string]struct {
+					TxnCount   int64  `json:"txn_count"`
+					VolumeUSDC string `json:"volume_usdc"`
+				} `json:"windows"`
+			} `json:"rows"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(b, &doc))
+	require.Len(t, doc.Data.Rows, 1)
+	r := doc.Data.Rows[0]
+	require.Equal(t, "0xfac1", r.Facilitator)
+	require.NotNil(t, r.Windows)
+	// The payment is on Jun 8 = the data edge, which is within the 7d window.
+	require.Equal(t, int64(1), r.Windows["7d"].TxnCount, "7d window must include the Jun 8 payment")
+	require.Equal(t, int64(1), r.Windows["30d"].TxnCount, "30d window must include the Jun 8 payment")
 }

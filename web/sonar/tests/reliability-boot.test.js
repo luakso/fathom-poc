@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const distRel = resolve(here, "../../dist/reliability.json");
-const distEco = resolve(here, "../../dist/economy.json");
+const distRel = resolve(here, "../../../dist/reliability.json");
+const distEco = resolve(here, "../../../dist/economy.json");
 const htmlPath = resolve(here, "../app/reliability.html");
 
 const haveArtifacts = existsSync(distRel) && existsSync(distEco);

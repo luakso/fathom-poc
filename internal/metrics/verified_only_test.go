@@ -13,7 +13,7 @@ import (
 )
 
 // TestEmit_NoMembershipLeaks asserts every emitted artifact is verified-only:
-// it carries scope=x402-attributed and contains no by_membership / unknown keys.
+// it carries scope=verified-x402 and contains no by_membership / unknown keys.
 //
 // Seeding BOTH a known (allowlisted) and an unknown (non-allowlisted) facilitator
 // makes the guard non-trivial: if any builder leaks the unknown slice, the
@@ -43,7 +43,7 @@ func TestEmit_NoMembershipLeaks(t *testing.T) {
 		require.NoError(t, err, "%s must be emitted", name)
 		s := string(b)
 
-		require.Contains(t, s, `"scope": "x402-attributed"`, "%s must stamp scope", name)
+		require.Contains(t, s, `"scope": "verified-x402"`, "%s must stamp scope", name)
 		// Match object-key form (trailing colon) so a legitimate field value of
 		// "unknown" (e.g. a settlement_kind string) does not trip the guard.
 		require.NotContains(t, s, `"by_membership":`, "%s must not ship by_membership", name)

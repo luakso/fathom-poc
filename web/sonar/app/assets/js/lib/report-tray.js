@@ -37,7 +37,7 @@ export function createTray({ brand, meta }) {
     if (!pins.length) { $("#thread").value = ""; rCount(); return; }
     const head = `fathom // ${brand} — x402 on Base, data through ${meta.data_through_day}\n\n`;
     const body = pins.map(p => `▸ ${p.value} — ${p.context}`).join("\n");
-    const foot = `\n\ndenominators stated. no row dropped — only labeled.`;
+    const foot = `\n\nverified payments only. unverified transfers excluded. denominators stated.`;
     $("#thread").value = head + body + foot; rCount();
   }
   function rCount() {

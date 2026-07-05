@@ -46,5 +46,6 @@ CLAUDE.md
 
 # Test tooling node_modules
 web/sonar/tests/node_modules/
-# Stray vite cache if a tool runs in web/ root
+# Stray vite cache if a tool runs in web/ or web/sonar/ root
 web/node_modules/
+web/sonar/node_modules/

@@ -72,7 +72,7 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 		return err
 	}
 
-	fac, err := BuildFacilitators(ctx, tx)
+	fac, err := BuildFacilitators(ctx, tx, asOf)
 	if err != nil {
 		return fmt.Errorf("build facilitators: %w", err)
 	}
@@ -121,7 +121,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	var minVersion *int16
 	if err := q.QueryRow(ctx, `
 		SELECT
-		    (SELECT max(day)::text FROM metrics_daily_v2),
+		    (SELECT max(day)::text FROM metrics_daily_v2 WHERE membership = 'known'),
 		    count(DISTINCT methodology_version),
 		    min(methodology_version)
 		FROM (
@@ -139,6 +139,9 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 		    UNION ALL SELECT methodology_version FROM metrics_mechanics_batch_v2
 		    UNION ALL SELECT methodology_version FROM metrics_mechanics_block_v2
 		    UNION ALL SELECT methodology_version FROM metrics_mechanics_selector_v2
+		    UNION ALL SELECT methodology_version FROM metrics_active_entities_daily_v2
+		    UNION ALL SELECT methodology_version FROM metrics_payer_cohorts_v1
+		    UNION ALL SELECT methodology_version FROM metrics_price_point_daily_v1
 		) versions`).Scan(&day, &versions, &minVersion); err != nil {
 		return "", 0, fmt.Errorf("cube stamp: %w", err)
 	}
@@ -155,7 +158,7 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 func writeArtifact(outDir, name string, version int, through string, data any) error {
 	doc := artifact{
 		MethodologyVersion: version,
-		Scope:              "x402-attributed",
+		Scope:              "verified-x402",
 		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
 		DataThroughDay:     through,
 		Data:               data,
