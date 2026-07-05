@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { QueryClient } from '@tanstack/react-query'
 import { TopBar } from './chrome/TopBar'
+import { Home } from './routes/Home'
 
 export function newQueryClient(): QueryClient {
   return new QueryClient({
@@ -17,7 +18,7 @@ export function AppRoutes() {
     <div className="layout">
       <TopBar />
       <Routes>
-        <Route path="/" element={<Placeholder name="home" />} />
+        <Route path="/" element={<Home />} />
         <Route path="/base/address/:addr" element={<Placeholder name="entity" />} />
         <Route path="/base/tx/:hash" element={<Placeholder name="tx" />} />
         <Route path="*" element={<Placeholder name="not found" />} />
