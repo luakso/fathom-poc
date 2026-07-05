@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { QueryClient } from '@tanstack/react-query'
 import { TopBar } from './chrome/TopBar'
 import { Home } from './routes/Home'
+import { Entity } from './routes/Entity'
 
 export function newQueryClient(): QueryClient {
   return new QueryClient({
@@ -19,7 +20,7 @@ export function AppRoutes() {
       <TopBar />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/base/address/:addr" element={<Placeholder name="entity" />} />
+        <Route path="/base/address/:addr" element={<Entity />} />
         <Route path="/base/tx/:hash" element={<Placeholder name="tx" />} />
         <Route path="*" element={<Placeholder name="not found" />} />
       </Routes>
