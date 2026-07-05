@@ -3,11 +3,13 @@ import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap, type Node,
 import '@xyflow/react/dist/style.css'
 import { EntityNode } from './EntityNode'
 import { GhostNode } from './GhostNode'
+import { TxNode } from './TxNode'
+import { EventNode } from './EventNode'
 import { FlowEdge } from './FlowEdge'
 import { roleColor } from '../lib/roles'
 import type { EntityNodeData } from './graph'
 
-const nodeTypes = { entity: EntityNode, ghost: GhostNode }
+const nodeTypes = { entity: EntityNode, ghost: GhostNode, tx: TxNode, event: EventNode }
 const edgeTypes = { flow: FlowEdge }
 
 type Props = {

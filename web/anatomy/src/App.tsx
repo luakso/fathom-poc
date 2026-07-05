@@ -3,15 +3,12 @@ import { QueryClient } from '@tanstack/react-query'
 import { TopBar } from './chrome/TopBar'
 import { Home } from './routes/Home'
 import { Entity } from './routes/Entity'
+import { Tx } from './routes/Tx'
 
 export function newQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { retry: 1, staleTime: 60_000, refetchOnWindowFocus: false } },
   })
-}
-
-function Placeholder({ name }: { name: string }) {
-  return <div className="empty-state">{name}</div>
 }
 
 export function AppRoutes() {
@@ -21,8 +18,8 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/base/address/:addr" element={<Entity />} />
-        <Route path="/base/tx/:hash" element={<Placeholder name="tx" />} />
-        <Route path="*" element={<Placeholder name="not found" />} />
+        <Route path="/base/tx/:hash" element={<Tx />} />
+        <Route path="*" element={<div className="empty-state">not found</div>} />
       </Routes>
     </div>
   )
