@@ -47,7 +47,7 @@ describe('Drawer', () => {
     mountDrawer()
     await waitFor(() => expect(screen.getByText('api.tollbit.com')).toBeTruthy())
     expect(screen.getByText(/Apr 8, 2026/)).toBeTruthy()
-    expect(screen.getByText(/catalog/)).toBeTruthy()
+    expect(screen.getByTestId('d-badge').textContent).toBe('catalog')
   })
   it('overview shows both lens totals', async () => {
     mountDrawer()

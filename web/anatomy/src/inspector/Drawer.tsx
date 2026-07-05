@@ -38,7 +38,7 @@ export function Drawer({ chain, address, lens, onNavigate, txNode }: Props) {
         <div className="d-head">
           <div className="d-title-row">
             <span className="d-addr">{txNode ? short(txNode.label) : e?.label ?? short(address)}</span>
-            <span className="badge">{txNode ? 'transaction' : e?.label ? 'identified' : 'unidentified'}</span>
+            <span className="badge" data-testid="d-badge">{txNode ? 'transaction' : e?.labelSource ?? 'Unidentified'}</span>
             {role && <span className="chip cyan" style={{ marginLeft: 'auto' }}>{role}</span>}
           </div>
           {sum && (
