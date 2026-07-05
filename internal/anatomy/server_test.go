@@ -26,21 +26,12 @@ func (f fakeDossier) Dossier(_ context.Context, _, _ string) (anatomy.Graph, err
 	return f.g, f.err
 }
 
-type fakeStats struct {
-	s   anatomy.Stats
-	err error
-}
-
-func (f fakeStats) Stats(_ context.Context, _, _ string) (anatomy.Stats, error) {
-	return f.s, f.err
-}
-
 func testAssets() fs.FS {
 	return fstest.MapFS{"index.html": {Data: []byte("<html>anatomy</html>")}}
 }
 
-func newTestServer(d anatomy.DossierProvider, s anatomy.StatsProvider) http.Handler {
-	return anatomy.NewServer(anatomy.Providers{Dossier: d, Stats: s}, testAssets(), slog.Default())
+func newTestServer(d anatomy.DossierProvider) http.Handler {
+	return anatomy.NewServer(anatomy.Providers{Dossier: d}, testAssets(), slog.Default())
 }
 
 type fakeMeta struct{ m anatomy.Meta }
@@ -66,9 +57,9 @@ func TestServer_BadLensRejected(t *testing.T) {
 
 func TestServer_TxOK(t *testing.T) {
 	d := fakeDossier{g: anatomy.Graph{Chain: "base", TxHash: "0xabc"}}
-	srv := newTestServer(d, fakeStats{})
+	srv := newTestServer(d)
 	hash := "0x" + strings.Repeat("a", 64)
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/base/tx/"+hash, nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -78,41 +69,32 @@ func TestServer_TxOK(t *testing.T) {
 }
 
 func TestServer_TxBadChain(t *testing.T) {
-	srv := newTestServer(fakeDossier{}, fakeStats{})
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/ethereum/0xabc", nil)
+	srv := newTestServer(fakeDossier{})
+	req := httptest.NewRequest(http.MethodGet, "/api/ethereum/tx/0xabc", nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestServer_TxBadHash(t *testing.T) {
-	srv := newTestServer(fakeDossier{}, fakeStats{})
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/notahash", nil)
+	srv := newTestServer(fakeDossier{})
+	req := httptest.NewRequest(http.MethodGet, "/api/base/tx/notahash", nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestServer_TxNotFound(t *testing.T) {
-	srv := newTestServer(fakeDossier{err: anatomy.ErrNotFound}, fakeStats{})
+	srv := newTestServer(fakeDossier{err: anatomy.ErrNotFound})
 	hash := "0x" + strings.Repeat("a", 64)
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/base/tx/"+hash, nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusNotFound, rr.Code)
 }
 
-func TestServer_StatsOK(t *testing.T) {
-	s := fakeStats{s: anatomy.Stats{Address: "0xhero", PaymentCount: 3}}
-	srv := newTestServer(fakeDossier{}, s)
-	req := httptest.NewRequest(http.MethodGet, "/api/address/base/0xHERO/stats", nil)
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	require.Equal(t, http.StatusOK, rr.Code)
-}
-
 func TestServer_ServesIndex(t *testing.T) {
-	srv := newTestServer(fakeDossier{}, fakeStats{})
+	srv := newTestServer(fakeDossier{})
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
@@ -122,9 +104,9 @@ func TestServer_ServesIndex(t *testing.T) {
 
 func TestServer_Tx500(t *testing.T) {
 	d := fakeDossier{err: errors.New("boom")}
-	srv := newTestServer(d, fakeStats{})
+	srv := newTestServer(d)
 	hash := "0x" + strings.Repeat("a", 64)
-	req := httptest.NewRequest(http.MethodGet, "/api/tx/base/"+hash, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/base/tx/"+hash, nil)
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusInternalServerError, rr.Code)
@@ -134,9 +116,9 @@ func TestServer_Tx500(t *testing.T) {
 }
 
 func TestServer_SolanaRejected(t *testing.T) {
-	srv := newTestServer(fakeDossier{}, fakeStats{})
+	srv := newTestServer(fakeDossier{})
 	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/tx/solana/abc123", nil))
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/solana/tx/abc123", nil))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 

@@ -68,19 +68,6 @@ type Graph struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
-// Stats is the StatsProvider payload for one address.
-type Stats struct {
-	Address                string `json:"address"`
-	Chain                  string `json:"chain"`
-	PaymentCount           int64  `json:"paymentCount"`
-	VolumeUSDC             string `json:"volumeUsdc"`
-	DistinctCounterparties int64  `json:"distinctCounterparties"`
-	FirstSeen              string `json:"firstSeen"`
-	LastSeen               string `json:"lastSeen"`
-	FacilitatorKnown       bool   `json:"facilitatorKnown"`
-	Roles                  []Role `json:"roles"`
-}
-
 // LensTotals holds aggregate counts for a single membership lens.
 type LensTotals struct {
 	TxnCount   int64  `json:"txnCount"`

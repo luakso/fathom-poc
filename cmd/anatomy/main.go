@@ -108,7 +108,6 @@ func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Log
 	srv := anatomy.NewServer(
 		anatomy.Providers{
 			Dossier:     anatomy.NewPgDossier(pool),
-			Stats:       anatomy.NewPgStats(pool),
 			Meta:        anatomy.NewPgMeta(pool),
 			Entity:      pgEntity,
 			Neighbors:   pgEntity,
