@@ -5,5 +5,5 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: 'dist', emptyOutDir: true },
   server: { proxy: { '/api': 'http://localhost:8090' } },
-  test: { environment: 'jsdom' },
+  test: { environment: 'node' },
 })
