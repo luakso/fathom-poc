@@ -29,31 +29,8 @@ func NewServer(p Providers, assets fs.FS, log *slog.Logger) http.Handler {
 	mux.HandleFunc("GET /api/{chain}/entity/{addr}/counterparties", h.counterparties)
 	mux.HandleFunc("GET /api/{chain}/entity/{addr}/payments", h.payments)
 	mux.HandleFunc("GET /api/{chain}/leaderboard", h.leaderboard)
-	// legacy v1 route for stats — removed in Plan C when the new frontend ships
-	mux.HandleFunc("GET /api/address/{chain}/{addr}/stats", h.stats)
 	mux.Handle("/", spaFileServer(assets))
-	// legacyTxRewrite translates the old /api/tx/{chain}/{hash} pattern to the
-	// v2 /api/{chain}/tx/{hash} pattern before the mux sees the request. This
-	// avoids a panic: both patterns overlap on paths like /api/tx/tx/HASH, which
-	// Go's ServeMux rejects at registration time.
-	return withTimeout(5*time.Second, legacyTxRewrite(mux))
-}
-
-// legacyTxRewrite transparently rewrites GET /api/tx/{chain}/{hash} to the v2
-// path /api/{chain}/tx/{hash} so the mux can route it normally. The old URL
-// shape is preserved for the frontend until Plan C ships.
-func legacyTxRewrite(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			// /api/tx/{chain}/{hash} splits as ["", "api", "tx", chain, hash]
-			parts := strings.SplitN(r.URL.Path, "/", 6)
-			if len(parts) == 5 && parts[1] == "api" && parts[2] == "tx" {
-				r = r.Clone(r.Context())
-				r.URL.Path = "/api/" + parts[3] + "/tx/" + parts[4]
-			}
-		}
-		next.ServeHTTP(w, r)
-	})
+	return withTimeout(5*time.Second, mux)
 }
 
 // withTimeout bounds every request; providers read precomputed tables, so
@@ -117,25 +94,6 @@ func (h *handler) tx(w http.ResponseWriter, r *http.Request) {
 	}
 	g, err := h.p.Dossier.Dossier(r.Context(), chain, strings.ToLower(hash))
 	h.respond(w, g, err)
-}
-
-func (h *handler) stats(w http.ResponseWriter, r *http.Request) {
-	chain := r.PathValue("chain")
-	addr := r.PathValue("addr")
-	if !chainOK(chain) {
-		writeErr(w, http.StatusBadRequest, "unknown chain")
-		return
-	}
-	if addr == "" {
-		writeErr(w, http.StatusBadRequest, "empty address")
-		return
-	}
-	if h.p.Stats == nil {
-		writeErr(w, http.StatusNotFound, "not found")
-		return
-	}
-	s, err := h.p.Stats.Stats(r.Context(), chain, strings.ToLower(addr))
-	h.respond(w, s, err)
 }
 
 func (h *handler) entity(w http.ResponseWriter, r *http.Request) {

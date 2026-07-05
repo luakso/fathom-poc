@@ -7,11 +7,6 @@ type DossierProvider interface {
 	Dossier(ctx context.Context, chain, txHash string) (Graph, error)
 }
 
-// StatsProvider returns aggregate statistics for one address.
-type StatsProvider interface {
-	Stats(ctx context.Context, chain, address string) (Stats, error)
-}
-
 // EntityProvider returns entity header data for one address.
 type EntityProvider interface {
 	Entity(ctx context.Context, chain, address string) (Entity, error)
@@ -48,7 +43,6 @@ type MetaProvider interface {
 // their routes are wired (handlers for nil providers return 404).
 type Providers struct {
 	Dossier     DossierProvider
-	Stats       StatsProvider // legacy v1 endpoint, removed in Plan C
 	Entity      EntityProvider
 	Neighbors   NeighborProvider
 	Activity    ActivityProvider
