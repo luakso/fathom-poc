@@ -122,6 +122,11 @@ func serve(ctx context.Context, cfg Config, pool *pgxpool.Pool, logger *slog.Log
 		Addr:              addr,
 		Handler:           srv,
 		ReadHeaderTimeout: 5 * time.Second,
+		// WriteTimeout bounds a slow client holding a connection open past the
+		// per-request context; IdleTimeout reaps kept-alive connections. Both are
+		// generous relative to the 5s request context these JSON endpoints use.
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 	// shutdown requires a fresh context after signal ctx is cancelled
 	go func() { //nolint:gosec // G118: signal ctx is cancelled before shutdown
