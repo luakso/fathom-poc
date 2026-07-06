@@ -1,7 +1,7 @@
 // Loads the canonical economy.json and reshapes it into the view-model the
 // renderers consume. Also the integrity gate: version guard + client-side
 // conservation re-check, so the status bar's glyphs are earned, not painted.
-import { num, fmtInt, BANDDEF } from "./format.js";
+import { num, numFinite, fmtInt, BANDDEF } from "./format.js";
 
 const MONTH_NAME = m => new Date(m + "-01T00:00:00Z").toLocaleString("en-US", { month:"short", timeZone:"UTC" });
 
@@ -48,7 +48,7 @@ export function reshape(doc){
     gas: {
       ...d.gas,
       windows: Object.fromEntries(winKeys.map(w => {
-        const g = d.gas.windows[w] || {};
+        const g = (d.gas.windows || {})[w] || {};
         return [w, { ...ZERO_GAS, ...g, by_band: g.by_band || {} }];
       })),
       // 6.4: daily cost-per-dollar series; absent in pre-6.4 artifacts (old-artifact
@@ -56,8 +56,8 @@ export function reshape(doc){
       cost_daily: (d.gas.cost_daily || []).map(p => [p.day, +p.cents_per_dollar, p.complete !== false]),
     },
     velocity: {
-      windows: Object.fromEntries(winKeys.map(w => [w, d.velocity.windows[w] || { ...ZERO_VELOCITY }])),
-      verified_daily: d.velocity.daily_series.map(p => [p.day, p.max_per_min, p.p99_per_min]),
+      windows: Object.fromEntries(winKeys.map(w => [w, (d.velocity.windows || {})[w] || { ...ZERO_VELOCITY }])),
+      verified_daily: (d.velocity.daily_series || []).map(p => [p.day, p.max_per_min, p.p99_per_min]),
     },
     claims: d.claims || [],
     // E9 concentration (window -> role -> {total_entities,...}); the overview
@@ -107,21 +107,28 @@ export function checkIntegrity(view){
     level: vPass ? "ok" : "warn",
     msg:   vPass ? null : vDetail });
 
-  // Conservation checks per window
+  // Conservation checks per window. numFinite guards every summed measure so a
+  // missing/garbage field throws a NAMED error here instead of silently summing
+  // to NaN and rendering "$NaN" as if it were a real (failing) conservation gap.
   for (const [w, win] of Object.entries(view.windows)){
     let n = 0, usd = 0;
-    for (const m of Object.values(win.by_band)){ n += m.txn_count; usd += num(m.volume_usdc); }
-    const cntPass = n === win.txn_count;
-    const cntDetail = `${w} bands ${fmtInt(n)} ${cntPass ? "==" : "≠"} window ${fmtInt(win.txn_count)} ${cntPass ? "OK" : "FAIL"}`;
+    for (const [band, m] of Object.entries(win.by_band)){
+      n   += numFinite(m.txn_count,   `${w}.${band}.txn_count`);
+      usd += numFinite(m.volume_usdc, `${w}.${band}.volume_usdc`);
+    }
+    const winN   = numFinite(win.txn_count,   `${w}.txn_count`);
+    const winUsd = numFinite(win.volume_usdc, `${w}.volume_usdc`);
+    const cntPass = n === winN;
+    const cntDetail = `${w} bands ${fmtInt(n)} ${cntPass ? "==" : "≠"} window ${fmtInt(winN)} ${cntPass ? "OK" : "FAIL"}`;
     checks.push({ name:`${w}-count`, pass:cntPass, detail:cntDetail,
       level: cntPass ? "ok" : "error",
-      msg:   cntPass ? null : `conservation ✗ — ${w} band txns ${n} ≠ total ${win.txn_count}` });
+      msg:   cntPass ? null : `conservation ✗ — ${w} band txns ${n} ≠ total ${winN}` });
 
-    const usdPass = Math.abs(usd - num(win.volume_usdc)) <= USD_TOLERANCE;
-    const usdDetail = `${w} bands $${usd.toFixed(2)} ${usdPass ? "≈" : "≠"} window $${num(win.volume_usdc).toFixed(2)} ${usdPass ? "OK" : `FAIL (off $${Math.abs(usd - num(win.volume_usdc)).toFixed(2)})`}`;
+    const usdPass = Math.abs(usd - winUsd) <= USD_TOLERANCE;
+    const usdDetail = `${w} bands $${usd.toFixed(2)} ${usdPass ? "≈" : "≠"} window $${winUsd.toFixed(2)} ${usdPass ? "OK" : `FAIL (off $${Math.abs(usd - winUsd).toFixed(2)})`}`;
     checks.push({ name:`${w}-usd`, pass:usdPass, detail:usdDetail,
       level: usdPass ? "ok" : "error",
-      msg:   usdPass ? null : `conservation ✗ — ${w} band USD off by $${Math.abs(usd - num(win.volume_usdc)).toFixed(2)}` });
+      msg:   usdPass ? null : `conservation ✗ — ${w} band USD off by $${Math.abs(usd - winUsd).toFixed(2)}` });
   }
 
   // Excluded remainder (informational, always pass when present)

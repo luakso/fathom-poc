@@ -1,6 +1,6 @@
 // Sortable entity leaderboard. Re-renders its own <table> on header click;
 // innerHTML replacement means click listeners die with their nodes (no leak).
-import { num, fmtMoney, fmtInt, fmtCount } from "../format.js";
+import { num, fmtMoney, fmtInt, fmtCount, escHtml } from "../format.js";
 import { classify, CLASSES } from "./fingerprint.js";
 
 export const shortAddr = a => a.slice(0, 6) + "…" + a.slice(-4);
@@ -25,7 +25,10 @@ export function renderLeaderboard(tableEl, rows, opts) {
       tableEl.innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no entities in this window</td></tr></tbody>`;
       return;
     }
-    const sorted = [...rows].sort((a, b) => st.dir * (SORT[st.sort](a) - SORT[st.sort](b))).slice(0, limit);
+    // Address localeCompare is the deterministic final tiebreak: tied rows must
+    // not fall back to artifact order, which can reshuffle between emits.
+    const sorted = [...rows].sort((a, b) =>
+      st.dir * (SORT[st.sort](a) - SORT[st.sort](b)) || a.address.localeCompare(b.address)).slice(0, limit);
     const arrow = id => st.sort === id ? (st.dir < 0 ? " ▾" : " ▴") : "";
     const head = `<thead><tr>
       <th>#</th>
@@ -45,7 +48,7 @@ export function renderLeaderboard(tableEl, rows, opts) {
         <td>${fmtInt(r.distinct_counterparties)}</td>
         <td>${fmtInt(r.distinct_amounts)}</td>
         <td><span class="fp" style="color:${meta.color}" title="${meta.blurb}">${meta.label}</span></td>
-        <td title="${r.address}\n${day(r.first_seen)} → ${day(r.last_seen)}" style="color:var(--dim)">${shortAddr(r.address)}</td>
+        <td title="${escHtml(r.address)}\n${escHtml(day(r.first_seen))} → ${escHtml(day(r.last_seen))}" style="color:var(--dim)">${escHtml(shortAddr(r.address))}</td>
         <td>${onPin ? `<button class="pin-row" data-pin-row="${i}" title="pin this entity">⊞</button>` : ""}</td>
       </tr>`;
     }).join("")}</tbody>`;

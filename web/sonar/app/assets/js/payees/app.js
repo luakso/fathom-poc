@@ -3,7 +3,7 @@
 // legend, leaderboard, dust-sink registry, concentration, verify log. Pins
 // flow into the shared report tray.
 import { $, $$ } from "../dom.js";
-import { num, fmtMoney, fmtCount, fmtInt, fmtAmt, pct } from "../format.js";
+import { num, fmtMoney, fmtCount, fmtInt, fmtAmt, pct, escHtml } from "../format.js";
 import { loadEntity } from "../lib/entity-adapter.js";
 import { renderLeaderboard, shortAddr } from "../lib/leaderboard.js";
 import { renderScatter, classCounts } from "../lib/scatter.js";
@@ -60,11 +60,11 @@ function rLeader() {
 
 function rSink() {
   const sinks = win().leaderboard.filter(r => classify(r) === "sink")
-    .sort((a, b) => b.txn_count - a.txn_count).slice(0, 20);
+    .sort((a, b) => (b.txn_count - a.txn_count) || a.address.localeCompare(b.address)).slice(0, 20);
   if (!sinks.length) { $("#sinktable").innerHTML = `<tbody><tr><td style="color:var(--faint);padding:14px 0">no dust sinks in this window</td></tr></tbody>`; return; }
   $("#sinktable").innerHTML = `<thead><tr><th>address</th><th>txns</th><th>$ absorbed</th><th>amounts</th></tr></thead>
     <tbody>${sinks.map(r => `<tr>
-      <td style="color:var(--dim)" title="${r.address}">${shortAddr(r.address)}</td>
+      <td style="color:var(--dim)" title="${escHtml(r.address)}">${escHtml(shortAddr(r.address))}</td>
       <td style="font-weight:700">${fmtCount(r.txn_count)}</td>
       <td>${fmtMoney(r.volume_usdc)}</td><td>${fmtInt(r.distinct_amounts)}</td></tr>`).join("")}</tbody>`;
 }
@@ -112,7 +112,7 @@ const PIN = {
   overview() { const c = win().concentration; return { title: "PAYEES · " + state.win.toUpperCase(), value: fmtMoney(c.total_volume), context: `${fmtInt(c.total_entities)} distinct payees · ${fmtCount(c.total_txns)} payments · top-10 take ${pct(c.top10_volume, c.total_volume)} of $`, denom: "x402 payees on Base · " + WIN_LABEL[state.win] }; },
   fingerprint() { const t = classCounts(win().leaderboard); const tot = Object.values(t).reduce((s, x) => s + x.volume, 0) || 1; return { title: "FINGERPRINT · " + state.win.toUpperCase(), value: pct(t.service.volume, tot) + " is service $", context: `${t.service.count} services, ${t.sink.count} dust sinks, ${t.fleet.count} fleet targets, ${t.otc.count} OTC desks among the top leaderboard`, denom: "fingerprint over leaderboard · " + WIN_LABEL[state.win] }; },
   leader() { const r = win().leaderboard[0]; return r ? pinForEntity(r) : null; },
-  sink() { const s = win().leaderboard.filter(r => classify(r) === "sink").sort((a, b) => b.txn_count - a.txn_count)[0]; if (!s) return null; const avg = s.txn_count ? num(s.volume_usdc) / s.txn_count : 0; return { title: "DUST SINK · " + shortAddr(s.address), value: fmtCount(s.txn_count) + " txns for " + fmtMoney(s.volume_usdc), context: `absorbs micro-spam across ${fmtInt(s.distinct_amounts)} amounts — averaging ${fmtAmt(avg.toFixed(6))} per payment`, denom: "fingerprint class = dust sink · " + WIN_LABEL[state.win] }; },
+  sink() { const s = win().leaderboard.filter(r => classify(r) === "sink").sort((a, b) => (b.txn_count - a.txn_count) || a.address.localeCompare(b.address))[0]; if (!s) return null; const avg = s.txn_count ? num(s.volume_usdc) / s.txn_count : 0; return { title: "DUST SINK · " + shortAddr(s.address), value: fmtCount(s.txn_count) + " txns for " + fmtMoney(s.volume_usdc), context: `absorbs micro-spam across ${fmtInt(s.distinct_amounts)} amounts — averaging ${fmtAmt(avg.toFixed(6))} per payment`, denom: "fingerprint class = dust sink · " + WIN_LABEL[state.win] }; },
   conc() { const c = win().concentration; return { title: "CONCENTRATION · " + state.win.toUpperCase(), value: pct(c.top10_volume, c.total_volume) + " to top 10", context: `top-10 payees take ${pct(c.top10_volume, c.total_volume)} of $ and ${pct(c.top10_txns, c.total_txns)} of payments; top-100 take ${pct(c.top100_volume, c.total_volume)} of $`, denom: "concentration{} · cross-checked vs economy.json · " + WIN_LABEL[state.win] }; },
 };
 

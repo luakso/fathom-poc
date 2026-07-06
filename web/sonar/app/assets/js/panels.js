@@ -171,7 +171,7 @@ export function rClaims(){
     const fmt = isUsd ? fmtMoney : fmtInt;
     return `<div class="claimrow">
       <div class="q">"${escHtml(c.claim_text)}"</div>
-      <div class="src">${/^https?:\/\//i.test(c.source_url) ? `<a href="${c.source_url.replace(/"/g,"%22")}" target="_blank" rel="noopener" style="color:inherit">${c.source}</a>` : c.source} · ${c.claim_date} · measured as ${c.measured_metric}</div>
+      <div class="src">${/^https?:\/\//i.test(c.source_url) ? `<a href="${escHtml(c.source_url)}" target="_blank" rel="noopener" style="color:inherit">${escHtml(c.source)}</a>` : escHtml(c.source)} · ${escHtml(c.claim_date)} · measured as ${escHtml(c.measured_metric)}</div>
       <div class="nums"><span class="a">claimed ${fmt(c.claimed_value)}</span><span>▸</span><span class="m">measured ${fmt(c.measured_value)}</span>${tag}</div>
     </div>`;
   }).join("");
