@@ -27,7 +27,8 @@ describe('buildEntityGraph', () => {
 
   it('creates subject + payees + facilitator + ghost with address ids', () => {
     expect(state.nodes.map((n) => n.id).sort()).toEqual([A, B, C, D, F].sort())
-    expect(state.nodes.find((n) => n.id === A)?.data.roleClass).toBe('subject')
+    const subj = state.nodes.find((n) => n.id === A)
+    expect(subj && 'roleClass' in subj.data ? subj.data.roleClass : undefined).toBe('subject')
     expect(state.nodes.find((n) => n.id === D)?.type).toBe('ghost')
   })
   it('payees sit right of subject, facilitator above', () => {
@@ -42,7 +43,7 @@ describe('buildEntityGraph', () => {
   it('exactly one primary edge, the top-share one', () => {
     const primaries = state.edges.filter((e) => e.data?.primary)
     expect(primaries).toHaveLength(1)
-    expect(primaries[0].id).toBe(`${A}->${B}`)
+    expect(primaries[0]!.id).toBe(`${A}->${B}`)
   })
   it('edge label composes usd · txns · share', () => {
     expect(state.edges.find((e) => e.id === `${A}->${B}`)?.data?.label).toBe('$90.00 · 100 txns · 90%')
@@ -51,11 +52,11 @@ describe('buildEntityGraph', () => {
     const rects = state.nodes.map((n) => ({
       x: n.position.x, y: n.position.y,
       w: n.type === 'ghost' ? GHOST_W : NODE_W,
-      h: n.type === 'ghost' ? GHOST_H : NODE_H + (n.data.roleClass === 'subject' ? 40 : 0),
+      h: n.type === 'ghost' ? GHOST_H : NODE_H + ('roleClass' in n.data && n.data.roleClass === 'subject' ? 40 : 0),
     }))
     for (let i = 0; i < rects.length; i++)
       for (let j = i + 1; j < rects.length; j++)
-        expect(overlaps(rects[i], rects[j])).toBe(false)
+        expect(overlaps(rects[i]!, rects[j]!)).toBe(false)
   })
 })
 

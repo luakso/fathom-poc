@@ -8,8 +8,11 @@ export function densify(points: DayPoint[]): DayPoint[] {
   const sorted = [...points].sort((a, b) => (a.day < b.day ? -1 : 1))
   const byDay = new Map(sorted.map((p) => [p.day, p]))
   const out: DayPoint[] = []
-  const end = Date.parse(`${sorted[sorted.length - 1].day}T00:00:00Z`)
-  for (let t = Date.parse(`${sorted[0].day}T00:00:00Z`); t <= end; t += 86_400_000) {
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  if (!first || !last) return [...points]
+  const end = Date.parse(`${last.day}T00:00:00Z`)
+  for (let t = Date.parse(`${first.day}T00:00:00Z`); t <= end; t += 86_400_000) {
     const day = new Date(t).toISOString().slice(0, 10)
     out.push(byDay.get(day) ?? { day, txnCount: 0, volumeUsdc: '0' })
   }

@@ -8,8 +8,8 @@ export function OverviewTab({ entity }: { entity: Entity; lens: Lens }) {
       <div className="card-block">
         <div className="section-title" style={{ marginBottom: 8 }}>Identity signals</div>
         {(entity.signals ?? []).length === 0 && <div className="empty-state">no identity signals</div>}
-        {(entity.signals ?? []).map((s, i) => (
-          <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', fontSize: 11.5 }}>
+        {(entity.signals ?? []).map((s) => (
+          <div key={`${s.source}:${s.kind}:${s.value}`} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', fontSize: 11.5 }}>
             <span className="badge">{s.source}</span>
             <span style={{ color: 'var(--dim)' }}>{s.kind}</span>
             {s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="mono">{s.value}</a> : <span className="mono">{s.value}</span>}

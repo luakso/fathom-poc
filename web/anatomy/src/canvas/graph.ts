@@ -8,29 +8,55 @@ import {
 } from './layout'
 import { usd, groupDigits, pct } from '../lib/format'
 import type { Neighbors, NeighborRow } from '../lib/schemas'
+import type { RoleClass } from '../lib/roles'
 
+// Data payload for entity/ghost cards. Explicit optional fields (no index
+// signature) so the node data stays fully typed; @xyflow only requires that a
+// node's data be assignable to Record<string, unknown>, which this object type
+// satisfies. onExpand/onFocus are injected by <Canvas> at render time.
 export type EntityNodeData = {
   address: string
   label?: string
-  roleClass: 'subject' | 'payee' | 'payer' | 'facilitator' | 'ghost'
+  roleClass: RoleClass
   chips: string[]
   kpis?: { payments: string; volume: string; counterparties: string }
   detail?: string
   expandable: boolean
-  [key: string]: unknown
+  onExpand?: (addr: string) => void
+  onFocus?: (addr: string) => void
 }
 
-export type FlowState = { nodes: Node<EntityNodeData>[]; edges: Edge[] }
+// Data payloads for the transaction dossier's tx/event cards (built in txgraph).
+export type TxNodeData = { label: string; fields: Record<string, string> }
+export type EventNodeData = { label: string; fields: Record<string, string> }
+
+// Edge payload shared by both the entity canvas and the tx dossier.
+export type FlowEdgeData = {
+  share?: number
+  label?: string
+  primary?: boolean
+  verb?: boolean
+  ghost?: boolean
+}
+
+export type EntityFlowNode = Node<EntityNodeData>
+export type TxFlowNode = Node<TxNodeData>
+export type EventFlowNode = Node<EventNodeData>
+export type FlowNode = EntityFlowNode | TxFlowNode | EventFlowNode
+export type FlowEdge = Edge<FlowEdgeData>
+
+export type FlowState = { nodes: FlowNode[]; edges: FlowEdge[] }
 
 const SUBJECT_H = NODE_H + 40
 
-function nodeRect(n: Node<EntityNodeData>): Rect {
+function nodeRect(n: FlowNode): Rect {
   const ghost = n.type === 'ghost'
+  const subject = 'roleClass' in n.data && n.data.roleClass === 'subject'
   return {
     x: n.position.x,
     y: n.position.y,
     w: ghost ? GHOST_W : NODE_W,
-    h: ghost ? GHOST_H : n.data.roleClass === 'subject' ? SUBJECT_H : NODE_H,
+    h: ghost ? GHOST_H : subject ? SUBJECT_H : NODE_H,
   }
 }
 
@@ -43,7 +69,7 @@ function makeNode(
   roleClass: EntityNodeData['roleClass'],
   rect: Rect,
   ghost: boolean,
-): Node<EntityNodeData> {
+): EntityFlowNode {
   return {
     id: r.address,
     type: ghost ? 'ghost' : 'entity',
@@ -58,7 +84,7 @@ function makeNode(
   }
 }
 
-function makeEdge(source: string, target: string, r: NeighborRow, opts: { settles?: boolean; ghost?: boolean }): Edge {
+function makeEdge(source: string, target: string, r: NeighborRow, opts: { settles?: boolean; ghost?: boolean }): FlowEdge {
   if (opts.settles) {
     return { id: `${source}=>${target}`, source, target, type: 'flow', data: { label: 'settles', verb: true } }
   }
@@ -108,7 +134,10 @@ function merge(state: FlowState, anchorId: string, n: Neighbors, ghost = false):
         const x = columnX(anchorRect, d.dir, boxSize.w)
         rects = placeColumn(occupied, x, anchorRect.y + anchorRect.h / 2, fresh.map(() => boxSize))
       }
-      fresh.forEach((r, i) => nodes.push(makeNode(r, ghost ? 'ghost' : d.roleClass, rects[i], ghost)))
+      fresh.forEach((r, i) => {
+        const rect = rects[i]
+        if (rect) nodes.push(makeNode(r, ghost ? 'ghost' : d.roleClass, rect, ghost))
+      })
     }
     for (const r of d.rows) {
       const [source, target] = d.toAnchor ? [r.address, anchorId] : [anchorId, r.address]
@@ -127,7 +156,7 @@ export function buildEntityGraph(
   neighbors: Neighbors,
   ghosts: NeighborRow[],
 ): FlowState {
-  const subjectNode: Node<EntityNodeData> = {
+  const subjectNode: EntityFlowNode = {
     id: subject.address,
     type: 'entity',
     position: { x: 0, y: 0 },
@@ -146,17 +175,24 @@ export function buildEntityGraph(
     // ghosts always render as payees-direction stubs under the subject's right lane
     state = merge(state, subject.address, { address: subject.address, lens: 'all', payees: { total: ghosts.length, rows: ghosts } }, true)
   }
-  // primary = single highest-share flow edge touching the subject
-  let best: Edge | undefined
+  // primary = single highest-share flow edge touching the subject. Computed as
+  // an id, then applied immutably so no rendered edge object is mutated.
+  let bestId: string | undefined
+  let bestShare = -1
   for (const e of state.edges) {
-    const d = e.data as { share?: number; ghost?: boolean } | undefined
+    const d = e.data
     if (d?.share == null || d.ghost) continue
     if (e.source !== subject.address && e.target !== subject.address) continue
-    const bestShare = (best?.data as { share?: number } | undefined)?.share ?? -1
-    if (d.share > bestShare) best = e
+    if (d.share > bestShare) {
+      bestShare = d.share
+      bestId = e.id
+    }
   }
-  if (best) (best.data as { primary?: boolean }).primary = true
-  return state
+  if (bestId === undefined) return state
+  const edges = state.edges.map((e) =>
+    e.id === bestId ? { ...e, data: { ...e.data, primary: true } } : e,
+  )
+  return { ...state, edges }
 }
 
 export function expandNode(state: FlowState, parentAddr: string, neighbors: Neighbors): FlowState {

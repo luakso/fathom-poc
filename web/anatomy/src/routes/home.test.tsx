@@ -32,7 +32,7 @@ describe('Home', () => {
       </MemoryRouter>,
     )
     await waitFor(() => expect(screen.getByText('api.tollbit.com')).toBeTruthy())
-    const url = String(fetchMock.mock.calls[0][0])
+    const url = String(fetchMock.mock.calls[0]![0])
     expect(url).toContain('role=payee')
     expect(url).toContain('window=all')
     expect(url).toContain('sort=volume')

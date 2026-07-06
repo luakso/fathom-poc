@@ -1,5 +1,12 @@
 import { z } from 'zod'
 
+// The three economic roles are a closed set across every API surface (entity
+// roles, graph-node roles, timeline/fingerprint role keys). Enumerated here so
+// an unexpected role fails loudly at the boundary rather than flowing through
+// as an opaque string.
+export const RoleSchema = z.enum(['payer', 'payee', 'facilitator'])
+export type Role = z.infer<typeof RoleSchema>
+
 export const LensTotalsSchema = z.object({ txnCount: z.number(), volumeUsdc: z.string() })
 export const MetaSchema = z.object({
   dataMaxDay: z.string(),
@@ -33,7 +40,7 @@ export const EntitySchema = z.object({
   address: z.string(),
   label: z.string().optional(),
   labelSource: z.string().optional(),
-  roles: z.array(z.string()),
+  roles: z.array(RoleSchema),
   signals: z.array(IdentitySignalSchema).optional(),
   summaries: z.record(z.string(), z.record(z.string(), LensSummarySchema)),
 })
@@ -147,7 +154,7 @@ export const GraphNodeSchema = z.object({
   id: z.string(),
   kind: z.enum(['transaction', 'event', 'address']),
   label: z.string(),
-  roles: z.array(z.string()).optional(),
+  roles: z.array(RoleSchema).optional(),
   fields: z.record(z.string(), z.string()),
   providers: z.array(ProviderRefSchema).optional(),
 })

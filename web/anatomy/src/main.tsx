@@ -5,7 +5,10 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { AppRoutes, newQueryClient } from './App'
 import './theme.css'
 
-createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById('root')
+if (!rootEl) throw new Error('root element (#root) not found - cannot mount the app')
+
+createRoot(rootEl).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={newQueryClient()}>

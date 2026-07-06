@@ -19,8 +19,8 @@ export function identiconData(address: string): { hue: number; cells: boolean[][
     for (let c = 0; c < 3; c++) {
       row.push(Boolean((h >>> ((r * 3 + c) % 31)) & 1))
     }
-    row.push(row[1])
-    row.push(row[0])
+    row.push(row[1] ?? false)
+    row.push(row[0] ?? false)
     cells.push(row)
   }
   return { hue, cells }

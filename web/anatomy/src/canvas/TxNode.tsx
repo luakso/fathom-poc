@@ -1,9 +1,12 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { short } from '../lib/format'
 import { buildTxView } from '../lib/txview'
+import type { TxNodeData } from './graph'
 
-export function TxNode({ data, selected }: NodeProps & { data: { label: string; fields: Record<string, string> } }) {
-  const v = buildTxView(data.fields, Date.now())
+export function TxNode({ data, selected }: NodeProps<Node<TxNodeData>> & { data: TxNodeData }) {
+  // Relative age is not shown on the node card, so pass a fixed 0 rather than a
+  // wall-clock read (keeps rendering deterministic / free of Date.now in render).
+  const v = buildTxView(data.fields, 0)
   return (
     <div className={`node-card subject ${selected ? 'selected' : ''}`} style={{ width: 300 }}>
       <Handle id="l" type="target" position={Position.Left} style={{ opacity: 0 }} />
