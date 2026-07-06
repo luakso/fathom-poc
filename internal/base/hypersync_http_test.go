@@ -1,6 +1,7 @@
 package base_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -45,13 +46,13 @@ func TestHTTPFetcher_StreamsBatches(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 119))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 119))
 	require.NoError(t, err)
 	defer stream.Close()
 
 	var got []base.HyperSyncBatch
 	for {
-		b, ok, err := stream.Next()
+		b, ok, err := stream.Next(context.Background())
 		require.NoError(t, err)
 		if !ok {
 			break
@@ -73,10 +74,10 @@ func TestHTTPFetcher_SendsBearerToken(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "secret-token")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
-	_, _, err = stream.Next()
+	_, _, err = stream.Next(context.Background())
 	require.NoError(t, err)
 }
 
@@ -91,11 +92,11 @@ func TestHTTPFetcher_StreamEndsWhenNextBlockPastToBlock(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 	for {
-		_, ok, err := stream.Next()
+		_, ok, err := stream.Next(context.Background())
 		require.NoError(t, err)
 		if !ok {
 			break
@@ -112,10 +113,10 @@ func TestHTTPFetcher_ServerErrorBubblesUp(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
-	_, _, err = stream.Next()
+	_, _, err = stream.Next(context.Background())
 	require.Error(t, err)
 }
 
@@ -134,11 +135,11 @@ func TestHTTPFetcher_RetriesOn429ThenSucceeds(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(5, time.Millisecond))
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 
-	_, ok, err := stream.Next()
+	_, ok, err := stream.Next(context.Background())
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, 3, calls, "two 429s then success = three calls")
@@ -154,11 +155,11 @@ func TestHTTPFetcher_429ExhaustsRetriesReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(2, time.Millisecond))
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 
-	_, _, err = stream.Next()
+	_, _, err = stream.Next(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "429")
 	require.Equal(t, 3, calls, "initial attempt + 2 retries")
@@ -183,11 +184,11 @@ func TestHTTPFetcher_RetriesTransportErrorThenSucceeds(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(5, time.Millisecond))
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 
-	_, ok, err := stream.Next()
+	_, ok, err := stream.Next(context.Background())
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, int32(2), calls.Load(), "one transport failure then success")
@@ -205,11 +206,11 @@ func TestHTTPFetcher_TransportErrorExhaustsRetriesReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "", base.WithRetry(2, time.Millisecond))
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 
-	_, _, err = stream.Next()
+	_, _, err = stream.Next(context.Background())
 	require.Error(t, err)
 	require.Equal(t, int32(3), calls.Load(), "initial attempt + 2 retries")
 }
@@ -230,11 +231,11 @@ func TestHTTPFetcher_NonAdvancingServerReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 199))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 199))
 	require.NoError(t, err)
 	defer stream.Close()
 
-	_, _, err = stream.Next()
+	_, _, err = stream.Next(context.Background())
 	require.Error(t, err, "no-advance mid-range must be an error, not silent completion")
 	require.Contains(t, err.Error(), "did not advance")
 	require.Equal(t, 1, calls, "non-advancing server must not be re-queried")
@@ -260,13 +261,13 @@ func TestHTTPFetcher_CoversInclusiveFinalBlock(t *testing.T) {
 	defer srv.Close()
 
 	f := base.NewHTTPFetcher(srv.URL, "")
-	stream, err := f.Stream(base.BuildBackfillQuery(100, 119))
+	stream, err := f.Stream(context.Background(), base.BuildBackfillQuery(100, 119))
 	require.NoError(t, err)
 	defer stream.Close()
 
 	var got []base.HyperSyncBatch
 	for {
-		b, ok, err := stream.Next()
+		b, ok, err := stream.Next(context.Background())
 		require.NoError(t, err)
 		if !ok {
 			break

@@ -77,7 +77,7 @@ func RunProbe(ctx context.Context, d ProbeDeps) (report ProbeReport, err error) 
 		return ProbeReport{}, fmt.Errorf("probe: fetcher is required")
 	}
 
-	stream, err := d.Fetcher.Stream(BuildBackfillQuery(d.FromBlock, d.ToBlock))
+	stream, err := d.Fetcher.Stream(ctx, BuildBackfillQuery(d.FromBlock, d.ToBlock))
 	if err != nil {
 		return ProbeReport{}, fmt.Errorf("open stream: %w", err)
 	}
@@ -96,7 +96,7 @@ func RunProbe(ctx context.Context, d ProbeDeps) (report ProbeReport, err error) 
 			return report, nil
 		default:
 		}
-		batch, ok, err := stream.Next()
+		batch, ok, err := stream.Next(ctx)
 		if err != nil {
 			return report, fmt.Errorf("stream next: %w", err)
 		}

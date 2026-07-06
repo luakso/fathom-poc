@@ -118,7 +118,7 @@ func TestAssemble_KeepsReceiveWithAuthorizationFlagged(t *testing.T) {
 	)
 	require.Equal(t, AssembleStats{AuthLogs: 1, Denied: 0, Kept: 1, Dropped: 0}, stats)
 	require.Len(t, out, 1)
-	require.Equal(t, "receive", out[0].SettlementKind)
+	require.Equal(t, SettlementReceive, out[0].SettlementKind)
 	require.True(t, out[0].SelfSettled, "facilitator == payee")
 	require.Equal(t, "0xbbbb000000000000000000000000000000000001", out[0].Payee)
 	require.Equal(t, "0xaaaa000000000000000000000000000000000001", out[0].Payer, "payer is the authorizer, distinct from the self-settling payee")
@@ -224,7 +224,7 @@ func TestAssemble_PopulatesCaptureFields(t *testing.T) {
 	require.Len(t, out, 1)
 	p := out[0]
 
-	require.Equal(t, "transfer", p.SettlementKind)
+	require.Equal(t, SettlementTransfer, p.SettlementKind)
 	require.False(t, p.SelfSettled, "facilitator != payee here")
 	require.NotNil(t, p.ValidAfter)
 	require.Equal(t, time.Unix(1_700_000_000, 0).UTC(), *p.ValidAfter)
@@ -272,6 +272,77 @@ func TestAssemble_PopulatesL1CaptureFields(t *testing.T) {
 	require.Equal(t, big.NewInt(12_345), p.L1Fee)
 	require.Equal(t, big.NewInt(1_600), p.L1GasUsed)
 	require.Equal(t, big.NewInt(7), p.L1GasPrice)
+}
+
+// TestAssemble_SharedAuthorizerSingleTransferProducesOneRow is the core M4
+// double-count guard: a malformed/adversarial receipt [AUTH0, AUTH1, XFER] where
+// AUTH0 and AUTH1 share an authorizer. Both auths pass the authorizer==from
+// backstop against the single XFER, so the old forward-reaching pairing would
+// write the SAME transfer amount to TWO rows. Exactly ONE payment must result.
+func TestAssemble_SharedAuthorizerSingleTransferProducesOneRow(t *testing.T) {
+	tx := txFixture(
+		"0xdead",
+		"0xfaC1000000000000000000000000000000000001",
+		USDCProxyBase.Hex(),
+		[]byte{0x82, 0xad, 0x56, 0xcb}, // aggregate3 wrapper (two inner auths)
+	)
+	tx.Hash = common.HexToHash("0xdead")
+
+	payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001" // shared authorizer
+	payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+
+	logs := []Log{
+		// AUTH0@0 and AUTH1@1 share the authorizer; a single XFER@2 whose
+		// Transfer.from == that authorizer follows both.
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(bytes32(0xaa))}, TxHash: tx.Hash, LogIndex: 0, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(bytes32(0xbb))}, TxHash: tx.Hash, LogIndex: 1, BlockNumber: 42},
+		{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payer), common.HexToHash(payee)}, Data: make32WithUint64(1_000_000), TxHash: tx.Hash, LogIndex: 2, BlockNumber: 42},
+	}
+	out, stats := Assemble(
+		logs,
+		map[common.Hash]Transaction{tx.Hash: tx},
+		map[common.Hash][]Log{tx.Hash: logs},
+		map[uint64]Block{42: {Number: 42, Timestamp: 1_700_000_000}},
+	)
+	require.Len(t, out, 1, "one Transfer can back at most one payment — no invented money")
+	require.Equal(t, big.NewInt(1_000_000), out[0].AmountRaw)
+	require.Equal(t, uint32(0), out[0].LogIndex, "the earliest auth claims the sole companion Transfer")
+	// AuthLogs=2, both kept-eligible, but the second finds no unconsumed companion
+	// → dropped as anomalous. Invariant AuthLogs == Denied+Kept+Dropped holds.
+	require.Equal(t, AssembleStats{AuthLogs: 2, Denied: 0, Kept: 1, Dropped: 1}, stats)
+}
+
+// TestAssemble_OutputOrderedByBlockAndLogIndex proves the documented
+// (block_number, log_index) output ordering even when candidates arrive
+// out of order across two blocks.
+func TestAssemble_OutputOrderedByBlockAndLogIndex(t *testing.T) {
+	mk := func(hash string, block uint64, logIndex uint32, nonce byte) (Transaction, []Log) {
+		tx := txFixture(hash, "0xfaC1000000000000000000000000000000000001", USDCProxyBase.Hex(), []byte{0xe3, 0xee, 0x16, 0x0e})
+		tx.Hash = common.HexToHash(hash)
+		tx.BlockNumber = block
+		payer := "0x000000000000000000000000aaaa000000000000000000000000000000000001"
+		payee := "0x000000000000000000000000bbbb000000000000000000000000000000000001"
+		logs := []Log{
+			{Address: USDCProxyBase, Topics: []common.Hash{AuthorizationUsedTopic, common.HexToHash(payer), common.BytesToHash(bytes32(nonce))}, TxHash: tx.Hash, LogIndex: logIndex, BlockNumber: block},
+			{Address: USDCProxyBase, Topics: []common.Hash{TransferTopic, common.HexToHash(payer), common.HexToHash(payee)}, Data: make32WithUint64(uint64(nonce)), TxHash: tx.Hash, LogIndex: logIndex + 1, BlockNumber: block},
+		}
+		return tx, logs
+	}
+
+	txHi, logsHi := mk("0xbbbb", 100, 4, 0xbb) // later block
+	txLo, logsLo := mk("0xaaaa", 42, 0, 0xaa)  // earlier block
+	// Feed logs in the "wrong" order (high block first) to prove the sort works.
+	allLogs := append(append([]Log{}, logsHi...), logsLo...)
+
+	out, _ := Assemble(
+		allLogs,
+		map[common.Hash]Transaction{txHi.Hash: txHi, txLo.Hash: txLo},
+		map[common.Hash][]Log{txHi.Hash: logsHi, txLo.Hash: logsLo},
+		map[uint64]Block{42: {Number: 42, Timestamp: 1_700_000_000}, 100: {Number: 100, Timestamp: 1_700_000_100}},
+	)
+	require.Len(t, out, 2)
+	require.Equal(t, uint64(42), out[0].BlockNumber, "earlier block first")
+	require.Equal(t, uint64(100), out[1].BlockNumber, "later block second")
 }
 
 // helpers

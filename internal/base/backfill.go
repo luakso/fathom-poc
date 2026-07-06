@@ -56,7 +56,7 @@ func NewBackfiller(fetcher Fetcher, store *Store, opts ...BackfillerOption) *Bac
 // error — the range is unfinished, so callers must see a non-zero exit.
 func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 	q := BuildBackfillQuery(fromBlock, toBlock)
-	stream, err := b.fetcher.Stream(q)
+	stream, err := b.fetcher.Stream(ctx, q)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
 	}
@@ -74,7 +74,7 @@ func (b *Backfiller) Run(ctx context.Context, fromBlock, toBlock uint64) error {
 		}
 
 		started := time.Now()
-		batch, ok, err := stream.Next()
+		batch, ok, err := stream.Next(ctx)
 		if err != nil {
 			return fmt.Errorf("stream next: %w", err)
 		}

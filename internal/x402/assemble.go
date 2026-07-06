@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"math"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -60,6 +61,13 @@ func Assemble(
 	out := make([]Payment, 0, len(allLogs)/2) // rough capacity hint
 	stats := AssembleStats{}
 
+	// Collect the candidate AuthorizationUsed logs, then process them in ascending
+	// (block_number, log_index) order. On EVM log_index is unique and monotonic
+	// within a block, so this is a total order that, within each receipt, visits
+	// the earliest auth first. That ordering is LOAD-BEARING for the consumed-
+	// Transfer accounting below: the earliest auth claims its companion Transfer
+	// before any later auth in the same receipt can.
+	candidates := make([]Log, 0, len(allLogs)/2)
 	for _, lg := range allLogs {
 		// Topic + address gate. KeepAuthorizationUsed handles the rest.
 		if lg.Address != USDCProxyBase {
@@ -68,6 +76,25 @@ func Assemble(
 		if len(lg.Topics) == 0 || lg.Topics[0] != AuthorizationUsedTopic {
 			continue
 		}
+		candidates = append(candidates, lg)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].BlockNumber != candidates[j].BlockNumber {
+			return candidates[i].BlockNumber < candidates[j].BlockNumber
+		}
+		return candidates[i].LogIndex < candidates[j].LogIndex
+	})
+
+	// consumedByTx tracks, per receipt, the log indices of USDC Transfers already
+	// bound to a KEPT payment. Each Transfer may back at most one payment row, so
+	// a malformed/adversarial receipt (e.g. [AUTH0, AUTH1, XFER] where AUTH0 and
+	// AUTH1 share an authorizer) can never write the same transfer amount to two
+	// rows — that would invent money in a public, citable figure. A Transfer is
+	// marked consumed only when its auth is actually kept, so an auth that later
+	// drops does not steal a Transfer from the payment it truly belongs to.
+	consumedByTx := map[common.Hash]map[uint32]bool{}
+
+	for _, lg := range candidates {
 		stats.AuthLogs++
 
 		tx, ok := txByHash[lg.TxHash]
@@ -88,9 +115,15 @@ func Assemble(
 			continue
 		}
 
-		companion, ok := PairCompanionTransfer(receiptLogs, lg.LogIndex)
+		consumed := consumedByTx[lg.TxHash]
+		companion, ok := PairCompanionTransfer(receiptLogs, lg.LogIndex, consumed)
 		if !ok {
-			slog.Warn("assemble: no companion Transfer", "tx_hash", lg.TxHash.Hex(), "log_index", lg.LogIndex)
+			// Either no following USDC Transfer exists, or the only candidate was
+			// already claimed by an earlier auth in this receipt. Reaching forward
+			// to a Transfer that belongs to another payment would double-count it,
+			// so drop this auth as anomalous instead.
+			slog.Warn("assemble: no available companion Transfer (missing, or already consumed by an earlier authorization)",
+				"tx_hash", lg.TxHash.Hex(), "log_index", lg.LogIndex)
 			stats.Dropped++
 			continue
 		}
@@ -131,39 +164,42 @@ func Assemble(
 		methodSel := make([]byte, 4)
 		copy(methodSel, tx.Input[:4])
 
-		settlementKind := SettlementKind(tx.Input)
+		settlementKind := ClassifySettlement(tx.Input)
 		selfSettled := tx.From == to
 		validAfterRaw, validBeforeRaw, _ := DecodeAuthorizationWindow(tx.Input)
 		inputCopy := append([]byte(nil), tx.Input...)
 
 		out = append(out, Payment{
-			Chain:                ChainBase,
-			TxHash:               strings.ToLower(lg.TxHash.Hex()),
-			LogIndex:             lg.LogIndex,
-			BlockNumber:          lg.BlockNumber,
-			BlockTimestamp:       time.Unix(int64(block.Timestamp), 0).UTC(), //nolint:gosec // bounds-checked above
-			Source:               "base-collector",
-			Protocol:             "x402",
-			Facilitator:          strings.ToLower(tx.From.Hex()),
-			Payer:                strings.ToLower(from.Hex()),
-			Payee:                strings.ToLower(to.Hex()),
-			PayeeServiceID:       nil,
-			Asset:                "USDC",
-			TokenAddress:         strings.ToLower(USDCProxyBase.Hex()),
-			AmountRaw:            value,
-			AmountUSDC:           USDCFromRaw(value),
-			AssetUSDAtTime:       decimal.NewFromInt(1),
-			AuthNonce:            nonce,
-			MethodSelector:       methodSel,
-			CalledContract:       strings.ToLower(tx.To.Hex()),
-			TxType:               tx.Type,
-			TxNonce:              tx.Nonce,
-			GasUsed:              tx.GasUsed,
-			EffectiveGasPrice:    tx.EffectiveGasPrice,
-			GasCostWei:           gasCost,
-			BaseFeePerGas:        block.BaseFeePerGas,
-			MaxFeePerGas:         tx.MaxFeePerGas,
-			MaxPriorityFeePerGas: tx.MaxPriorityFeePerGas,
+			Chain:          ChainBase,
+			TxHash:         strings.ToLower(lg.TxHash.Hex()),
+			LogIndex:       lg.LogIndex,
+			BlockNumber:    lg.BlockNumber,
+			BlockTimestamp: time.Unix(int64(block.Timestamp), 0).UTC(), //nolint:gosec // bounds-checked above
+			Source:         SourceBaseCollector,
+			Protocol:       ProtocolX402,
+			Facilitator:    strings.ToLower(tx.From.Hex()),
+			Payer:          strings.ToLower(from.Hex()),
+			Payee:          strings.ToLower(to.Hex()),
+			PayeeServiceID: nil,
+			Asset:          AssetUSDC,
+			TokenAddress:   strings.ToLower(USDCProxyBase.Hex()),
+			AmountRaw:      value,
+			AmountUSDC:     USDCFromRaw(value),
+			AssetUSDAtTime: decimal.NewFromInt(1),
+			AuthNonce:      nonce,
+			MethodSelector: methodSel,
+			CalledContract: strings.ToLower(tx.To.Hex()),
+			TxType:         tx.Type,
+			TxNonce:        tx.Nonce,
+			GasUsed:        tx.GasUsed,
+			// Money/gas big.Ints are copied out of the per-batch tx/block maps so
+			// the Payment owns its values — no aliasing into shared, mutable batch
+			// state (matches the defensive copies of InputCalldata/AuthNonce).
+			EffectiveGasPrice:    cloneBig(tx.EffectiveGasPrice),
+			GasCostWei:           gasCost, // freshly allocated above
+			BaseFeePerGas:        cloneBig(block.BaseFeePerGas),
+			MaxFeePerGas:         cloneBig(tx.MaxFeePerGas),
+			MaxPriorityFeePerGas: cloneBig(tx.MaxPriorityFeePerGas),
 			SettlementKind:       settlementKind,
 			SelfSettled:          selfSettled,
 			ValidAfter:           unixToTimePtr(validAfterRaw),
@@ -172,14 +208,42 @@ func Assemble(
 			BlockHash:            strings.ToLower(block.Hash.Hex()),
 			TransactionIndex:     lg.TxIndex,
 			TokenDecimals:        USDCDecimals,
-			TokenSymbol:          "USDC",
-			TxValue:              tx.Value,
+			TokenSymbol:          TokenSymbolUSDC,
+			TxValue:              cloneBig(tx.Value),
 			GasLimit:             tx.GasLimit,
-			L1Fee:                tx.L1Fee,
-			L1GasUsed:            tx.L1GasUsed,
-			L1GasPrice:           tx.L1GasPrice,
+			L1Fee:                cloneBig(tx.L1Fee),
+			L1GasUsed:            cloneBig(tx.L1GasUsed),
+			L1GasPrice:           cloneBig(tx.L1GasPrice),
 		})
+
+		// The companion Transfer is now spoken for: mark it consumed so no later
+		// auth in this receipt can pair to it.
+		if consumed == nil {
+			consumed = map[uint32]bool{}
+			consumedByTx[lg.TxHash] = consumed
+		}
+		consumed[companion.LogIndex] = true
 		stats.Kept++
 	}
+
+	// Guarantee the documented output ordering. Kept rows are appended in the
+	// candidate order (already ascending by block/log_index), so this is defensive
+	// — it keeps the (block_number, log_index) contract true regardless of how the
+	// loop above evolves.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].BlockNumber != out[j].BlockNumber {
+			return out[i].BlockNumber < out[j].BlockNumber
+		}
+		return out[i].LogIndex < out[j].LogIndex
+	})
 	return out, stats
+}
+
+// cloneBig returns an independent copy of v (nil-safe), so an assembled Payment
+// never aliases a *big.Int owned by the per-batch tx/block maps.
+func cloneBig(v *big.Int) *big.Int {
+	if v == nil {
+		return nil
+	}
+	return new(big.Int).Set(v)
 }

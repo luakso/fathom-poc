@@ -2,19 +2,37 @@ package x402
 
 import "math/big"
 
-// SettlementKind classifies an x402 settlement by its outer tx selector:
-// "receive" for a direct receiveWithAuthorization (payee-pull, self-settled),
-// "transfer" for everything else (transferWithAuthorization and any wrapper —
-// aggregate3, handleOps, charge, …). The outer selector is the only signal
-// inspected; an inner receiveWithAuthorization wrapped in another call reads as
-// "transfer" (observed to be ~nonexistent on Base).
-func SettlementKind(input []byte) string {
+// SettlementKind classifies an x402 settlement by its outer tx selector. It is a
+// closed enum — only SettlementTransfer and SettlementReceive are ever produced.
+// The string values are the on-the-wire/DB representation (payments.settlement_kind).
+type SettlementKind string
+
+const (
+	// SettlementTransfer is a transferWithAuthorization or any wrapper
+	// (aggregate3, handleOps, charge, …) — the facilitator pushes the payer's
+	// authorized funds to the payee.
+	SettlementTransfer SettlementKind = "transfer"
+	// SettlementReceive is a direct receiveWithAuthorization: a payee-pull,
+	// self-settled settlement (msg.sender == payee).
+	SettlementReceive SettlementKind = "receive"
+)
+
+// ClassifySettlement classifies an x402 settlement by its outer tx selector:
+// SettlementReceive for a direct receiveWithAuthorization (payee-pull,
+// self-settled), SettlementTransfer for everything else (transferWithAuthorization
+// and any wrapper — aggregate3, handleOps, charge, …). The outer selector is the
+// only signal inspected; an inner receiveWithAuthorization wrapped in another call
+// reads as SettlementTransfer (observed to be ~nonexistent on Base).
+//
+// (Named ClassifySettlement rather than SettlementKind because the enum TYPE now
+// owns that identifier — a type and a func cannot share a name in one package.)
+func ClassifySettlement(input []byte) SettlementKind {
 	if sig, ok := SighashFromBytes(input); ok {
 		if sig == SighashReceiveWithAuthV || sig == SighashReceiveWithAuthB {
-			return "receive"
+			return SettlementReceive
 		}
 	}
-	return "transfer"
+	return SettlementTransfer
 }
 
 // DecodeAuthorizationWindow extracts (validAfter, validBefore) from the calldata
