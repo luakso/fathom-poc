@@ -27,8 +27,14 @@ ranked AS (
                    WHEN 'basename'  THEN 4
                    WHEN 'allowlist' THEN 5
                    ELSE 6
-               END, source, label
+               END, source, label, url NULLS LAST
            ) AS rn
+           -- url is the final tiebreak so the picked identity is fully
+           -- deterministic across rebuilds. Without it, two signals sharing
+           -- source+label leave the emitted url up to Postgres row order.
+           -- This is a determinism fix, not a precedence change (the picked
+           -- label/source is unaffected), so it stays in v1 per this file's
+           -- own "new PRECEDENCE rules => v2" policy.
     FROM signals
 )
 SELECT chain, address, source, label, url, 1 AS methodology_version

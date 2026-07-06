@@ -6,6 +6,11 @@
 -- allowlist), mirroring payment_x402_v1. A canceled authorization was never used,
 -- so transaction_from is the only available linkage. Applied by init-db after
 -- migrations; kept byte-identical to the view DDL in migration 00013.
+--
+-- REPRODUCIBILITY HAZARD (known, deferred): uses `SELECT c.*` — a future
+-- authorization_cancellations column silently reshapes this "frozen" view.
+-- Enumerate columns in the next vN. See
+-- docs/notes/2026-07-06-code-review-findings.md (SQL-1).
 
 CREATE OR REPLACE VIEW authorization_cancellation_v1 AS
 WITH allow AS (
