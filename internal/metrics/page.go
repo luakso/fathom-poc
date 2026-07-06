@@ -24,7 +24,7 @@ type Querier interface {
 }
 
 // windowDays maps a window name to its lookback in days. "all" (0) has no lower bound.
-var windowDays = map[string]int{"7d": 7, "30d": 30, "all": 0}
+var windowDays = map[Window]int{Window7d: 7, Window30d: 30, WindowAll: 0}
 
 // Measure is the additive triple every roll-up returns. VolumeUSDC is a decimal
 // string (never float) to preserve exactness through JSON.
@@ -63,18 +63,18 @@ type ExcludedTotals struct {
 // EconomyPage is the full payload for the Payment Economy page. Claims is
 // attached by Emit (ResolveClaims) — BuildEconomy leaves it empty.
 type EconomyPage struct {
-	Windows        map[string]WindowEconomy  `json:"windows"`
+	Windows        map[Window]WindowEconomy  `json:"windows"`
 	DailySeries    []DailyPoint              `json:"daily_series"`
 	MonthlySeries  []MonthlyPoint            `json:"monthly_series"`
-	TypicalPayment map[string]TypicalPayment `json:"typical_payment"`
-	PricePoints    map[string][]PricePoint   `json:"price_points"`
+	TypicalPayment map[Window]TypicalPayment `json:"typical_payment"`
+	PricePoints    map[Window][]PricePoint   `json:"price_points"`
 	Gas            GasSection                `json:"gas"`
 	Velocity       VelocitySection           `json:"velocity"`
 	Claims         []ClaimResult             `json:"claims"`
 	Concentration  ConcentrationSection      `json:"concentration"`
 	Excluded       ExcludedTotals            `json:"excluded"`
 	ActiveEntities []ActiveEntitiesPoint     `json:"active_entities"`
-	PayerCohorts   map[string]PayerCohort    `json:"payer_cohorts,omitempty"`
+	PayerCohorts   map[Window]PayerCohort    `json:"payer_cohorts,omitempty"`
 	PriceBreadth   []PriceBreadthSeries      `json:"price_point_breadth,omitempty"`
 }
 
@@ -82,7 +82,7 @@ type EconomyPage struct {
 // for "all" (no lower bound). "7d" means asOf's day plus the 6 preceding days
 // = 7 days total, so we subtract d-1. YYYY-MM-DD strings order lexicographically,
 // so day-range checks are plain string comparisons.
-func lowerBound(asOf time.Time, window string) string {
+func lowerBound(asOf time.Time, window Window) string {
 	d := windowDays[window]
 	if d == 0 {
 		return ""
@@ -157,7 +157,7 @@ func BuildEconomy(ctx context.Context, q Querier, asOf time.Time) (EconomyPage, 
 	}
 
 	page := EconomyPage{
-		Windows:     map[string]WindowEconomy{},
+		Windows:     map[Window]WindowEconomy{},
 		DailySeries: dailySeries(slices),
 		Claims:      []ClaimResult{},
 	}
@@ -314,7 +314,7 @@ type FacilitatorRow struct {
 	Facilitator      string             `json:"facilitator"`
 	FacilitatorKnown bool               `json:"facilitator_known"`
 	Measure                             // all-window: txn_count and volume_usdc
-	Windows          map[string]Measure `json:"windows"` // "7d" and "30d" windowed measures
+	Windows          map[Window]Measure `json:"windows"` // "7d" and "30d" windowed measures
 }
 
 // FacilitatorsPage is the Facilitators page payload (top facilitators by volume).
@@ -405,9 +405,9 @@ func BuildFacilitators(ctx context.Context, q Querier, asOf time.Time) (Facilita
 		if err != nil {
 			return FacilitatorsPage{}, fmt.Errorf("parse facilitator 30d volume %q: %w", vol30Str, err)
 		}
-		r.Windows = map[string]Measure{
-			"7d":  {TxnCount: txns7, VolumeUSDC: vol7.StringFixed(x402.USDCDecimals)},
-			"30d": {TxnCount: txns30, VolumeUSDC: vol30.StringFixed(x402.USDCDecimals)},
+		r.Windows = map[Window]Measure{
+			Window7d:  {TxnCount: txns7, VolumeUSDC: vol7.StringFixed(x402.USDCDecimals)},
+			Window30d: {TxnCount: txns30, VolumeUSDC: vol30.StringFixed(x402.USDCDecimals)},
 		}
 
 		totalTxns += r.TxnCount

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/lukostrobl/fathom/internal/config"
 	"github.com/lukostrobl/fathom/internal/db"
@@ -97,7 +98,7 @@ func run() error {
 			return err
 		}
 		logger.Info("publisher: emitting artifacts", "out", *outDir, "claims", *claimsPath)
-		if err := metrics.Emit(ctx, pool, *outDir, claims); err != nil {
+		if err := metrics.Emit(ctx, pool, *outDir, claims, time.Now); err != nil {
 			return err
 		}
 		logger.Info("publisher: emit complete", "out", *outDir)

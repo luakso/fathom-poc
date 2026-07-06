@@ -10,9 +10,13 @@ import (
 // entityRoles maps a role to its (entity column, counterparty column) in
 // payment_x402_v1. role is a fixed internal constant, never user input, so it is
 // safe to interpolate into SQL.
-var entityRoles = []struct{ role, entityCol, counterpartyCol string }{
-	{"payee", "payee", "payer"},
-	{"payer", "payer", "payee"},
+var entityRoles = []struct {
+	role            Role
+	entityCol       string
+	counterpartyCol string
+}{
+	{RolePayee, "payee", "payer"},
+	{RolePayer, "payer", "payee"},
 }
 
 // RebuildEntities recomputes the three entity tables for every (window, role)
@@ -40,7 +44,7 @@ func RebuildEntities(ctx context.Context, tx pgx.Tx) error {
 // rebuildEntityRole builds a fresh entity_agg temp table for one role and inserts
 // the three derived projections. entity_agg is dropped at the end so the next role
 // recreates it; the surrounding tx already sets temp_file_limit.
-func rebuildEntityRole(ctx context.Context, tx pgx.Tx, role, entityCol, counterpartyCol string) error {
+func rebuildEntityRole(ctx context.Context, tx pgx.Tx, role Role, entityCol, counterpartyCol string) error {
 	if _, err := tx.Exec(ctx, "DROP TABLE IF EXISTS entity_agg"); err != nil {
 		return fmt.Errorf("drop stale entity_agg: %w", err)
 	}
@@ -168,19 +172,19 @@ type EntityWindow struct {
 
 // EntityPage is the payees.json / payers.json payload.
 type EntityPage struct {
-	Role    string                  `json:"role"`
-	Windows map[string]EntityWindow `json:"windows"`
+	Role    Role                    `json:"role"`
+	Windows map[Window]EntityWindow `json:"windows"`
 }
 
 // ConcentrationSection is the E9 add-on for economy.json: window -> role -> conc.
 type ConcentrationSection struct {
-	Windows map[string]map[string]EntityConcentration `json:"windows"`
+	Windows map[Window]map[Role]EntityConcentration `json:"windows"`
 }
 
 // BuildEntities assembles one role's entity page from the three entity tables.
 // role is 'payee' or 'payer'. Windows absent from the tables come back empty.
-func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, error) {
-	page := EntityPage{Role: role, Windows: map[string]EntityWindow{}}
+func BuildEntities(ctx context.Context, q Querier, role Role) (EntityPage, error) {
+	page := EntityPage{Role: role, Windows: map[Window]EntityWindow{}}
 	zeroConc := EntityConcentration{TotalVolume: "0", Top10Volume: "0", Top100Volume: "0"}
 	for w := range windowDays {
 		page.Windows[w] = EntityWindow{
@@ -194,21 +198,22 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 		SELECT window_name, address, volume_usdc::text, txn_count, distinct_counterparties,
 		       distinct_amounts, first_seen::text, last_seen::text
 		FROM entity_rank_v1 WHERE role = $1
-		ORDER BY window_name, entity_rank_v1.volume_usdc DESC, address`, role)
+		ORDER BY window_name, entity_rank_v1.volume_usdc DESC, address`, string(role))
 	if err != nil {
 		return EntityPage{}, fmt.Errorf("entity rank read: %w", err)
 	}
 	defer rrows.Close()
 	for rrows.Next() {
-		var w string
+		var wname string
 		var r EntityRow
-		if err := rrows.Scan(&w, &r.Address, &r.VolumeUSDC, &r.TxnCount, &r.DistinctCounterparties,
+		if err := rrows.Scan(&wname, &r.Address, &r.VolumeUSDC, &r.TxnCount, &r.DistinctCounterparties,
 			&r.DistinctAmounts, &r.FirstSeen, &r.LastSeen); err != nil {
 			return EntityPage{}, fmt.Errorf("scan entity rank: %w", err)
 		}
+		w := Window(wname)
 		ew, ok := page.Windows[w]
 		if !ok {
-			return EntityPage{}, fmt.Errorf("entity rank: unknown window %q", w)
+			return EntityPage{}, fmt.Errorf("entity rank: unknown window %q", wname)
 		}
 		ew.Leaderboard = append(ew.Leaderboard, r)
 		page.Windows[w] = ew
@@ -220,20 +225,21 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 	brows, err := q.Query(ctx, `
 		SELECT window_name, bucket, entity_count, txn_sum, volume_sum::text
 		FROM entity_buckets_v1 WHERE role = $1
-		ORDER BY window_name, bucket`, role)
+		ORDER BY window_name, bucket`, string(role))
 	if err != nil {
 		return EntityPage{}, fmt.Errorf("entity buckets read: %w", err)
 	}
 	defer brows.Close()
 	for brows.Next() {
-		var w string
+		var wname string
 		var b EntityBucket
-		if err := brows.Scan(&w, &b.Bucket, &b.EntityCount, &b.TxnSum, &b.VolumeSum); err != nil {
+		if err := brows.Scan(&wname, &b.Bucket, &b.EntityCount, &b.TxnSum, &b.VolumeSum); err != nil {
 			return EntityPage{}, fmt.Errorf("scan entity bucket: %w", err)
 		}
+		w := Window(wname)
 		ew, ok := page.Windows[w]
 		if !ok {
-			return EntityPage{}, fmt.Errorf("entity buckets: unknown window %q", w)
+			return EntityPage{}, fmt.Errorf("entity buckets: unknown window %q", wname)
 		}
 		ew.Buckets = append(ew.Buckets, b)
 		page.Windows[w] = ew
@@ -258,16 +264,16 @@ func BuildEntities(ctx context.Context, q Querier, role string) (EntityPage, err
 }
 
 // readConcentration returns window -> EntityConcentration for one role.
-func readConcentration(ctx context.Context, q Querier, role string) (map[string]EntityConcentration, error) {
+func readConcentration(ctx context.Context, q Querier, role Role) (map[Window]EntityConcentration, error) {
 	rows, err := q.Query(ctx, `
 		SELECT window_name, total_entities, total_volume::text, total_txns,
 		       top10_volume::text, top10_txns, top100_volume::text
-		FROM entity_concentration_v1 WHERE role = $1`, role)
+		FROM entity_concentration_v1 WHERE role = $1`, string(role))
 	if err != nil {
 		return nil, fmt.Errorf("concentration read: %w", err)
 	}
 	defer rows.Close()
-	out := map[string]EntityConcentration{}
+	out := map[Window]EntityConcentration{}
 	for rows.Next() {
 		var w string
 		var c EntityConcentration
@@ -275,22 +281,22 @@ func readConcentration(ctx context.Context, q Querier, role string) (map[string]
 			&c.Top10Volume, &c.Top10Txns, &c.Top100Volume); err != nil {
 			return nil, fmt.Errorf("scan concentration: %w", err)
 		}
-		out[w] = c
+		out[Window(w)] = c
 	}
 	return out, rows.Err()
 }
 
 // BuildConcentration assembles the economy.json E9 section (both roles).
 func BuildConcentration(ctx context.Context, q Querier) (ConcentrationSection, error) {
-	sec := ConcentrationSection{Windows: map[string]map[string]EntityConcentration{}}
-	for _, role := range []string{"payee", "payer"} {
+	sec := ConcentrationSection{Windows: map[Window]map[Role]EntityConcentration{}}
+	for _, role := range []Role{RolePayee, RolePayer} {
 		conc, err := readConcentration(ctx, q, role)
 		if err != nil {
 			return ConcentrationSection{}, err
 		}
 		for w, c := range conc {
 			if sec.Windows[w] == nil {
-				sec.Windows[w] = map[string]EntityConcentration{}
+				sec.Windows[w] = map[Role]EntityConcentration{}
 			}
 			sec.Windows[w][role] = c
 		}

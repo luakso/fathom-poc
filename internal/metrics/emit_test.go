@@ -24,7 +24,7 @@ func TestEmit_WritesStampedFiles(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	// economy.json exists and carries stamps.
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
@@ -60,7 +60,7 @@ func TestEmit_EmptyCubeErrors(t *testing.T) {
 
 	// No rollup has run: emit must refuse rather than publish all-zero artifacts.
 	dir := t.TempDir()
-	err := metrics.Emit(ctx, pool, dir, nil)
+	err := metrics.Emit(ctx, pool, dir, nil, nil)
 	require.ErrorContains(t, err, "rollup")
 
 	entries, rerr := os.ReadDir(dir)
@@ -82,7 +82,7 @@ func TestEmit_EconomySectionsAndClaims(t *testing.T) {
 		MeasuredMetric: "total_txns_all", Lens: "verified x402 payments",
 	}}
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, claims))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, claims, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	// The page ships with the data.
 	idx, err := os.ReadFile(filepath.Join(dir, "index.html"))
@@ -185,7 +185,7 @@ func TestEmit_WritesSiteFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second emit overwrites cleanly (idempotent).
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 }
 
 func TestEmit_WritesEntityPages(t *testing.T) {
@@ -197,7 +197,7 @@ func TestEmit_WritesEntityPages(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	for _, page := range []struct{ html, script string }{
 		{"payees.html", "assets/js/payees/app.js"},
@@ -235,7 +235,7 @@ func TestEmit_StampsKnownDayWhenNewestDayUnknownOnly(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
 	require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestEmit_WritesReliability(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "reliability.json"))
 	require.NoError(t, err)
@@ -309,7 +309,7 @@ func TestEmit_TypicalPaymentPercentiles(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestEmit_ActiveEntitiesSeries(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
 	require.NoError(t, err)
@@ -398,7 +398,7 @@ func TestEmit_PriceBreadthSection(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "economy.json"))
 	require.NoError(t, err)
@@ -446,7 +446,7 @@ func TestEmit_FacilitatorsWindows(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "facilitators.json"))
 	require.NoError(t, err)

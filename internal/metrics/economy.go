@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"time"
 
@@ -76,7 +77,7 @@ type GasCostDailyPoint struct {
 // number citable. CostDaily (6.4) is the full-history daily cost-per-dollar series.
 type GasSection struct {
 	Method    map[string]string    `json:"method"`
-	Windows   map[string]GasWindow `json:"windows"`
+	Windows   map[Window]GasWindow `json:"windows"`
 	CostDaily []GasCostDailyPoint  `json:"cost_daily"`
 }
 
@@ -105,7 +106,7 @@ type VelocityPoint struct {
 
 // VelocitySection is the E12 payload (verified payments only).
 type VelocitySection struct {
-	Windows     map[string]VelocityStat `json:"windows"`
+	Windows     map[Window]VelocityStat `json:"windows"`
 	DailySeries []VelocityPoint         `json:"daily_series"`
 }
 
@@ -174,9 +175,9 @@ func monthlySeries(slices []cubeSlice, asOf time.Time) ([]MonthlyPoint, error) {
 // verified payments only. windows is the already-built map from BuildEconomy.
 // Every window is pre-initialised so the output always contains all three keys
 // even when a window has no verified rows in metrics_window_stats_v2.
-func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]WindowEconomy) (map[string]TypicalPayment, error) {
+func buildTypicalPayment(ctx context.Context, q Querier, windows map[Window]WindowEconomy) (map[Window]TypicalPayment, error) {
 	zero := decimal.Zero.StringFixed(x402.USDCDecimals)
-	out := map[string]TypicalPayment{}
+	out := map[Window]TypicalPayment{}
 	for w := range windowDays {
 		out[w] = TypicalPayment{AvgUSDC: zero, MedianUSDC: zero}
 	}
@@ -189,18 +190,19 @@ func buildTypicalPayment(ctx context.Context, q Querier, windows map[string]Wind
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var w, median string
+		var wname, median string
 		var txns int64
 		var p10, p90, p99 *string
-		if err := rows.Scan(&w, &txns, &median, &p10, &p90, &p99); err != nil {
+		if err := rows.Scan(&wname, &txns, &median, &p10, &p90, &p99); err != nil {
 			return nil, fmt.Errorf("scan window stats: %w", err)
 		}
+		w := Window(wname)
 		if _, ok := windows[w]; !ok {
-			return nil, fmt.Errorf("window stats read: unknown window_name %q", w)
+			return nil, fmt.Errorf("window stats read: unknown window_name %q", wname)
 		}
 		avg, err := avgUSDC(windows[w].Measure)
 		if err != nil {
-			return nil, fmt.Errorf("avg for window %s: %w", w, err)
+			return nil, fmt.Errorf("avg for window %s: %w", wname, err)
 		}
 		out[w] = TypicalPayment{
 			AvgUSDC:    avg,
@@ -229,8 +231,8 @@ func avgUSDC(m Measure) (string, error) {
 }
 
 // buildPricePoints reads the precomputed top-N and attaches the window share.
-func buildPricePoints(ctx context.Context, q Querier, windows map[string]WindowEconomy) (map[string][]PricePoint, error) {
-	out := map[string][]PricePoint{}
+func buildPricePoints(ctx context.Context, q Querier, windows map[Window]WindowEconomy) (map[Window][]PricePoint, error) {
+	out := map[Window][]PricePoint{}
 	for w := range windowDays {
 		out[w] = []PricePoint{}
 	}
@@ -244,13 +246,14 @@ func buildPricePoints(ctx context.Context, q Querier, windows map[string]WindowE
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var w string
+		var wname string
 		var p PricePoint
-		if err := rows.Scan(&w, &p.AmountUSDC, &p.TxnCount, &p.VolumeUSDC, &p.PayeeCount); err != nil {
+		if err := rows.Scan(&wname, &p.AmountUSDC, &p.TxnCount, &p.VolumeUSDC, &p.PayeeCount); err != nil {
 			return nil, fmt.Errorf("scan price point: %w", err)
 		}
+		w := Window(wname)
 		if _, ok := out[w]; !ok {
-			return nil, fmt.Errorf("price points read: unknown window_name %q", w)
+			return nil, fmt.Errorf("price points read: unknown window_name %q", wname)
 		}
 		knownTxns := windows[w].TxnCount
 		share := decimal.Zero
@@ -347,7 +350,9 @@ func buildGas(ctx context.Context, q Querier, asOf time.Time) (GasSection, error
 		return GasSection{}, fmt.Errorf("gas read: %w", err)
 	}
 
-	sec := GasSection{Method: gasMethodNotes, Windows: map[string]GasWindow{}, CostDaily: buildGasCostDailySeries(slices)}
+	// M1: gasMethodNotes is a shared package global; hand each GasSection its own
+	// copy so a caller mutating sec.Method can never corrupt the global.
+	sec := GasSection{Method: maps.Clone(gasMethodNotes), Windows: map[Window]GasWindow{}, CostDaily: buildGasCostDailySeries(slices)}
 	for w := range windowDays {
 		lb := lowerBound(asOf, w)
 		var total gasAccum
@@ -380,7 +385,7 @@ func buildVelocity(ctx context.Context, q Querier, asOf time.Time) (VelocitySect
 	}
 	defer rows.Close()
 
-	sec := VelocitySection{Windows: map[string]VelocityStat{}, DailySeries: []VelocityPoint{}}
+	sec := VelocitySection{Windows: map[Window]VelocityStat{}, DailySeries: []VelocityPoint{}}
 	for rows.Next() {
 		var p VelocityPoint
 		if err := rows.Scan(&p.Day, &p.MaxPerMin, &p.P99PerMin); err != nil {
@@ -426,10 +431,10 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 		m := we.Measure
 		r := ClaimResult{Claim: c}
 		switch kind {
-		case "txns":
+		case ClaimKindTxns:
 			r.MeasuredValue = strconv.FormatInt(m.TxnCount, 10)
 			r.MeasuredUnit = "transactions"
-		case "volume":
+		case ClaimKindVolume:
 			// VolumeUSDC from accum.measure() is always a valid decimal string;
 			// no empty-string fallback needed after the ok-check above.
 			r.MeasuredValue = m.VolumeUSDC
@@ -447,8 +452,8 @@ func ResolveClaims(page EconomyPage, claims []Claim) ([]ClaimResult, error) {
 // of each cell's max_amount_usdc (populated by the rollup from the payments
 // table), bounded by asOf like all other window measures. Returns nil for a
 // window with no verified rows (window value absent in the result map).
-func windowLargestPayments(slices []cubeSlice, asOf time.Time) map[string]*string {
-	out := make(map[string]*string)
+func windowLargestPayments(slices []cubeSlice, asOf time.Time) map[Window]*string {
+	out := make(map[Window]*string)
 	for w := range windowDays {
 		lb := lowerBound(asOf, w)
 		var wmax decimal.Decimal
@@ -519,7 +524,7 @@ type PayerCohort struct {
 // buildPayerCohorts reads the precomputed payer cohort table. Returns nil (not
 // an empty map) when the table is empty, so the omitempty tag on EconomyPage
 // suppresses the field from the artifact for rollups that predated this table.
-func buildPayerCohorts(ctx context.Context, q Querier) (map[string]PayerCohort, error) {
+func buildPayerCohorts(ctx context.Context, q Querier) (map[Window]PayerCohort, error) {
 	rows, err := q.Query(ctx, `
 		SELECT window_name, new_payers, returning_payers,
 		       new_payer_volume_usdc::text, returning_payer_volume_usdc::text
@@ -528,7 +533,7 @@ func buildPayerCohorts(ctx context.Context, q Querier) (map[string]PayerCohort, 
 		return nil, fmt.Errorf("payer cohorts: %w", err)
 	}
 	defer rows.Close()
-	var out map[string]PayerCohort
+	var out map[Window]PayerCohort
 	for rows.Next() {
 		var name string
 		var c PayerCohort
@@ -536,9 +541,9 @@ func buildPayerCohorts(ctx context.Context, q Querier) (map[string]PayerCohort, 
 			return nil, fmt.Errorf("payer cohorts scan: %w", err)
 		}
 		if out == nil {
-			out = make(map[string]PayerCohort)
+			out = make(map[Window]PayerCohort)
 		}
-		out[name] = c
+		out[Window(name)] = c
 	}
 	return out, rows.Err()
 }

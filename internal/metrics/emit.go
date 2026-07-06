@@ -17,13 +17,14 @@ import (
 )
 
 // artifact is the envelope every emitted file shares: data plus provenance
-// stamps for citability and staleness display.
-type artifact struct {
+// stamps for citability and staleness display. It is generic over the page
+// payload so each artifact carries its concrete type instead of `any`.
+type artifact[T any] struct {
 	MethodologyVersion int    `json:"methodology_version"`
 	Scope              string `json:"scope"`
 	GeneratedAt        string `json:"generated_at"`
 	DataThroughDay     string `json:"data_through_day"`
-	Data               any    `json:"data"`
+	Data               T      `json:"data"`
 }
 
 // Emit builds every page and writes it as <page>.json under outDir. claims is
@@ -38,7 +39,13 @@ type artifact struct {
 // dataset is static between deliberate backfills, so "7d" means the last 7 days
 // of data, and re-emitting later never flatlines the windows. An empty cube is
 // an error (run `publisher rollup` first), never an all-zero artifact.
-func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim) error {
+// now supplies the wall-clock time stamped into each artifact's GeneratedAt.
+// It is injected (cmd/publisher passes time.Now) so emit is reproducible under a
+// fixed clock in tests. A nil clock defaults to time.Now.
+func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim, now func() time.Time) error {
+	if now == nil {
+		now = time.Now
+	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil { //nolint:gosec // G301: dashboard JSON is public, served as static files
 		return fmt.Errorf("mkdir %s: %w", outDir, err)
 	}
@@ -68,7 +75,7 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 	if econ.Concentration, err = BuildConcentration(ctx, tx); err != nil {
 		return fmt.Errorf("build concentration: %w", err)
 	}
-	if err := writeArtifact(outDir, "economy.json", version, through, econ); err != nil {
+	if err := writeArtifact(outDir, "economy.json", version, through, econ, now); err != nil {
 		return err
 	}
 
@@ -76,35 +83,35 @@ func Emit(ctx context.Context, pool *pgxpool.Pool, outDir string, claims []Claim
 	if err != nil {
 		return fmt.Errorf("build facilitators: %w", err)
 	}
-	if err := writeArtifact(outDir, "facilitators.json", version, through, fac); err != nil {
+	if err := writeArtifact(outDir, "facilitators.json", version, through, fac, now); err != nil {
 		return err
 	}
 	payees, err := BuildEntities(ctx, tx, "payee")
 	if err != nil {
 		return fmt.Errorf("build payees: %w", err)
 	}
-	if err := writeArtifact(outDir, "payees.json", version, through, payees); err != nil {
+	if err := writeArtifact(outDir, "payees.json", version, through, payees, now); err != nil {
 		return err
 	}
 	payers, err := BuildEntities(ctx, tx, "payer")
 	if err != nil {
 		return fmt.Errorf("build payers: %w", err)
 	}
-	if err := writeArtifact(outDir, "payers.json", version, through, payers); err != nil {
+	if err := writeArtifact(outDir, "payers.json", version, through, payers, now); err != nil {
 		return err
 	}
 	reliability, err := BuildReliability(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("build reliability: %w", err)
 	}
-	if err := writeArtifact(outDir, "reliability.json", version, through, reliability); err != nil {
+	if err := writeArtifact(outDir, "reliability.json", version, through, reliability, now); err != nil {
 		return err
 	}
 	mechanics, err := BuildMechanics(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("build mechanics: %w", err)
 	}
-	if err := writeArtifact(outDir, "mechanics.json", version, through, mechanics); err != nil {
+	if err := writeArtifact(outDir, "mechanics.json", version, through, mechanics, now); err != nil {
 		return err
 	}
 	if err := writeSonar(outDir); err != nil {
@@ -154,12 +161,13 @@ func cubeStamp(ctx context.Context, q Querier) (through string, version int, err
 	return *day, int(*minVersion), nil
 }
 
-// writeArtifact writes a stamped JSON document via writeFileAtomic.
-func writeArtifact(outDir, name string, version int, through string, data any) error {
-	doc := artifact{
+// writeArtifact writes a stamped JSON document via writeFileAtomic. now supplies
+// the GeneratedAt stamp (injected for reproducibility).
+func writeArtifact[T any](outDir, name string, version int, through string, data T, now func() time.Time) error {
+	doc := artifact[T]{
 		MethodologyVersion: version,
 		Scope:              "verified-x402",
-		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
+		GeneratedAt:        now().UTC().Format(time.RFC3339),
 		DataThroughDay:     through,
 		Data:               data,
 	}

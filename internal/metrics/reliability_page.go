@@ -5,13 +5,23 @@ import (
 	"fmt"
 )
 
+// LatencyBuckets is the fixed-shape sign→settle latency histogram. The JSON keys
+// reproduce the prior open-map shape exactly.
+type LatencyBuckets struct {
+	Sub1s   int64 `json:"sub1s"`
+	B1To10s int64 `json:"1_10s"`
+	B10To60 int64 `json:"10_60s"`
+	B1To10m int64 `json:"1_10m"`
+	GT10m   int64 `json:"gt10m"`
+}
+
 // ReliabilityLatency is the R2 sign→settle distribution for one slice. Percentiles
 // are nil when the slice has no windowed settlements.
 type ReliabilityLatency struct {
-	P50S    *float64         `json:"p50_s"`
-	P90S    *float64         `json:"p90_s"`
-	P99S    *float64         `json:"p99_s"`
-	Buckets map[string]int64 `json:"buckets"`
+	P50S    *float64       `json:"p50_s"`
+	P90S    *float64       `json:"p90_s"`
+	P99S    *float64       `json:"p99_s"`
+	Buckets LatencyBuckets `json:"buckets"`
 }
 
 // ReliabilityMeasure is the reliability summary for one (window, membership).
@@ -53,7 +63,7 @@ type CancellationActor struct {
 
 // ReliabilityPage is the reliability.json payload.
 type ReliabilityPage struct {
-	Windows                 map[string]ReliabilityWindow `json:"windows"`
+	Windows                 map[Window]ReliabilityWindow `json:"windows"`
 	Daily                   []ReliabilityDailyPoint      `json:"daily"`
 	CancellationAttribution struct {
 		ByPayer      []CancellationActor `json:"by_payer"`
@@ -72,7 +82,7 @@ func rate(num, den int64) float64 {
 // BuildReliability assembles reliability.json from the two rollup tables plus the
 // cancellation view (R6, read live — 33 rows in production).
 func BuildReliability(ctx context.Context, q Querier) (ReliabilityPage, error) {
-	page := ReliabilityPage{Windows: map[string]ReliabilityWindow{}}
+	page := ReliabilityPage{Windows: map[Window]ReliabilityWindow{}}
 	for w := range windowDays {
 		page.Windows[w] = ReliabilityWindow{}
 	}
@@ -101,17 +111,17 @@ func BuildReliability(ctx context.Context, q Querier) (ReliabilityPage, error) {
 		m.CancellationRate = rate(m.CancellationCount, m.SettlementCount)
 		m.ExpiredRate = rate(m.ExpiredCount, m.WindowedCount)
 		m.NotYetValidRate = rate(m.NotYetValidCount, m.WindowedCount)
-		m.Latency.Buckets = map[string]int64{
-			"sub1s": b.sub1, "1_10s": b.b110s, "10_60s": b.b1060s, "1_10m": b.b110m, "gt10m": b.gt10m,
+		m.Latency.Buckets = LatencyBuckets{
+			Sub1s: b.sub1, B1To10s: b.b110s, B10To60: b.b1060s, B1To10m: b.b110m, GT10m: b.gt10m,
 		}
-		win, ok := page.Windows[wname]
+		win, ok := page.Windows[Window(wname)]
 		if !ok {
 			return ReliabilityPage{}, fmt.Errorf("reliability: unknown window %q", wname)
 		}
-		if membership == "known" {
+		if Membership(membership) == MembershipKnown {
 			win.ReliabilityMeasure = m
 		}
-		page.Windows[wname] = win
+		page.Windows[Window(wname)] = win
 	}
 	if err := wrows.Err(); err != nil {
 		return ReliabilityPage{}, fmt.Errorf("reliability window read: %w", err)
