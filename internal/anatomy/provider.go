@@ -14,13 +14,13 @@ type EntityProvider interface {
 
 // NeighborProvider returns the graph neighborhood of one address.
 type NeighborProvider interface {
-	Neighbors(ctx context.Context, chain, address, lens string, limit int) (Neighbors, error)
+	Neighbors(ctx context.Context, chain, address string, lens Lens, limit int) (Neighbors, error)
 }
 
 // ActivityProvider returns timeline and fingerprint activity for one address.
 type ActivityProvider interface {
-	Timeline(ctx context.Context, chain, address, lens string) (Timeline, error)
-	Fingerprint(ctx context.Context, chain, address, lens string) (Fingerprint, error)
+	Timeline(ctx context.Context, chain, address string, lens Lens) (Timeline, error)
+	Fingerprint(ctx context.Context, chain, address string, lens Lens) (Fingerprint, error)
 }
 
 // ListProvider returns paginated counterparty and payment lists for one address.
@@ -31,7 +31,7 @@ type ListProvider interface {
 
 // LeaderboardProvider returns ranked entity lists.
 type LeaderboardProvider interface {
-	Leaderboard(ctx context.Context, chain, role, window, lens, sort string) (Leaderboard, error)
+	Leaderboard(ctx context.Context, chain string, role Role, window Window, lens Lens, sort Sort) (Leaderboard, error)
 }
 
 // MetaProvider returns dataset metadata (stamp + totals).

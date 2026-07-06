@@ -108,7 +108,7 @@ type Entity struct {
 	Address     string                            `json:"address"`
 	Label       string                            `json:"label,omitempty"`
 	LabelSource string                            `json:"labelSource,omitempty"`
-	Roles       []string                          `json:"roles"`
+	Roles       []Role                            `json:"roles"`
 	Signals     []IdentitySignal                  `json:"signals,omitempty"`
 	Summaries   map[string]map[string]LensSummary `json:"summaries"` // role -> lens -> summary
 }
@@ -134,7 +134,7 @@ type NeighborList struct {
 // direction plus the facilitators that settle for it. Empty lists are omitted.
 type Neighbors struct {
 	Address       string        `json:"address"`
-	Lens          string        `json:"lens"`
+	Lens          Lens          `json:"lens"`
 	Payees        *NeighborList `json:"payees,omitempty"`        // whom it pays
 	Payers        *NeighborList `json:"payers,omitempty"`        // who pays it
 	Facilitators  *NeighborList `json:"facilitators,omitempty"`  // who settles for it
@@ -152,7 +152,7 @@ type DayPoint struct {
 // Timeline groups sparse day series per role.
 type Timeline struct {
 	Address string                `json:"address"`
-	Lens    string                `json:"lens"`
+	Lens    Lens                  `json:"lens"`
 	Roles   map[string][]DayPoint `json:"roles"`
 }
 
@@ -177,15 +177,15 @@ type RoleFingerprint struct {
 // Fingerprint is the ActivityProvider fingerprint payload.
 type Fingerprint struct {
 	Address string                     `json:"address"`
-	Lens    string                     `json:"lens"`
+	Lens    Lens                       `json:"lens"`
 	Roles   map[string]RoleFingerprint `json:"roles"`
 }
 
 // CounterpartyQuery parameterises a counterparty list request (Task 7).
 type CounterpartyQuery struct {
-	Role   string
-	Lens   string
-	Sort   string
+	Role   Role
+	Lens   Lens
+	Sort   Sort
 	Limit  int
 	Offset int
 }
@@ -193,16 +193,16 @@ type CounterpartyQuery struct {
 // CounterpartyPage is the ListProvider counterparty page payload.
 type CounterpartyPage struct {
 	Address string        `json:"address"`
-	Role    string        `json:"role"`
-	Lens    string        `json:"lens"`
+	Role    Role          `json:"role"`
+	Lens    Lens          `json:"lens"`
 	Total   int64         `json:"total"`
 	Rows    []NeighborRow `json:"rows"` // same row shape as neighbors
 }
 
 // PaymentQuery parameterises a payment list request (Task 7).
 type PaymentQuery struct {
-	Role   string
-	Lens   string
+	Role   Role
+	Lens   Lens
 	Limit  int
 	Before string
 }
@@ -223,8 +223,8 @@ type PaymentRow struct {
 // PaymentPage is the ListProvider payment page payload.
 type PaymentPage struct {
 	Address string       `json:"address"`
-	Role    string       `json:"role"`
-	Lens    string       `json:"lens"`
+	Role    Role         `json:"role"`
+	Lens    Lens         `json:"lens"`
 	Rows    []PaymentRow `json:"rows"`
 	Next    string       `json:"next,omitempty"` // cursor for the next page
 }
@@ -243,9 +243,9 @@ type LeaderboardRow struct {
 
 // Leaderboard is the LeaderboardProvider payload (Task 8).
 type Leaderboard struct {
-	Role   string           `json:"role"`
-	Window string           `json:"window"`
-	Lens   string           `json:"lens"`
-	Sort   string           `json:"sort"`
+	Role   Role             `json:"role"`
+	Window Window           `json:"window"`
+	Lens   Lens             `json:"lens"`
+	Sort   Sort             `json:"sort"`
 	Rows   []LeaderboardRow `json:"rows"`
 }

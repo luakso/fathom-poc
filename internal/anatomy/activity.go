@@ -10,8 +10,8 @@ import (
 // Timeline implements ActivityProvider: sparse per-role day series. Lens=all
 // merges the two facilitator_known slices per (role, day); volume is summed
 // in SQL to stay exact.
-func (p *PgEntity) Timeline(ctx context.Context, chain, address, lens string) (Timeline, error) {
-	knownOnly := lens == "known"
+func (p *PgEntity) Timeline(ctx context.Context, chain, address string, lens Lens) (Timeline, error) {
+	knownOnly := lens == LensKnown
 	rows, err := p.pool.Query(ctx, `
 		SELECT role, day::text, sum(txn_count), sum(volume_usdc)::text
 		FROM entity_day_v1
@@ -65,7 +65,7 @@ func spanDays(first, last string) (int64, error) {
 
 // Fingerprint implements ActivityProvider: cadence from the day series,
 // price points from entity_price_point_v1, concentration from the edges.
-func (p *PgEntity) Fingerprint(ctx context.Context, chain, address, lens string) (Fingerprint, error) {
+func (p *PgEntity) Fingerprint(ctx context.Context, chain, address string, lens Lens) (Fingerprint, error) {
 	tl, err := p.Timeline(ctx, chain, address, lens)
 	if err != nil {
 		return Fingerprint{}, err // propagates ErrNotFound
@@ -105,8 +105,8 @@ func (p *PgEntity) Fingerprint(ctx context.Context, chain, address, lens string)
 // fillPricePoints merges the stored top-64 partitions for the lens. The
 // distinct-amount total is only exact per stored partition, so lens=all
 // leaves TotalDistinctAmounts nil rather than publish a wrong number.
-func (p *PgEntity) fillPricePoints(ctx context.Context, chain, addr, role, lens string, rf *RoleFingerprint) error {
-	knownOnly := lens == "known"
+func (p *PgEntity) fillPricePoints(ctx context.Context, chain, addr, role string, lens Lens, rf *RoleFingerprint) error {
+	knownOnly := lens == LensKnown
 	rows, err := p.pool.Query(ctx, `
 		SELECT amount_usdc::text, sum(txn_count), max(total_distinct_amounts)
 		FROM entity_price_point_v1
@@ -141,7 +141,7 @@ func (p *PgEntity) fillPricePoints(ctx context.Context, chain, addr, role, lens 
 
 // fillConcentration computes top-1/top-3 volume share against the direction
 // total from the edge tables (payer/payee) or facilitator edges.
-func (p *PgEntity) fillConcentration(ctx context.Context, chain, addr, role, lens string, rf *RoleFingerprint) error {
+func (p *PgEntity) fillConcentration(ctx context.Context, chain, addr, role string, lens Lens, rf *RoleFingerprint) error {
 	var cpExpr, subjectCol, table string
 	switch role {
 	case "payer":
@@ -153,7 +153,7 @@ func (p *PgEntity) fillConcentration(ctx context.Context, chain, addr, role, len
 	default:
 		return fmt.Errorf("unknown role %q", role)
 	}
-	knownOnly := lens == "known"
+	knownOnly := lens == LensKnown
 	sql := fmt.Sprintf(`
 		WITH agg AS (
 		    SELECT %s AS cp, sum(volume_usdc) AS vol

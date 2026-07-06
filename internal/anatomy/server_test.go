@@ -133,7 +133,7 @@ func (f fakeEntity) Entity(_ context.Context, _, _ string) (anatomy.Entity, erro
 
 func TestServer_EntityOK(t *testing.T) {
 	addr := "0x1234567890123456789012345678901234567890"
-	fe := fakeEntity{e: anatomy.Entity{Chain: "base", Address: addr, Roles: []string{"payer"}}}
+	fe := fakeEntity{e: anatomy.Entity{Chain: "base", Address: addr, Roles: []anatomy.Role{anatomy.RolePayer}}}
 	srv := anatomy.NewServer(anatomy.Providers{Entity: fe}, testAssets(), slog.Default())
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/base/entity/"+addr, nil))
@@ -156,8 +156,8 @@ type fakeLeaderboard struct {
 	err  error
 }
 
-func (f fakeLeaderboard) Leaderboard(_ context.Context, _, _, _, _, _ string) (anatomy.Leaderboard, error) {
-	return anatomy.Leaderboard{Role: "payee", Rows: f.rows}, f.err
+func (f fakeLeaderboard) Leaderboard(_ context.Context, _ string, _ anatomy.Role, _ anatomy.Window, _ anatomy.Lens, _ anatomy.Sort) (anatomy.Leaderboard, error) {
+	return anatomy.Leaderboard{Role: anatomy.RolePayee, Rows: f.rows}, f.err
 }
 
 func TestServer_LeaderboardLimitApplied(t *testing.T) {
