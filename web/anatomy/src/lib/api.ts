@@ -12,6 +12,10 @@ import type {
 
 export type Lens = 'known' | 'all'
 
+// Shape of the Go API's error envelope. Parsed defensively: a non-conforming
+// error body falls back to the status line rather than leaking `[object Object]`.
+const ApiErrorSchema = z.object({ error: z.string() }).partial()
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
     super(message)
@@ -23,7 +27,8 @@ async function getJSON<T>(url: string, schema: z.ZodType<T>): Promise<T> {
   const res = await fetch(url)
   const body: unknown = await res.json().catch(() => null)
   if (!res.ok) {
-    const msg = (body as { error?: string } | null)?.error ?? `request failed: ${res.status}`
+    const parsed = ApiErrorSchema.safeParse(body)
+    const msg = parsed.success && parsed.data.error ? parsed.data.error : `request failed: ${res.status}`
     throw new ApiError(msg, res.status)
   }
   return schema.parse(body)

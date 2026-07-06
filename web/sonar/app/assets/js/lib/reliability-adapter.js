@@ -4,6 +4,7 @@
 // Verified-only artifact: all rows are known-facilitator payments; no membership
 // conservation check applies. The page renders nothing it cannot verify;
 // these checks feed the VERIFY LOG. Mirrors entity-adapter.js.
+import { fetchJson as fetchDoc } from "./fetch-json.js";
 
 export const LAT_BUCKETS = [
   { key: "sub1s", label: "<1s" },
@@ -15,8 +16,27 @@ export const LAT_BUCKETS = [
 
 const RATE_KEYS = ["windowed_share", "cancellation_rate", "expired_rate", "not_yet_valid_rate"];
 
+// Every window a reliability artifact ships must carry a latency section (the
+// renderer deep-accesses l.buckets); a truncated artifact that drops it would
+// otherwise throw a raw TypeError. Mirrors adapter.js's REQUIRED_SECTIONS:
+// collect ALL missing keys, fail with one named aggregated error. daily and
+// cancellation_attribution are tolerated (defaulted in reshape below).
+const REQUIRED_WINDOW_SECTIONS = ["latency"];
+function validateReliability(d) {
+  const missing = [];
+  if (!d || typeof d !== "object") throw new Error("artifact missing sections: data");
+  if (!d.windows || typeof d.windows !== "object") missing.push("windows");
+  else for (const [w, win] of Object.entries(d.windows)) {
+    for (const s of REQUIRED_WINDOW_SECTIONS) {
+      if (!win || win[s] === undefined) missing.push(`${w}.${s}`);
+    }
+  }
+  if (missing.length) throw new Error(`artifact missing sections: ${missing.join(", ")}`);
+}
+
 export function reshapeReliability(doc) {
   const d = doc.data;
+  validateReliability(d);
   return {
     meta: {
       methodology_version: doc.methodology_version,
@@ -82,16 +102,4 @@ export async function loadReliability() {
   const v = reshapeReliability(doc);
   const issues = [...checkReliabilityIntegrity(v), ...crossCheckEconomyReliability(v, economy)];
   return { view: v, issues };
-}
-
-async function fetchDoc(url, ok, fieldHint) {
-  let res;
-  try { res = await fetch(url, { cache: "no-cache" }); }
-  catch (e) { throw new Error(`network error fetching ${url}: ${e.message}`); }
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  let doc;
-  try { doc = await res.json(); }
-  catch (e) { throw new Error(`${url} is not valid JSON: ${e.message}`); }
-  if (!ok(doc)) throw new Error(`${url} missing expected fields (${fieldHint})`);
-  return doc;
 }

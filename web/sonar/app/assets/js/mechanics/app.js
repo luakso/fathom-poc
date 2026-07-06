@@ -3,7 +3,7 @@
 // economics, fee intent, batch mechanics, wrapper mix, rails physics, QA canaries,
 // verify log. Mirrors reliability/app.js.
 import { $, $$ } from "../dom.js";
-import { fmtCount, fmtInt, num } from "../format.js";
+import { fmtCount, fmtInt, num, escHtml } from "../format.js";
 import { loadMechanics, selectorLabel, txTypeOther } from "../lib/mechanics-adapter.js";
 import { createTray } from "../lib/report-tray.js";
 
@@ -27,6 +27,9 @@ $("#fatal-retry").addEventListener("click", () => location.reload());
 
 const win = () => view.windows[state.win];
 function pctOf(n, d) { return d ? (100 * n / d).toFixed(1) + "%" : "0.0%"; }
+// pct_batched can be null (no settlements in window). Render "—" rather than a
+// bogus "0.0%", matching the gas_cents_per_dollar==null handling in this file.
+function batchPct(p) { return p == null ? "—" : (p * 100).toFixed(1) + "%"; }
 function gwei(weiStr) { return weiStr == null ? "—" : (num(weiStr) / 1e9).toFixed(4) + " gwei"; }
 function secs(v) { return v == null ? "—" : (v < 1 ? v.toFixed(2) + "s" : Math.round(v) + "s"); }
 function ratio(v) { return v == null ? "—" : v.toFixed(3); }
@@ -63,7 +66,7 @@ function rBatch() {
         <span style="display:inline-block;height:8px;width:${Math.round(160 * x.payment_count / tot)}px;background:var(--agentic);border-radius:2px"></span>
         ${fmtCount(x.payment_count)} · ${pctOf(x.payment_count, tot)}</span></div>`).join("");
   $("#batch-kv").innerHTML = `
-    <div class="kv"><span class="k">batched (≥2 in one tx)</span><span class="v c-cm">${(b.pct_batched * 100).toFixed(1)}%</span></div>
+    <div class="kv"><span class="k">batched (≥2 in one tx)</span><span class="v c-cm">${batchPct(b.pct_batched)}</span></div>
     <div class="kv"><span class="k">largest batch</span><span class="v">${fmtInt(b.max_batch_size)} payments</span></div>`;
 }
 
@@ -72,8 +75,9 @@ function rWrapper() {
   $("#wrap-chip").textContent = `top ${rows.length} of N · not exhaustive`;
   const body = rows.map(r => {
     const lbl = selectorLabel(r.selector_hex);
-    const name = lbl ? `${lbl} <span style="color:var(--faint)">0x${r.selector_hex}</span>` : `0x${r.selector_hex}`;
-    return `<tr><td>${name}</td><td>${r.settlement_kind}</td><td>${fmtCount(r.txn_count)}</td></tr>`;
+    const hex = escHtml(r.selector_hex);
+    const name = lbl ? `${lbl} <span style="color:var(--faint)">0x${hex}</span>` : `0x${hex}`;
+    return `<tr><td>${name}</td><td>${escHtml(r.settlement_kind)}</td><td>${fmtCount(r.txn_count)}</td></tr>`;
   }).join("");
   $("#wraptable").innerHTML = `<thead><tr><th>selector</th><th>kind</th><th>txns</th></tr></thead><tbody>${body || '<tr><td colspan="3">no selectors</td></tr>'}</tbody>`;
 }
@@ -120,7 +124,7 @@ function rShell() {
 const PIN = {
   economics() { const a = win(), c = a.cost; return { title: "UNIT ECONOMICS · " + state.win.toUpperCase(), value: pctOf(c.breakeven_txn_count, a.settlement_count) + " cost > value", context: `${fmtCount(c.breakeven_txn_count)} of ${fmtCount(a.settlement_count)} payments cost more gas than they moved · ${c.gas_cents_per_dollar} ¢/$ · ${num(c.gas_eth).toFixed(2)} ETH burned`, denom: "true cost = L2+L1 gas · " + WIN_LABEL[state.win] }; },
   fee() { const a = win(), t = a.fee.tx_type, n = a.settlement_count; return { title: "FEE INTENT · " + state.win.toUpperCase(), value: pctOf(t["2"] || 0, n) + " EIP-1559", context: `tx_type-2 ${pctOf(t["2"] || 0, n)}, legacy ${pctOf(t["0"] || 0, n)}, other ${fmtInt(txTypeOther(a))} · max_fee p50 ${gwei(a.fee.max_fee.p50)}`, denom: "tx_type mix · " + WIN_LABEL[state.win] }; },
-  batch() { const b = win().batch; return { title: "BATCH MECHANICS · " + state.win.toUpperCase(), value: (b.pct_batched * 100).toFixed(1) + "% batched", context: `${(b.pct_batched * 100).toFixed(1)}% of payments share a tx (Multicall3 etc.); largest batch ${fmtInt(b.max_batch_size)}`, denom: "payments per tx · " + WIN_LABEL[state.win] }; },
+  batch() { const b = win().batch; return { title: "BATCH MECHANICS · " + state.win.toUpperCase(), value: batchPct(b.pct_batched) + " batched", context: `${batchPct(b.pct_batched)} of payments share a tx (Multicall3 etc.); largest batch ${fmtInt(b.max_batch_size)}`, denom: "payments per tx · " + WIN_LABEL[state.win] }; },
   wrapper() { const r = (win().selector_mix || [])[0]; if (!r) return null; const lbl = selectorLabel(r.selector_hex) || ("0x" + r.selector_hex); return { title: "TOP WRAPPER · " + lbl, value: fmtCount(r.txn_count) + " settlements", context: `${lbl} (0x${r.selector_hex}, ${r.settlement_kind}) is the most-used settlement path`, denom: "top selector · " + WIN_LABEL[state.win] }; },
   physics() { const a = win(); return { title: "RAILS PHYSICS · " + state.win.toUpperCase(), value: "headroom p50 " + ratio(a.over_provisioning.ratio_p50), context: `gas used/limit p50 ${ratio(a.over_provisioning.ratio_p50)}; auth-window p50 ${secs(a.auth_window_width.p50_s)}; ${fmtInt(a.block_density.max_per_block)} payments in the busiest block`, denom: "rails physics · " + WIN_LABEL[state.win] }; },
   qa() { const a = win(), hy = view.windows.all.hygiene; return { title: "QA CANARIES · " + state.win.toUpperCase(), value: fmtInt(hy.dup_auth_nonce + hy.same_block_replay) + " anomalies", context: `${fmtInt(a.tx_value_nonzero)} tx carry ETH value, ${fmtInt(hy.dup_auth_nonce)} dup nonces (global), ${fmtInt(hy.same_block_replay)} same-block replays (global)`, denom: "data-quality canaries · hygiene is global" }; },

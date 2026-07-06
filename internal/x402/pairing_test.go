@@ -62,7 +62,7 @@ func TestPairCompanionTransfer_SinglePayment(t *testing.T) {
 		makeAuth(t, 5, addrA),
 		makeTransfer(t, 6, addrA, addrB, 100),
 	}
-	got, ok := PairCompanionTransfer(logs, 5)
+	got, ok := PairCompanionTransfer(logs, 5, nil)
 	require.True(t, ok)
 	require.Equal(t, uint32(6), got.LogIndex, "companion Transfer follows the auth at the next index")
 }
@@ -78,11 +78,11 @@ func TestPairCompanionTransfer_MulticallInterleaved(t *testing.T) {
 		makeAuth(t, 2, addrC),
 		makeTransfer(t, 3, addrC, addrD, 500),
 	}
-	a, ok := PairCompanionTransfer(logs, 0)
+	a, ok := PairCompanionTransfer(logs, 0, nil)
 	require.True(t, ok)
 	require.Equal(t, uint32(1), a.LogIndex, "auth@0 must pair with transfer@1")
 
-	b, ok := PairCompanionTransfer(logs, 2)
+	b, ok := PairCompanionTransfer(logs, 2, nil)
 	require.True(t, ok)
 	require.Equal(t, uint32(3), b.LogIndex, "auth@2 must pair with the FOLLOWING transfer@3, not the earlier @1")
 }
@@ -96,7 +96,7 @@ func TestPairCompanionTransfer_IgnoresTransferBefore(t *testing.T) {
 		makeAuth(t, 1, addrA),
 		makeTransfer(t, 2, addrA, addrB, 100), // this auth's transfer
 	}
-	got, ok := PairCompanionTransfer(logs, 1)
+	got, ok := PairCompanionTransfer(logs, 1, nil)
 	require.True(t, ok)
 	require.Equal(t, uint32(2), got.LogIndex, "must pick the following transfer, not the preceding one")
 }
@@ -115,7 +115,7 @@ func TestPairCompanionTransfer_IgnoresNonUSDC(t *testing.T) {
 		},
 		makeTransfer(t, 2, addrA, addrB, 100),
 	}
-	got, ok := PairCompanionTransfer(logs, 0)
+	got, ok := PairCompanionTransfer(logs, 0, nil)
 	require.True(t, ok)
 	require.Equal(t, uint32(2), got.LogIndex, "USDC Transfer at log_index=2 wins; non-USDC at 1 is ignored")
 }
@@ -128,6 +128,24 @@ func TestPairCompanionTransfer_NoMatch(t *testing.T) {
 		makeTransfer(t, 0, addrA, addrB, 100),
 		makeAuth(t, 1, addrA),
 	}
-	_, ok := PairCompanionTransfer(logs, 1)
+	_, ok := PairCompanionTransfer(logs, 1, nil)
 	require.False(t, ok)
+}
+
+func TestPairCompanionTransfer_SkipsConsumedTransfer(t *testing.T) {
+	t.Parallel()
+	// [AUTH0@0, AUTH1@1, XFER@2]: once XFER@2 is consumed by AUTH0, AUTH1 must
+	// find NO companion rather than reaching for the already-spoken-for transfer.
+	logs := []Log{
+		makeAuth(t, 0, addrA),
+		makeAuth(t, 1, addrA),
+		makeTransfer(t, 2, addrA, addrB, 100),
+	}
+	got, ok := PairCompanionTransfer(logs, 0, nil)
+	require.True(t, ok)
+	require.Equal(t, uint32(2), got.LogIndex)
+
+	consumed := map[uint32]bool{2: true}
+	_, ok = PairCompanionTransfer(logs, 1, consumed)
+	require.False(t, ok, "the only following transfer is consumed — no companion for the second auth")
 }

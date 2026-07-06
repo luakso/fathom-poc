@@ -28,7 +28,7 @@ func TestEmit_NoMembershipLeaks(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	artifacts := []string{
 		"economy.json",

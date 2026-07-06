@@ -76,7 +76,7 @@ describe('Tx route', () => {
     )
     await waitFor(() => expect(screen.getAllByText(/0xeeeee…eeee/).length).toBeGreaterThan(0))
     // select the payer address card instead of the tx node
-    fireEvent.click(screen.getAllByText(/0xaaaaa…aaaa/)[0])
+    fireEvent.click(screen.getAllByText(/0xaaaaa…aaaa/)[0]!)
     // the 'Tx' tab must be gone and the drawer must not be stuck rendering
     // nothing for a tab that no longer exists in this tab set
     await waitFor(() => expect(screen.getByRole('button', { name: 'Activity' })).toBeTruthy())

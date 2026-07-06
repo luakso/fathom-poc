@@ -3,7 +3,7 @@ import { short } from '../lib/format'
 import type { EntityNodeData } from './graph'
 
 export function GhostNode({ data }: NodeProps<Node<EntityNodeData>> & { data: EntityNodeData }) {
-  const onFocus = data.onFocus as ((addr: string) => void) | undefined
+  const { onFocus } = data
   return (
     <div className="node-card ghost" style={{ width: 230 }}>
       <Handle id="l" type="target" position={Position.Left} style={{ opacity: 0 }} />

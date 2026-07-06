@@ -5,6 +5,10 @@
 --   agentic        tx.from (facilitator) is in the allowlist
 --   contested      neither — real-looking x402 on USDC with no known facilitator
 --
+-- REPRODUCIBILITY HAZARD (known, deferred): uses `SELECT p.*` — a future
+-- payments column silently reshapes this "frozen" view. Enumerate columns in the
+-- next vN. See docs/notes/2026-07-06-code-review-findings.md (SQL-1).
+--
 -- Reads only dimension rows visible at version 1, so this view's output is frozen
 -- even after v2 rows are appended. The raw payments row is never rewritten; this
 -- supersedes the hardcoded protocol='x402' only at read time.

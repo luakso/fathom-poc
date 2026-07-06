@@ -143,7 +143,7 @@ func TestEmit_EntityArtifactsAndConcentration(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	var doc struct {
 		MethodologyVersion int `json:"methodology_version"`

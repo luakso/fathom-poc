@@ -13,11 +13,12 @@ import (
 var errBadCursor = errors.New("malformed cursor")
 
 // cpSortCols whitelists ORDER BY expressions for the counterparty table.
-// Keys are the public sort names; values are safe SQL (never user input).
-var cpSortCols = map[string]string{
-	"volume":    "vol DESC",
-	"txns":      "txns DESC",
-	"last_seen": "ls DESC",
+// Keys are the closed Sort set (validated by parseCounterpartySort); values
+// are safe SQL (never user input).
+var cpSortCols = map[Sort]string{
+	SortVolume:   "vol DESC",
+	SortTxns:     "txns DESC",
+	SortLastSeen: "ls DESC",
 }
 
 // Counterparties implements ListProvider: the paginated inspector table.
@@ -26,20 +27,20 @@ var cpSortCols = map[string]string{
 func (p *PgEntity) Counterparties(ctx context.Context, chain, address string, q CounterpartyQuery) (CounterpartyPage, error) {
 	order, ok := cpSortCols[q.Sort]
 	if !ok {
-		order = cpSortCols["volume"]
+		order = cpSortCols[SortVolume]
 	}
 	var cpExpr, subjectCol, table string
 	switch q.Role {
-	case "payer":
+	case RolePayer:
 		cpExpr, subjectCol, table = "payee", "payer", "entity_edge_v1"
-	case "payee":
+	case RolePayee:
 		cpExpr, subjectCol, table = "payer", "payee", "entity_edge_v1"
-	case "facilitator":
+	case RoleFacilitator:
 		cpExpr, subjectCol, table = "counterparty", "facilitator", "facilitator_edge_v1"
 	default:
 		return CounterpartyPage{}, fmt.Errorf("unknown role %q", q.Role)
 	}
-	knownOnly := q.Lens == "known"
+	knownOnly := q.Lens == LensKnown
 	//nolint:gosec // G201: cpExpr/subjectCol/table/order are internal constants, never user input
 	sql := fmt.Sprintf(`
 		WITH agg AS (
@@ -74,8 +75,9 @@ func (p *PgEntity) Counterparties(ctx context.Context, chain, address string, q 
 }
 
 // paymentRoleCols whitelists the payments filter column per subject role.
-var paymentRoleCols = map[string]string{
-	"payer": "payer", "payee": "payee", "facilitator": "facilitator",
+// Keys are the closed Role set (validated by parseRole).
+var paymentRoleCols = map[Role]string{
+	RolePayer: "payer", RolePayee: "payee", RoleFacilitator: "facilitator",
 }
 
 // Payments implements ListProvider: the ONLY live query against payments.
@@ -96,7 +98,7 @@ func (p *PgEntity) Payments(ctx context.Context, chain, address string, q Paymen
 	if err != nil {
 		return PaymentPage{}, err
 	}
-	knownOnly := q.Lens == "known"
+	knownOnly := q.Lens == LensKnown
 	//nolint:gosec // G201: col is an internal whitelist constant, never user input
 	sql := fmt.Sprintf(`
 		SELECT tx_hash, log_index, block_number, block_timestamp::text,

@@ -2,6 +2,16 @@
 // DISPLAY ONLY — every shown value is rounded far above float error; the
 // artifact remains the exact record.
 export const num = x => typeof x === "string" ? parseFloat(x) : x;
+// numFinite: the validation-boundary variant of num. A missing or unparseable
+// measure yields NaN/undefined from num(); feeding that into a conservation sum
+// silently produces "$NaN" instead of a real failure. Callers that re-check the
+// artifact's promised invariants use this so a non-finite input fails LOUDLY
+// with a named error naming the field, rather than rendering a nonsense number.
+export const numFinite = (x, ctx) => {
+  const n = num(x);
+  if (!Number.isFinite(n)) throw new Error(`non-finite measure (${ctx}): ${JSON.stringify(x)}`);
+  return n;
+};
 export const fmtInt = n => Math.round(num(n)).toLocaleString("en-US");
 export const fmtMoney = n => { n = num(n);
   if (n >= 1e9) return "$" + (n/1e9).toFixed(2) + "B";

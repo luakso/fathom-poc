@@ -1,6 +1,7 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
+import type { EventNodeData } from './graph'
 
-export function EventNode({ data }: NodeProps & { data: { label: string; fields: Record<string, string> } }) {
+export function EventNode({ data }: NodeProps<Node<EventNodeData>> & { data: EventNodeData }) {
   return (
     <div className="node-card ghost" style={{ width: 230 }}>
       <Handle id="t" type="target" position={Position.Top} style={{ opacity: 0 }} />

@@ -2,12 +2,31 @@
 // the emitter promised: buckets reconcile to concentration totals, and the
 // page's concentration equals economy.json's block for this role. The page
 // renders nothing it cannot verify; these checks feed the VERIFY LOG.
-import { num } from "../format.js";
+import { num, numFinite } from "../format.js";
+import { fetchJson as fetchDoc } from "./fetch-json.js";
 
 export const USD_TOLERANCE = 0.5; // counts conserve exactly; dollars within $0.50
 
+// Every window an entity artifact ships must carry these sub-sections; a
+// truncated artifact that drops one would otherwise deep-crash with a raw
+// TypeError. Mirrors adapter.js's REQUIRED_SECTIONS: collect ALL missing keys
+// and fail with one named, aggregated error.
+const REQUIRED_WINDOW_SECTIONS = ["concentration", "buckets", "leaderboard"];
+function validateEntity(d) {
+  const missing = [];
+  if (!d || typeof d !== "object") { throw new Error("artifact missing sections: data"); }
+  if (!d.windows || typeof d.windows !== "object") missing.push("windows");
+  else for (const [w, win] of Object.entries(d.windows)) {
+    for (const s of REQUIRED_WINDOW_SECTIONS) {
+      if (!win || win[s] === undefined) missing.push(`${w}.${s}`);
+    }
+  }
+  if (missing.length) throw new Error(`artifact missing sections: ${missing.join(", ")}`);
+}
+
 export function reshapeEntity(doc) {
   const d = doc.data;
+  validateEntity(d);
   return {
     meta: {
       methodology_version: doc.methodology_version,
@@ -27,15 +46,22 @@ export function checkEntityIntegrity(view) {
   for (const [w, win] of Object.entries(view.windows)) {
     const c = win.concentration;
     let bt = 0, be = 0, bv = 0;
-    for (const b of win.buckets) { bt += b.txn_sum; be += b.entity_count; bv += num(b.volume_sum); }
-    if (bt !== c.total_txns) {
-      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket txns ${bt} ≠ total ${c.total_txns}` });
+    for (const b of win.buckets) {
+      bt += numFinite(b.txn_sum,      `${w}.bucket.txn_sum`);
+      be += numFinite(b.entity_count, `${w}.bucket.entity_count`);
+      bv += numFinite(b.volume_sum,   `${w}.bucket.volume_sum`);
     }
-    if (be !== c.total_entities) {
-      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket entities ${be} ≠ total ${c.total_entities}` });
+    const cTxns = numFinite(c.total_txns,    `${w}.concentration.total_txns`);
+    const cEnts = numFinite(c.total_entities, `${w}.concentration.total_entities`);
+    const cVol  = numFinite(c.total_volume,  `${w}.concentration.total_volume`);
+    if (bt !== cTxns) {
+      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket txns ${bt} ≠ total ${cTxns}` });
     }
-    if (Math.abs(bv - num(c.total_volume)) > USD_TOLERANCE) {
-      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket USD off by $${Math.abs(bv - num(c.total_volume)).toFixed(2)}` });
+    if (be !== cEnts) {
+      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket entities ${be} ≠ total ${cEnts}` });
+    }
+    if (Math.abs(bv - cVol) > USD_TOLERANCE) {
+      issues.push({ level: "error", msg: `conservation ✗ — ${w} bucket USD off by $${Math.abs(bv - cVol).toFixed(2)}` });
     }
   }
   return issues;
@@ -76,16 +102,4 @@ export async function loadEntity(role) {
   const v = reshapeEntity(view);
   const issues = [...checkEntityIntegrity(v), ...crossCheckEconomy(v, economy)];
   return { view: v, issues };
-}
-
-async function fetchDoc(url, ok, fieldHint) {
-  let res;
-  try { res = await fetch(url, { cache: "no-cache" }); }
-  catch (e) { throw new Error(`network error fetching ${url}: ${e.message}`); }
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  let doc;
-  try { doc = await res.json(); }
-  catch (e) { throw new Error(`${url} is not valid JSON: ${e.message}`); }
-  if (!ok(doc)) throw new Error(`${url} missing expected fields (${fieldHint})`);
-  return doc;
 }

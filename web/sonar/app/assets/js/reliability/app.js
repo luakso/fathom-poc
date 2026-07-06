@@ -3,7 +3,7 @@
 // overview, latency (validAfter→settle), window integrity, abandonment, cancellation
 // attribution, daily trend, verify log. Mirrors payers/app.js.
 import { $, $$ } from "../dom.js";
-import { fmtCount, fmtInt } from "../format.js";
+import { fmtCount, fmtInt, escHtml } from "../format.js";
 import { loadReliability, latencyBars } from "../lib/reliability-adapter.js";
 import { shortAddr } from "../lib/leaderboard.js";
 import { createTray } from "../lib/report-tray.js";
@@ -80,7 +80,7 @@ function rAbandon() {
 function rAttribution() {
   const rows = view.attribution[state.attr] || [];
   $$("#attrsel button").forEach(x => x.classList.toggle("on", x.dataset.attr === state.attr));
-  const body = rows.map(r => `<tr><td>${shortAddr(r.address)}</td><td>${fmtInt(r.count)}</td><td>${r.facilitator_known ? '<span class="c-ag">known</span>' : '<span class="c-cm">unknown</span>'}</td></tr>`).join("");
+  const body = rows.map(r => `<tr><td>${escHtml(shortAddr(r.address))}</td><td>${fmtInt(r.count)}</td><td>${r.facilitator_known ? '<span class="c-ag">known</span>' : '<span class="c-cm">unknown</span>'}</td></tr>`).join("");
   $("#attrtable").innerHTML = `<thead><tr><th>address</th><th>cancellations</th><th>facilitator</th></tr></thead><tbody>${body || '<tr><td colspan="3">no cancellations in window</td></tr>'}</tbody>`;
 }
 
@@ -100,8 +100,8 @@ function rDaily() {
     <path d="${line}" fill="none" stroke="var(--agentic)" stroke-width="1.5"/>
     ${marks}
     <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--line-2)"/>
-    <text x="${padL}" y="${H - 4}" fill="var(--faint)" font-size="10">${d[0].day}</text>
-    <text x="${W - padR}" y="${H - 4}" fill="var(--faint)" font-size="10" text-anchor="end">${d[d.length - 1].day}</text>
+    <text x="${padL}" y="${H - 4}" fill="var(--faint)" font-size="10">${escHtml(d[0].day)}</text>
+    <text x="${W - padR}" y="${H - 4}" fill="var(--faint)" font-size="10" text-anchor="end">${escHtml(d[d.length - 1].day)}</text>
   </svg>`;
 }
 

@@ -2,7 +2,9 @@ import type { GraphNode } from '../lib/schemas'
 import { buildTxView } from '../lib/txview'
 
 export function TxDetail({ node }: { node: GraphNode }) {
-  const v = buildTxView(node.fields, Date.now())
+  // Relative age is not rendered in the detail panel, so pass a fixed 0 rather
+  // than reading the wall clock during render.
+  const v = buildTxView(node.fields, 0)
   return (
     <>
       {v.sections.map((s) => (

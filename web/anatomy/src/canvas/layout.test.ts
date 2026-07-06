@@ -6,7 +6,7 @@ const box = { w: NODE_W, h: NODE_H }
 function assertNoOverlaps(rects: Rect[]) {
   for (let i = 0; i < rects.length; i++) {
     for (let j = i + 1; j < rects.length; j++) {
-      expect(overlaps(rects[i], rects[j]), `rect ${i} overlaps rect ${j}`).toBe(false)
+      expect(overlaps(rects[i]!, rects[j]!), `rect ${i} overlaps rect ${j}`).toBe(false)
     }
   }
 }
@@ -37,8 +37,8 @@ describe('placeColumn', () => {
   it('centers a stack on centerY', () => {
     const rects = placeColumn([], 600, 0, [box, box])
     expect(rects).toHaveLength(2)
-    const top = rects[0].y
-    const bottom = rects[1].y + rects[1].h
+    const top = rects[0]!.y
+    const bottom = rects[1]!.y + rects[1]!.h
     expect(Math.abs(top + bottom)).toBeLessThanOrEqual(1) // symmetric around 0
     assertNoOverlaps(rects)
   })
@@ -57,7 +57,7 @@ describe('placeColumn', () => {
     const all: Rect[] = [{ x: 0, y: 0, w: NODE_W, h: NODE_H }]
     const c1 = placeColumn(all, NODE_W + COL_GAP, NODE_H / 2, Array(8).fill(box))
     all.push(...c1)
-    const anchor = c1[3]
+    const anchor = c1[3]!
     const c2 = placeColumn(all, columnX(anchor, 'right', NODE_W), anchor.y + anchor.h / 2, Array(8).fill(box))
     all.push(...c2)
     const c3 = placeColumn(all, columnX(anchor, 'left', NODE_W), anchor.y, Array(4).fill(box))
@@ -67,6 +67,6 @@ describe('placeColumn', () => {
   })
   it('ROW_GAP separates stacked cards', () => {
     const [a, b] = placeColumn([], 0, 0, [box, box])
-    expect(b.y - (a.y + a.h)).toBe(ROW_GAP)
+    expect(b!.y - (a!.y + a!.h)).toBe(ROW_GAP)
   })
 })

@@ -6,6 +6,7 @@ package base_test
 // like setupStore stay in their integration-tagged files.
 
 import (
+	"context"
 	"strings"
 
 	"github.com/lukostrobl/fathom/internal/base"
@@ -15,7 +16,7 @@ import (
 // fakeFetcher returns a fixed sequence of batches.
 type fakeFetcher struct{ batches []base.HyperSyncBatch }
 
-func (f *fakeFetcher) Stream(_ base.HyperSyncQuery) (base.Stream, error) {
+func (f *fakeFetcher) Stream(_ context.Context, _ base.HyperSyncQuery) (base.Stream, error) {
 	return &fakeStream{batches: f.batches}, nil
 }
 
@@ -24,7 +25,7 @@ type fakeStream struct {
 	idx     int
 }
 
-func (s *fakeStream) Next() (base.HyperSyncBatch, bool, error) {
+func (s *fakeStream) Next(_ context.Context) (base.HyperSyncBatch, bool, error) {
 	if s.idx >= len(s.batches) {
 		return base.HyperSyncBatch{}, false, nil
 	}

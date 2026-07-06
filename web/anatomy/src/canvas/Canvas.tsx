@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap, type Node, type Edge } from '@xyflow/react'
+import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { EntityNode } from './EntityNode'
 import { GhostNode } from './GhostNode'
@@ -7,14 +7,14 @@ import { TxNode } from './TxNode'
 import { EventNode } from './EventNode'
 import { FlowEdge } from './FlowEdge'
 import { roleColor } from '../lib/roles'
-import type { EntityNodeData } from './graph'
+import type { FlowNode, FlowEdge as FlowEdgeType } from './graph'
 
 const nodeTypes = { entity: EntityNode, ghost: GhostNode, tx: TxNode, event: EventNode }
 const edgeTypes = { flow: FlowEdge }
 
 type Props = {
-  nodes: Node<EntityNodeData>[]
-  edges: Edge[]
+  nodes: FlowNode[]
+  edges: FlowEdgeType[]
   selectedId?: string
   onSelect: (id: string) => void
   onExpand?: (addr: string) => void
@@ -23,11 +23,14 @@ type Props = {
 
 export function Canvas({ nodes, edges, selectedId, onSelect, onExpand, onFocus }: Props) {
   const decorated = useMemo(
-    () => nodes.map((n) => ({
-      ...n,
-      selected: n.id === selectedId,
-      data: { ...n.data, onExpand, onFocus },
-    })),
+    () => nodes.map((n) => {
+      const selected = n.id === selectedId
+      // onExpand/onFocus belong only to entity/ghost cards (their data carries
+      // roleClass); tx/event cards are left untouched.
+      return 'roleClass' in n.data
+        ? { ...n, selected, data: { ...n.data, onExpand, onFocus } }
+        : { ...n, selected }
+    }),
     [nodes, selectedId, onExpand, onFocus],
   )
   return (
@@ -47,7 +50,11 @@ export function Canvas({ nodes, edges, selectedId, onSelect, onExpand, onFocus }
         <Controls showInteractive={false} />
         <MiniMap
           pannable
-          nodeColor={(n) => (n.type === 'ghost' ? 'rgba(143,160,152,.25)' : roleColor((n.data as EntityNodeData).roleClass))}
+          nodeColor={(n) => {
+            if (n.type === 'ghost') return 'rgba(143,160,152,.25)'
+            const roleClass = n.data['roleClass']
+            return typeof roleClass === 'string' ? roleColor(roleClass) : '#8fa098'
+          }}
           maskColor="rgba(7,11,9,.7)"
           style={{ background: 'rgba(12,17,14,.92)' }}
         />

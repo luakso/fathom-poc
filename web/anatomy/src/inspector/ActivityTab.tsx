@@ -9,19 +9,24 @@ export function ActivityTab({ chain, address, lens }: { chain: string; address: 
     queryKey: ['timeline', chain, address, lens],
     queryFn: () => api.timeline(chain, address, lens),
   })
-  const roles = Object.keys(q.data?.roles ?? {})
-  const defaultRole = useMemo(
-    () => roles.sort((a, b) =>
-      (q.data?.roles[b] ?? []).reduce((s, p) => s + p.txnCount, 0) -
-      (q.data?.roles[a] ?? []).reduce((s, p) => s + p.txnCount, 0))[0],
-    [q.data],
-  )
+  // Roles ordered by total txns, descending - computed on a copy so the source
+  // array (and query cache) is never mutated. ordered[0] is the busiest role.
+  const ordered = useMemo(() => {
+    const roles = q.data?.roles ?? {}
+    return Object.keys(roles).sort((a, b) =>
+      (roles[b] ?? []).reduce((s, p) => s + p.txnCount, 0) -
+      (roles[a] ?? []).reduce((s, p) => s + p.txnCount, 0))
+  }, [q.data])
+  const defaultRole = ordered[0]
   const [role, setRole] = useState<string | null>(null)
   const active = role ?? defaultRole
   if (q.isLoading) return <div className="skeleton">loading activity…</div>
   if (q.isError) return <div className="banner-err">{String(q.error)}</div>
+  if (!active) return <div className="empty-state">no activity under this lens</div>
   const points = densify(q.data?.roles[active] ?? [])
-  if (points.length === 0) return <div className="empty-state">no activity under this lens</div>
+  const first = points[0]
+  const last = points[points.length - 1]
+  if (!first || !last) return <div className="empty-state">no activity under this lens</div>
   const max = Math.max(...points.map((p) => p.txnCount))
   const maxIdx = points.findIndex((p) => p.txnCount === max)
   const W = 456, H = 122, top = 14, bottom = 22
@@ -30,11 +35,11 @@ export function ActivityTab({ chain, address, lens }: { chain: string; address: 
   return (
     <div className="card-block">
       <div className="section-title" style={{ marginBottom: 8 }}>
-        Daily payments <span className="hint">{dayLabel(points[0].day)} → {dayLabel(points[points.length - 1].day)}</span>
+        Daily payments <span className="hint">{dayLabel(first.day)} → {dayLabel(last.day)}</span>
       </div>
-      {roles.length > 1 && (
+      {ordered.length > 1 && (
         <div className="seg" style={{ marginBottom: 8 }}>
-          {roles.map((r) => (
+          {ordered.map((r) => (
             <button key={r} className={r === active ? 'active' : ''} onClick={() => setRole(r)}>{r}</button>
           ))}
         </div>

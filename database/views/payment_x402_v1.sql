@@ -4,6 +4,17 @@
 -- there is no agentic/contested/contamination split — the only label is
 -- facilitator_known (tx.from is a known facilitator). settlement_kind and
 -- self_settled are columns on the row itself. Applied by init-db after migrations.
+--
+-- REPRODUCIBILITY HAZARD (known, deferred): the `SELECT p.*` below means any
+-- future `ALTER TABLE payments ADD COLUMN` silently changes this frozen view's
+-- projected columns and their order — a methodology view claimed immutable is
+-- then mutated by unrelated substrate changes. Fixing this properly means a new
+-- payment_x402_v2 that enumerates its columns explicitly (per the migrations-vs-
+-- views rule in CLAUDE.md) plus a methodology_version bump and a re-rollup/
+-- re-emit — a deliberate prod operation, not an in-place edit of a shipped v1
+-- view. Until then: do NOT rely on this view's column set being frozen, and
+-- enumerate columns explicitly in the next vN. See
+-- docs/notes/2026-07-06-code-review-findings.md (SQL-1).
 
 CREATE OR REPLACE VIEW payment_x402_v1 AS
 WITH allow AS (

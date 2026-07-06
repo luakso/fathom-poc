@@ -60,15 +60,15 @@ type Payment struct {
 	MaxPriorityFeePerGas *big.Int // EIP-1559 tip cap the sender bid; nil on legacy/EIP-2930
 
 	// v2 capture fields (settlement shape + provenance)
-	SettlementKind   string     // "transfer" | "receive" — from the outer selector
-	SelfSettled      bool       // facilitator == payee (no independent facilitator)
-	ValidAfter       *time.Time // EIP-3009 window lower bound; nil when absent / out of range
-	ValidBefore      *time.Time // EIP-3009 window upper bound (expiry); nil when absent / out of range
-	InputCalldata    []byte     // full tx.input — re-decode any arg later without a re-scan
-	BlockHash        string     // lowercased block hash
-	TransactionIndex uint32     // position of the tx in its block
-	TokenDecimals    uint8      // 6 for USDC
-	TokenSymbol      string     // "USDC"
+	SettlementKind   SettlementKind // "transfer" | "receive" — from the outer selector
+	SelfSettled      bool           // facilitator == payee (no independent facilitator)
+	ValidAfter       *time.Time     // EIP-3009 window lower bound; nil when absent / out of range
+	ValidBefore      *time.Time     // EIP-3009 window upper bound (expiry); nil when absent / out of range
+	InputCalldata    []byte         // full tx.input — re-decode any arg later without a re-scan
+	BlockHash        string         // lowercased block hash
+	TransactionIndex uint32         // position of the tx in its block
+	TokenDecimals    uint8          // 6 for USDC
+	TokenSymbol      string         // "USDC"
 
 	// v2 capture fields (true settlement cost + over-provisioning) — Plan 2
 	TxValue    *big.Int // wei sent with the tx (~0 for x402); nil if absent

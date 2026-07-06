@@ -88,7 +88,7 @@ describe('Entity route', () => {
     // select the counterparty node (B) on the canvas - without the Drawer
     // key= fix this reuses the same Drawer instance and keeps 'Payments' as
     // the active tab even though the bound identity changed.
-    fireEvent.click(screen.getAllByText(/0xbbbbb…bbbb/)[0])
+    fireEvent.click(screen.getAllByText(/0xbbbbb…bbbb/)[0]!)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Overview' }).className).toContain('active'))
     expect(screen.getByRole('button', { name: 'Payments' }).className).not.toContain('active')
   })

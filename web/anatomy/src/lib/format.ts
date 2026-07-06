@@ -48,7 +48,7 @@ export function usd(amount: string | null | undefined): string {
   if (amount == null || amount === '') return '—'
   const neg = amount.startsWith('-')
   const abs = neg ? amount.slice(1) : amount
-  const [intRaw, fracRaw = ''] = abs.split('.')
+  const [intRaw = '', fracRaw = ''] = abs.split('.')
   const int = intRaw.replace(/^0+(?=\d)/, '') || '0'
   const isSubCent = int === '0' && !/^[1-9]/.test(fracRaw.slice(0, 2))
   if (isSubCent && fracRaw.replace(/0+$/, '') !== '') {

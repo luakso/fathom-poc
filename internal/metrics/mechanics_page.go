@@ -8,11 +8,19 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// TxTypeCounts is the fixed-shape EIP-2718 transaction-type breakdown. The JSON
+// keys "0"/"1"/"2" reproduce the prior open-map shape exactly.
+type TxTypeCounts struct {
+	Type0 int64 `json:"0"`
+	Type1 int64 `json:"1"`
+	Type2 int64 `json:"2"`
+}
+
 // FeeBlock is the M4 EIP-1559 fee-intent summary for one slice.
 type FeeBlock struct {
-	TxType      map[string]int64 `json:"tx_type"`
-	MaxFee      Percentiles      `json:"max_fee"`
-	MaxPriority Percentiles      `json:"max_priority"`
+	TxType      TxTypeCounts `json:"tx_type"`
+	MaxFee      Percentiles  `json:"max_fee"`
+	MaxPriority Percentiles  `json:"max_priority"`
 }
 
 // Percentiles holds nullable p50/p90/p99 (string-decimals for the NUMERIC fee
@@ -97,16 +105,16 @@ type MechanicsWindow struct {
 
 // MechanicsPage is the mechanics.json payload.
 type MechanicsPage struct {
-	Windows map[string]MechanicsWindow `json:"windows"`
+	Windows map[Window]MechanicsWindow `json:"windows"`
 }
 
 // BuildMechanics assembles mechanics.json from the four mechanics tables plus the
 // reused gas cube (metrics_gas_daily_v2) for the cost headline.
 func BuildMechanics(ctx context.Context, q Querier) (MechanicsPage, error) {
-	page := MechanicsPage{Windows: map[string]MechanicsWindow{}}
+	page := MechanicsPage{Windows: map[Window]MechanicsWindow{}}
 	for w := range windowDays {
 		page.Windows[w] = MechanicsWindow{
-			MechanicsMeasure: MechanicsMeasure{Fee: FeeBlock{TxType: map[string]int64{}}, SelectorMix: []SelectorRow{}},
+			MechanicsMeasure: MechanicsMeasure{SelectorMix: []SelectorRow{}},
 		}
 	}
 
@@ -156,19 +164,19 @@ func readMechWindow(ctx context.Context, q Querier, page MechanicsPage) error {
 			return fmt.Errorf("scan mechanics window: %w", err)
 		}
 		m.Fee = FeeBlock{
-			TxType:      map[string]int64{"0": t0, "1": t1, "2": t2},
+			TxType:      TxTypeCounts{Type0: t0, Type1: t1, Type2: t2},
 			MaxFee:      Percentiles{P50: mf50, P90: mf90, P99: mf99},
 			MaxPriority: Percentiles{P50: mp50, P90: mp90, P99: mp99},
 		}
 		m.SelectorMix = []SelectorRow{}
-		win, ok := page.Windows[wname]
+		win, ok := page.Windows[Window(wname)]
 		if !ok {
 			return fmt.Errorf("mechanics: unknown window %q", wname)
 		}
-		if membership == "known" {
+		if Membership(membership) == MembershipKnown {
 			win.MechanicsMeasure = m
 		}
-		page.Windows[wname] = win
+		page.Windows[Window(wname)] = win
 	}
 	return rows.Err()
 }
@@ -187,53 +195,59 @@ func readMechSelector(ctx context.Context, q Querier, page MechanicsPage) error 
 		if err := rows.Scan(&wname, &membership, &r.SelectorHex, &r.SettlementKind, &r.TxnCount, &r.VolumeUSDC); err != nil {
 			return fmt.Errorf("scan mechanics selector: %w", err)
 		}
-		win, ok := page.Windows[wname]
+		win, ok := page.Windows[Window(wname)]
 		if !ok {
 			return fmt.Errorf("mechanics selector: unknown window %q", wname)
 		}
-		if membership == "known" {
+		if Membership(membership) == MembershipKnown {
 			win.SelectorMix = append(win.SelectorMix, r)
 		}
-		page.Windows[wname] = win
+		page.Windows[Window(wname)] = win
 	}
 	return rows.Err()
 }
 
 func readMechBatch(ctx context.Context, q Querier, page MechanicsPage) error {
+	// batch_bucket is TEXT ('1','2-10','11-100','100+'); a plain text ORDER BY
+	// would emit 1,100+,11-100,2-10. Rank the buckets by magnitude so the
+	// histogram emits in a deterministic, human-ordered sequence.
 	rows, err := q.Query(ctx, `
 		SELECT window_name, batch_bucket, tx_count, payment_count, max_batch_size
-		FROM metrics_mechanics_batch_v2 ORDER BY window_name, batch_bucket`)
+		FROM metrics_mechanics_batch_v2
+		ORDER BY window_name,
+		    CASE batch_bucket WHEN '1' THEN 0 WHEN '2-10' THEN 1 WHEN '11-100' THEN 2 ELSE 3 END`)
 	if err != nil {
 		return fmt.Errorf("mechanics batch read: %w", err)
 	}
 	defer rows.Close()
-	totals := map[string]int64{}
-	batched := map[string]int64{}
+	totals := map[Window]int64{}
+	batched := map[Window]int64{}
 	for rows.Next() {
 		var wname, bucket string
 		var txc, payc, maxb int64
 		if err := rows.Scan(&wname, &bucket, &txc, &payc, &maxb); err != nil {
 			return fmt.Errorf("scan mechanics batch: %w", err)
 		}
-		win, ok := page.Windows[wname]
+		w := Window(wname)
+		win, ok := page.Windows[w]
 		if !ok {
 			return fmt.Errorf("mechanics batch: unknown window %q", wname)
 		}
 		win.Batch.Histogram = append(win.Batch.Histogram, BatchBucket{Bucket: bucket, TxCount: txc, PaymentCount: payc})
 		win.Batch.MaxBatchSize = maxb
-		page.Windows[wname] = win
-		totals[wname] += payc
+		page.Windows[w] = win
+		totals[w] += payc
 		if bucket != "1" {
-			batched[wname] += payc
+			batched[w] += payc
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for wname, win := range page.Windows {
-		if totals[wname] > 0 {
-			win.Batch.PctBatched = float64(batched[wname]) / float64(totals[wname])
-			page.Windows[wname] = win
+	for w, win := range page.Windows {
+		if totals[w] > 0 {
+			win.Batch.PctBatched = float64(batched[w]) / float64(totals[w])
+			page.Windows[w] = win
 		}
 	}
 	return nil
@@ -253,22 +267,23 @@ func readMechBlock(ctx context.Context, q Querier, page MechanicsPage) error {
 		if err := rows.Scan(&wname, &bd.MaxPerBlock, &bd.P99PerBlock, &bd.MeanPerBlock, &bd.DistinctBlocks); err != nil {
 			return fmt.Errorf("scan mechanics block: %w", err)
 		}
-		win, ok := page.Windows[wname]
+		win, ok := page.Windows[Window(wname)]
 		if !ok {
 			return fmt.Errorf("mechanics block: unknown window %q", wname)
 		}
 		win.BlockDensity = bd
-		page.Windows[wname] = win
+		page.Windows[Window(wname)] = win
 	}
 	return rows.Err()
 }
 
 // readMechCost rolls metrics_gas_daily_v2 into a per-window cost headline, reusing
-// economy.go's gasSlice/gasAccum. Windows are anchored to the cube's max day, the
-// same anchoring the rollup uses.
+// economy.go's gasSlice/gasAccum. Windows are anchored to the verified (known)
+// max day — the same anchor the economy and facilitators pages use — so "7d"
+// means the same calendar window on every page, not the all-membership edge.
 func readMechCost(ctx context.Context, q Querier, page MechanicsPage) error {
 	var maxDay *string
-	if err := q.QueryRow(ctx, `SELECT max(day)::text FROM metrics_gas_daily_v2`).Scan(&maxDay); err != nil {
+	if err := q.QueryRow(ctx, `SELECT max(day)::text FROM metrics_gas_daily_v2 WHERE membership = 'known'`).Scan(&maxDay); err != nil {
 		return fmt.Errorf("mechanics cost anchor: %w", err)
 	}
 	if maxDay == nil {

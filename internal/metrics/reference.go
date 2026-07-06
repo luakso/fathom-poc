@@ -174,19 +174,19 @@ func LoadClaims(path string) ([]Claim, error) {
 }
 
 // parseMetric splits "total_<kind>_<window>" and validates each part.
-func parseMetric(s string) (subject, kind, window string, err error) {
+func parseMetric(s string) (subject string, kind ClaimKind, window Window, err error) {
 	parts := strings.Split(s, "_")
 	if len(parts) != 3 {
 		return "", "", "", fmt.Errorf("bad measured_metric %q (want subject_kind_window)", s)
 	}
-	subject, kind, window = parts[0], parts[1], parts[2]
+	subject, kind, window = parts[0], ClaimKind(parts[1]), Window(parts[2])
 	switch subject {
 	case "total":
 	default:
 		return "", "", "", fmt.Errorf("measured_metric %q: unknown subject %q", s, subject)
 	}
 	switch kind {
-	case "txns", "volume":
+	case ClaimKindTxns, ClaimKindVolume:
 	default:
 		return "", "", "", fmt.Errorf("measured_metric %q: unknown kind %q", s, kind)
 	}

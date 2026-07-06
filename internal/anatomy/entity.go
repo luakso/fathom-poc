@@ -132,9 +132,9 @@ func (p *PgEntity) Entity(ctx context.Context, chain, address string) (Entity, e
 		roles[k.role] = true
 	}
 	for r := range roles {
-		e.Roles = append(e.Roles, r)
+		e.Roles = append(e.Roles, Role(r))
 	}
-	sort.Strings(e.Roles)
+	sort.Slice(e.Roles, func(i, j int) bool { return e.Roles[i] < e.Roles[j] })
 	return e, nil
 }
 

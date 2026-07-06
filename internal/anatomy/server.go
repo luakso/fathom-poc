@@ -49,20 +49,20 @@ type handler struct {
 }
 
 // entityParams centralizes chain+addr+lens validation for entity routes.
-func (h *handler) entityParams(w http.ResponseWriter, r *http.Request) (addr, lens string, ok bool) {
+func (h *handler) entityParams(w http.ResponseWriter, r *http.Request) (addr string, lens Lens, ok bool) {
 	if !chainOK(r.PathValue("chain")) {
-		writeErr(w, http.StatusBadRequest, "unknown chain")
+		h.writeErr(w, http.StatusBadRequest, "unknown chain")
 		return "", "", false
 	}
 	var err error
 	addr, err = parseAddr(r.PathValue("addr"))
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return "", "", false
 	}
 	lens, err = parseLens(r)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return "", "", false
 	}
 	return addr, lens, true
@@ -70,7 +70,7 @@ func (h *handler) entityParams(w http.ResponseWriter, r *http.Request) (addr, le
 
 func (h *handler) meta(w http.ResponseWriter, r *http.Request) {
 	if h.p.Meta == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	m, err := h.p.Meta.Meta(r.Context())
@@ -81,15 +81,18 @@ func (h *handler) tx(w http.ResponseWriter, r *http.Request) {
 	chain := r.PathValue("chain")
 	hash := r.PathValue("hash")
 	if !chainOK(chain) {
-		writeErr(w, http.StatusBadRequest, "unknown chain")
+		h.writeErr(w, http.StatusBadRequest, "unknown chain")
 		return
 	}
-	if chain == "base" && !evmHashRe.MatchString(hash) {
-		writeErr(w, http.StatusBadRequest, "malformed tx hash")
+	// validChains only admits "base", so any accepted chain is EVM here; the
+	// hash must be a 32-byte EVM tx hash. (A future non-EVM chain needs its own
+	// hash-shape branch.)
+	if !evmHashRe.MatchString(hash) {
+		h.writeErr(w, http.StatusBadRequest, "malformed tx hash")
 		return
 	}
 	if h.p.Dossier == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	g, err := h.p.Dossier.Dossier(r.Context(), chain, strings.ToLower(hash))
@@ -102,7 +105,7 @@ func (h *handler) entity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.p.Entity == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	e, err := h.p.Entity.Entity(r.Context(), r.PathValue("chain"), addr)
@@ -116,11 +119,11 @@ func (h *handler) neighbors(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := parseLimit(r, 8, 50)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.p.Neighbors == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	n, err := h.p.Neighbors.Neighbors(r.Context(), r.PathValue("chain"), addr, lens, limit)
@@ -133,7 +136,7 @@ func (h *handler) timeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.p.Activity == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	t, err := h.p.Activity.Timeline(r.Context(), r.PathValue("chain"), addr, lens)
@@ -146,7 +149,7 @@ func (h *handler) fingerprint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.p.Activity == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	f, err := h.p.Activity.Fingerprint(r.Context(), r.PathValue("chain"), addr, lens)
@@ -160,32 +163,20 @@ func (h *handler) counterparties(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 
-	role := q.Get("role")
-	switch role {
-	case "payer", "payee", "facilitator":
-		// valid
-	case "":
-		writeErr(w, http.StatusBadRequest, "role is required")
-		return
-	default:
-		writeErr(w, http.StatusBadRequest, "role must be payer, payee, or facilitator")
+	role, err := parseRole(q.Get("role"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	sort := q.Get("sort")
-	switch sort {
-	case "", "volume":
-		sort = "volume"
-	case "txns", "last_seen":
-		// valid
-	default:
-		writeErr(w, http.StatusBadRequest, "sort must be volume, txns, or last_seen")
+	sortKey, err := parseCounterpartySort(q.Get("sort"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	limit, err := parseLimit(r, 50, 200)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -193,16 +184,16 @@ func (h *handler) counterparties(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("offset"); raw != "" {
 		offset, err = strconv.Atoi(raw)
 		if err != nil || offset < 0 {
-			writeErr(w, http.StatusBadRequest, "offset must be >= 0")
+			h.writeErr(w, http.StatusBadRequest, "offset must be >= 0")
 			return
 		}
 	}
 
 	if h.p.Lists == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	cq := CounterpartyQuery{Role: role, Lens: lens, Sort: sort, Limit: limit, Offset: offset}
+	cq := CounterpartyQuery{Role: role, Lens: lens, Sort: sortKey, Limit: limit, Offset: offset}
 	cp, err := h.p.Lists.Counterparties(r.Context(), r.PathValue("chain"), addr, cq)
 	h.respond(w, cp, err)
 }
@@ -214,38 +205,32 @@ func (h *handler) payments(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 
-	role := q.Get("role")
-	switch role {
-	case "payer", "payee", "facilitator":
-		// valid
-	case "":
-		writeErr(w, http.StatusBadRequest, "role is required")
-		return
-	default:
-		writeErr(w, http.StatusBadRequest, "role must be payer, payee, or facilitator")
+	role, err := parseRole(q.Get("role"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	limit, err := parseLimit(r, 25, 100)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	before := q.Get("before")
 	if before != "" && !paymentCursorRe.MatchString(before) {
-		writeErr(w, http.StatusBadRequest, "malformed before cursor")
+		h.writeErr(w, http.StatusBadRequest, "malformed before cursor")
 		return
 	}
 	// Parse the cursor in the handler to catch int64 overflow before dispatch.
 	// The provider parses again as a second line of defence.
 	if _, _, _, _, cursorErr := parseCursor(before); cursorErr != nil {
-		writeErr(w, http.StatusBadRequest, "malformed cursor")
+		h.writeErr(w, http.StatusBadRequest, "malformed cursor")
 		return
 	}
 
 	if h.p.Lists == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	pq := PaymentQuery{Role: role, Lens: lens, Limit: limit, Before: before}
@@ -256,62 +241,44 @@ func (h *handler) payments(w http.ResponseWriter, r *http.Request) {
 func (h *handler) leaderboard(w http.ResponseWriter, r *http.Request) {
 	chain := r.PathValue("chain")
 	if !chainOK(chain) {
-		writeErr(w, http.StatusBadRequest, "unknown chain")
+		h.writeErr(w, http.StatusBadRequest, "unknown chain")
 		return
 	}
 	q := r.URL.Query()
 
-	role := q.Get("role")
-	switch role {
-	case "payer", "payee":
-		// valid
-	case "":
-		writeErr(w, http.StatusBadRequest, "role is required")
-		return
-	default:
-		writeErr(w, http.StatusBadRequest, "role must be payer or payee")
+	role, err := parseLeaderboardRole(q.Get("role"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	window := q.Get("window")
-	switch window {
-	case "", "all":
-		window = "all"
-	case "7d", "30d":
-		// valid
-	default:
-		writeErr(w, http.StatusBadRequest, "window must be 7d, 30d, or all")
+	window, err := parseWindow(q.Get("window"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	sort := q.Get("sort")
-	switch sort {
-	case "", "volume":
-		sort = "volume"
-	case "txns", "counterparties":
-		// valid
-	default:
-		writeErr(w, http.StatusBadRequest, "sort must be volume, txns, or counterparties")
+	sortKey, err := parseLeaderboardSort(q.Get("sort"))
+	if err != nil {
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	lens, err := parseLens(r)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	limit, err := parseLimit(r, 100, 500)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		h.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if h.p.Leaderboard == nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	lb, err := h.p.Leaderboard.Leaderboard(r.Context(), chain, role, window, lens, sort)
+	lb, err := h.p.Leaderboard.Leaderboard(r.Context(), chain, role, window, lens, sortKey)
 	if err == nil && len(lb.Rows) > limit {
 		lb.Rows = lb.Rows[:limit]
 	}
@@ -321,23 +288,33 @@ func (h *handler) leaderboard(w http.ResponseWriter, r *http.Request) {
 func (h *handler) respond(w http.ResponseWriter, payload any, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeErr(w, http.StatusNotFound, "not found")
+		h.writeErr(w, http.StatusNotFound, "not found")
 	case err != nil:
 		h.log.Error("anatomy request failed", "err", err)
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		h.writeErr(w, http.StatusInternalServerError, "internal error")
 	default:
-		writeJSON(w, http.StatusOK, payload)
+		h.writeJSON(w, http.StatusOK, payload)
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+// errorResponse is the JSON error envelope: {"error":"..."}.
+type errorResponse struct {
+	Error string `json:"error"`
 }
 
-func writeErr(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+func (h *handler) writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	// Status and headers are already sent, so a failed encode cannot change the
+	// response code; log it so a truncated body is diagnosable.
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		h.log.Error("anatomy: encode response failed", "err", err)
+	}
+}
+
+func (h *handler) writeErr(w http.ResponseWriter, status int, msg string) {
+	h.writeJSON(w, status, errorResponse{Error: msg})
 }
 
 // spaFileServer serves assets, falling back to index.html for unknown paths so

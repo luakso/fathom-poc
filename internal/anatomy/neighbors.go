@@ -66,9 +66,9 @@ var directions = []direction{
 }
 
 // Neighbors implements NeighborProvider.
-func (p *PgEntity) Neighbors(ctx context.Context, chain, address, lens string, limit int) (Neighbors, error) {
+func (p *PgEntity) Neighbors(ctx context.Context, chain, address string, lens Lens, limit int) (Neighbors, error) {
 	n := Neighbors{Address: address, Lens: lens}
-	knownOnly := lens == "known"
+	knownOnly := lens == LensKnown
 	found := false
 	for _, d := range directions {
 		sql := fmt.Sprintf(neighborSQL, d.cpExpr, d.subjectCol, d.table, d.extra)

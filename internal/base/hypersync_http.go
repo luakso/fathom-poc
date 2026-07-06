@@ -39,9 +39,25 @@ type HTTPFetcher struct {
 	baseURL    string
 	token      string
 	client     *http.Client
-	maxRetries int                 // retries on HTTP 429 before giving up
-	baseDelay  time.Duration       // first backoff delay; doubles each retry
-	sleep      func(time.Duration) // injectable for tests; defaults to time.Sleep
+	maxRetries int           // retries on HTTP 429 before giving up
+	baseDelay  time.Duration // first backoff delay; doubles each retry
+	// sleep is the injectable (for tests) cancellable wait used between retries.
+	// It returns ctx.Err() if ctx is cancelled before the delay elapses, so a
+	// SIGTERM during a multi-minute backoff aborts the batch instead of waiting
+	// it out. Defaults to ctxSleep.
+	sleep func(context.Context, time.Duration) error
+}
+
+// ctxSleep waits d, or returns early with ctx.Err() if ctx is cancelled first.
+func ctxSleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // FetcherOption customizes an HTTPFetcher.
@@ -66,7 +82,7 @@ func NewHTTPFetcher(baseURL, token string, opts ...FetcherOption) *HTTPFetcher {
 		client:     &http.Client{Timeout: 5 * time.Minute},
 		maxRetries: defaultMaxRetries,
 		baseDelay:  defaultBaseDelay,
-		sleep:      time.Sleep,
+		sleep:      ctxSleep,
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -78,7 +94,8 @@ func NewHTTPFetcher(baseURL, token string, opts ...FetcherOption) *HTTPFetcher {
 // Per-batch HTTP errors are surfaced via Next's error return; callers are
 // expected to fail-fast (the run is re-invocable from the last committed
 // cursor — see spec §11).
-func (f *HTTPFetcher) Stream(query HyperSyncQuery) (Stream, error) {
+func (f *HTTPFetcher) Stream(_ context.Context, query HyperSyncQuery) (Stream, error) {
+	// Stream construction does no IO; each Next carries its own ctx for the fetch.
 	return &httpStream{
 		fetcher: f,
 		query:   query,
@@ -95,7 +112,7 @@ type httpStream struct {
 	done    bool
 }
 
-func (s *httpStream) Next() (HyperSyncBatch, bool, error) {
+func (s *httpStream) Next(ctx context.Context) (HyperSyncBatch, bool, error) {
 	if s.done {
 		return HyperSyncBatch{}, false, nil
 	}
@@ -108,7 +125,7 @@ func (s *httpStream) Next() (HyperSyncBatch, bool, error) {
 		return HyperSyncBatch{}, false, fmt.Errorf("marshal query: %w", err)
 	}
 
-	body, err := s.fetcher.postWithRetry(bs)
+	body, err := s.fetcher.postWithRetry(ctx, bs)
 	if err != nil {
 		return HyperSyncBatch{}, false, err
 	}
@@ -153,21 +170,31 @@ func (s *httpStream) Close() error {
 //
 // Other non-200 statuses (4xx/5xx) and any failure outlasting maxRetries surface
 // to the caller as an error. A successful (200) response returns its body.
-func (f *HTTPFetcher) postWithRetry(query []byte) ([]byte, error) {
+func (f *HTTPFetcher) postWithRetry(ctx context.Context, query []byte) ([]byte, error) {
 	delay := f.baseDelay
 	for attempt := 0; ; attempt++ {
-		body, status, retryAfter, err := f.post(query)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		body, status, retryAfter, err := f.post(ctx, query)
 		switch {
 		case err != nil:
-			// Transport-level failure — retryable.
+			// Transport-level failure — retryable (unless ctx was cancelled).
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
 			if attempt >= f.maxRetries {
 				return nil, err
 			}
-			delay = f.backoff(delay, 0, attempt, err.Error())
+			if delay, err = f.backoff(ctx, delay, 0, attempt, err.Error()); err != nil {
+				return nil, err
+			}
 		case status == http.StatusOK:
 			return body, nil
 		case status == http.StatusTooManyRequests && attempt < f.maxRetries:
-			delay = f.backoff(delay, retryAfter, attempt, "http 429")
+			if delay, err = f.backoff(ctx, delay, retryAfter, attempt, "http 429"); err != nil {
+				return nil, err
+			}
 		default:
 			// Non-retryable status, or retries exhausted.
 			return nil, fmt.Errorf("hypersync status %d: %s", status, string(body))
@@ -179,7 +206,9 @@ func (f *HTTPFetcher) postWithRetry(query []byte) ([]byte, error) {
 // The wait is jittered ±20%, capped at maxRetryDelay; a server Retry-After (>0)
 // overrides the computed wait precisely (no jitter). reason is logged so a long
 // stall is explained (rate limit vs network drop).
-func (f *HTTPFetcher) backoff(delay, retryAfter time.Duration, attempt int, reason string) time.Duration {
+// It returns the doubled delay for the next attempt, and ctx.Err() if the wait
+// was cut short by cancellation (so the caller aborts instead of retrying).
+func (f *HTTPFetcher) backoff(ctx context.Context, delay, retryAfter time.Duration, attempt int, reason string) (time.Duration, error) {
 	wait := jitter(delay)
 	if retryAfter > 0 {
 		wait = retryAfter
@@ -194,17 +223,19 @@ func (f *HTTPFetcher) backoff(delay, retryAfter time.Duration, attempt int, reas
 		"max_retries", f.maxRetries,
 		"wait", wait.Round(time.Millisecond).String(),
 	)
-	f.sleep(wait)
-	return delay * 2
+	if err := f.sleep(ctx, wait); err != nil {
+		return delay, err
+	}
+	return delay * 2, nil
 }
 
 // post issues one POST and returns the body, HTTP status, and parsed
 // Retry-After delay (0 when absent/unparseable). A transport-level failure is
 // returned as err; an HTTP error status is reported via status, not err, so the
 // caller can decide whether it is retryable.
-func (f *HTTPFetcher) post(query []byte) (body []byte, status int, retryAfter time.Duration, err error) {
+func (f *HTTPFetcher) post(ctx context.Context, query []byte) (body []byte, status int, retryAfter time.Duration, err error) {
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		f.baseURL+"/query",
 		bytes.NewReader(query),

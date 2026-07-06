@@ -16,7 +16,7 @@ describe('schemas mirror the Go API', () => {
       dataMaxDay: '2026-06-06', builtAt: '2026-07-05T00:00:00Z', methodologyVersion: 2,
       totals: { known: { txnCount: 21190000, volumeUsdc: '7540000.12' }, all: { txnCount: 22767310, volumeUsdc: '463900000' } },
     })
-    expect(m.totals.known.volumeUsdc).toBe('7540000.12')
+    expect(m.totals.known!.volumeUsdc).toBe('7540000.12')
   })
   it('entity with omitted optionals', () => {
     const e = EntitySchema.parse({
@@ -24,12 +24,12 @@ describe('schemas mirror the Go API', () => {
       summaries: { payer: { known: { txnCount: 1, volumeUsdc: '1', activeDays: 1, distinctCounterparties: 1 } } },
     })
     expect(e.label).toBeUndefined()
-    expect(e.summaries.payer.known.firstDay).toBeUndefined()
+    expect(e.summaries.payer!.known!.firstDay).toBeUndefined()
   })
   it('neighbors with omitted directions', () => {
     const n = NeighborsSchema.parse({ address: row.address, lens: 'known', payees: { total: 1, rows: [row] } })
     expect(n.payers).toBeUndefined()
-    expect(n.payees?.rows[0].share).toBe('1.000000')
+    expect(n.payees?.rows[0]!.share).toBe('1.000000')
   })
   it('timeline / fingerprint', () => {
     TimelineSchema.parse({ address: row.address, lens: 'known', roles: { payer: [{ day: '2026-06-06', txnCount: 3, volumeUsdc: '0.01' }] } })
@@ -37,7 +37,7 @@ describe('schemas mirror the Go API', () => {
       address: row.address, lens: 'all',
       roles: { payer: { activeDays: 59, spanDays: 60, medianTxnsPerDay: 346, topDayShare: '0.041000', pricePoints: [{ amountUsdc: '0.001881', txnCount: 20389 }], totalDistinctAmounts: null, top1Share: '1.000000', top3Share: '1.000000' } },
     })
-    expect(f.roles.payer.totalDistinctAmounts).toBeNull()
+    expect(f.roles.payer!.totalDistinctAmounts).toBeNull()
   })
   it('pages + leaderboard + graph', () => {
     CounterpartyPageSchema.parse({ address: row.address, role: 'payee', lens: 'known', total: 1, rows: [row] })

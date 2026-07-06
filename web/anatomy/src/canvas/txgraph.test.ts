@@ -33,11 +33,11 @@ describe('txGraphToFlow', () => {
   })
   it('lanes: payer left, payee right, facilitator above, events below', () => {
     const pos = Object.fromEntries(flow.nodes.map((n) => [n.id, n.position]))
-    const tx = pos[`tx:${TX}`]
-    expect(pos[`addr:${A}`].x).toBeLessThan(tx.x)
-    expect(pos[`addr:${B}`].x).toBeGreaterThan(tx.x)
-    expect(pos[`addr:${F}`].y).toBeLessThan(tx.y)
-    expect(pos['ev:1'].y).toBeGreaterThan(tx.y)
+    const tx = pos[`tx:${TX}`]!
+    expect(pos[`addr:${A}`]!.x).toBeLessThan(tx.x)
+    expect(pos[`addr:${B}`]!.x).toBeGreaterThan(tx.x)
+    expect(pos[`addr:${F}`]!.y).toBeLessThan(tx.y)
+    expect(pos['ev:1']!.y).toBeGreaterThan(tx.y)
   })
   it('settles edges get the verb styling flag', () => {
     expect(flow.edges.find((e) => e.id === 'e3')?.data?.verb).toBe(true)
@@ -50,6 +50,6 @@ describe('txGraphToFlow', () => {
     }))
     for (let i = 0; i < rects.length; i++)
       for (let j = i + 1; j < rects.length; j++)
-        expect(overlaps(rects[i], rects[j])).toBe(false)
+        expect(overlaps(rects[i]!, rects[j]!)).toBe(false)
   })
 })

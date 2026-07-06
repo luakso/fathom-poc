@@ -112,7 +112,7 @@ func TestLoadClaims_Rejects(t *testing.T) {
 // silently publish "0.000000" as a confident measured value.
 func TestResolveClaims_MissingWindow(t *testing.T) {
 	// Page has NO windows — any claim referencing a window must fail.
-	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{}}
+	page := metrics.EconomyPage{Windows: map[metrics.Window]metrics.WindowEconomy{}}
 	claims := []metrics.Claim{
 		{ID: "c1", Source: "s", ClaimText: "t", ClaimedValue: "1", MeasuredMetric: "total_txns_all"},
 	}
@@ -122,7 +122,7 @@ func TestResolveClaims_MissingWindow(t *testing.T) {
 }
 
 func TestResolveClaims(t *testing.T) {
-	page := metrics.EconomyPage{Windows: map[string]metrics.WindowEconomy{
+	page := metrics.EconomyPage{Windows: map[metrics.Window]metrics.WindowEconomy{
 		"30d": {Measure: metrics.Measure{TxnCount: 100, VolumeUSDC: "500.000000"}},
 	}}
 	claims := []metrics.Claim{

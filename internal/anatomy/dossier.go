@@ -242,15 +242,18 @@ func buildGraph(chain, txHash string, rs []dossierRow) Graph {
 		payeeID := addAddr(r.payee, RolePayee)
 		facID := addAddr(r.facilitator, RoleFacilitator)
 
-		fn := &g.Nodes[addrIdx[r.facilitator]]
-		fn.Fields["facilitatorKnown"] = fmt.Sprintf("%t", r.facilitatorKnown)
+		// Index into g.Nodes directly rather than holding a *Node across code that
+		// appends to g.Nodes (addAddr on later iterations) — a held pointer could
+		// dangle into a stale backing array after a realloc.
+		fi := addrIdx[r.facilitator]
+		g.Nodes[fi].Fields["facilitatorKnown"] = fmt.Sprintf("%t", r.facilitatorKnown)
 		if r.facilitatorLabel != nil {
-			fn.Fields["entityLabel"] = *r.facilitatorLabel
+			g.Nodes[fi].Fields["entityLabel"] = *r.facilitatorLabel
 		}
 		if r.selfSettled {
-			fn.Fields["selfSettled"] = "true"
-		} else if _, ok := fn.Fields["selfSettled"]; !ok {
-			fn.Fields["selfSettled"] = "false"
+			g.Nodes[fi].Fields["selfSettled"] = "true"
+		} else if _, ok := g.Nodes[fi].Fields["selfSettled"]; !ok {
+			g.Nodes[fi].Fields["selfSettled"] = "false"
 		}
 
 		addEdge(Edge{ID: "e:emits:" + evtID, Source: txID, Target: evtID, Kind: "emits"})

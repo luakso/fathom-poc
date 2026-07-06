@@ -1,6 +1,7 @@
 package base
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -12,14 +13,20 @@ import (
 // One Query produces zero-or-more Batches; Next returns (batch, true) per
 // chunk and (zero, false) when the stream is exhausted. An error from Next
 // is terminal — callers must not retry without re-issuing the Query.
+//
+// ctx flows through Stream and Next so an in-flight HTTP fetch or a backoff
+// sleep is cancellable — SIGTERM interrupts the batch, it does not have to wait
+// out a multi-minute retry storm.
 type Fetcher interface {
-	Stream(query HyperSyncQuery) (Stream, error)
+	Stream(ctx context.Context, query HyperSyncQuery) (Stream, error)
 }
 
 // Stream is the per-query streaming handle. Callers drive it with Next.
 type Stream interface {
-	// Next blocks until the next batch is available or the stream ends.
-	Next() (HyperSyncBatch, bool, error)
+	// Next blocks until the next batch is available or the stream ends. It honors
+	// ctx: a cancelled ctx aborts an in-flight fetch or backoff and returns
+	// ctx.Err().
+	Next(ctx context.Context) (HyperSyncBatch, bool, error)
 	// Close releases any underlying connection / state. Safe to call multiple
 	// times; calls after the first are no-ops.
 	Close() error

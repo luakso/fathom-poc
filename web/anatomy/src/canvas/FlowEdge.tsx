@@ -1,9 +1,8 @@
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react'
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, type Edge } from '@xyflow/react'
+import type { FlowEdgeData } from './graph'
 
-type FlowEdgeData = { share?: number; label?: string; primary?: boolean; verb?: boolean; ghost?: boolean }
-
-export function FlowEdge(props: EdgeProps) {
-  const data = (props.data ?? {}) as FlowEdgeData
+export function FlowEdge(props: EdgeProps<Edge<FlowEdgeData>>) {
+  const data = props.data ?? {}
   const [path, labelX, labelY] = getBezierPath(props)
   const share = Math.min(data.share ?? 0, 1)
   const width = data.verb ? 2 : data.ghost ? 1.3 : 1.5 + 4.5 * share

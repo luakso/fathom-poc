@@ -5,6 +5,8 @@
 // selector mix is top-15 and tx_type buckets only 0/1/2 — those are surfaced as
 // remainders, NEVER asserted to conserve. Mirrors reliability-adapter.js.
 
+import { fetchJson as fetchDoc } from "./fetch-json.js";
+
 // Known x402 method selectors → friendly names. Unknowns show raw hex.
 export const SELECTOR_LABELS = {
   e3ee160e: "transferWithAuthorization",
@@ -16,8 +18,28 @@ export function selectorLabel(hex) {
   return SELECTOR_LABELS[hex] || null;
 }
 
+// Every window a mechanics artifact ships must carry these sub-sections; a
+// truncated artifact that drops one would otherwise deep-crash with a raw
+// TypeError (a.cost, a.fee.tx_type, a.over_provisioning, …). Mirrors
+// adapter.js's REQUIRED_SECTIONS: collect ALL missing keys, fail with one named
+// aggregated error. selector_mix/hygiene/tx_value_nonzero are tolerated (the
+// renderers guard them), so they are intentionally NOT required here.
+const REQUIRED_WINDOW_SECTIONS = ["cost", "fee", "batch", "over_provisioning", "auth_window_width", "block_density"];
+function validateMechanics(d) {
+  const missing = [];
+  if (!d || typeof d !== "object") throw new Error("artifact missing sections: data");
+  if (!d.windows || typeof d.windows !== "object") missing.push("windows");
+  else for (const [w, win] of Object.entries(d.windows)) {
+    for (const s of REQUIRED_WINDOW_SECTIONS) {
+      if (!win || win[s] === undefined) missing.push(`${w}.${s}`);
+    }
+  }
+  if (missing.length) throw new Error(`artifact missing sections: ${missing.join(", ")}`);
+}
+
 export function reshapeMechanics(doc) {
   const d = doc.data;
+  validateMechanics(d);
   return {
     meta: {
       methodology_version: doc.methodology_version,
@@ -77,16 +99,4 @@ export async function loadMechanics() {
   const v = reshapeMechanics(doc);
   const issues = [...checkMechanicsIntegrity(v), ...crossCheckEconomyMechanics(v, economy)];
   return { view: v, issues };
-}
-
-async function fetchDoc(url, ok, fieldHint) {
-  let res;
-  try { res = await fetch(url, { cache: "no-cache" }); }
-  catch (e) { throw new Error(`network error fetching ${url}: ${e.message}`); }
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  let doc;
-  try { doc = await res.json(); }
-  catch (e) { throw new Error(`${url} is not valid JSON: ${e.message}`); }
-  if (!ok(doc)) throw new Error(`${url} missing expected fields (${fieldHint})`);
-  return doc;
 }

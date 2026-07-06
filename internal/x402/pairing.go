@@ -17,8 +17,12 @@ package x402
 // function does not assume any particular ordering and tolerates non-USDC and
 // non-Transfer entries mixed in.
 //
-// Returns (Log{}, false) if no qualifying Transfer is present.
-func PairCompanionTransfer(receiptLogs []Log, authLogIndex uint32) (Log, bool) {
+// consumed is the set of USDC Transfer log indices already bound to an earlier
+// auth in the SAME receipt; those are skipped so one Transfer never backs two
+// payments (see Assemble). Pass nil (or an empty map) when nothing is consumed.
+//
+// Returns (Log{}, false) if no qualifying, unconsumed Transfer is present.
+func PairCompanionTransfer(receiptLogs []Log, authLogIndex uint32, consumed map[uint32]bool) (Log, bool) {
 	var best Log
 	found := false
 	for _, lg := range receiptLogs {
@@ -30,6 +34,9 @@ func PairCompanionTransfer(receiptLogs []Log, authLogIndex uint32) (Log, bool) {
 		}
 		if lg.LogIndex <= authLogIndex {
 			continue // companion Transfer must strictly follow the auth
+		}
+		if consumed[lg.LogIndex] {
+			continue // already paired to an earlier auth in this receipt
 		}
 		if !found || lg.LogIndex < best.LogIndex {
 			best = lg

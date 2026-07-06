@@ -95,3 +95,17 @@ const USDCDecimals = 6
 
 // ChainBase is the canonical chain identifier stored in payments.chain.
 const ChainBase = "base"
+
+// Provenance / asset constants stamped onto every assembled Payment. Promoted
+// from repeated inline literals so the observation source, protocol tag, and
+// asset identity have a single definition (see Assemble).
+const (
+	// SourceBaseCollector is payments.source — this binary produced the row.
+	SourceBaseCollector = "base-collector"
+	// ProtocolX402 is payments.protocol — the settlement protocol.
+	ProtocolX402 = "x402"
+	// AssetUSDC is payments.asset — the canonical asset symbol.
+	AssetUSDC = "USDC"
+	// TokenSymbolUSDC is payments.token_symbol — the ERC-20 symbol of the token.
+	TokenSymbolUSDC = "USDC"
+)

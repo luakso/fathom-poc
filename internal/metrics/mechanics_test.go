@@ -137,9 +137,9 @@ func TestBuildMechanics_Shape(t *testing.T) {
 	page, err := metrics.BuildMechanics(ctx, pool)
 	require.NoError(t, err)
 	all := page.Windows["all"]
-	require.Equal(t, int64(1), all.SettlementCount) // verified headline: only 0xa (fac1=known)
-	require.Equal(t, int64(0), all.Fee.TxType["0"]) // known payment 0xa is type-2
-	require.Equal(t, int64(1), all.Fee.TxType["2"])
+	require.Equal(t, int64(1), all.SettlementCount)  // verified headline: only 0xa (fac1=known)
+	require.Equal(t, int64(0), all.Fee.TxType.Type0) // known payment 0xa is type-2
+	require.Equal(t, int64(1), all.Fee.TxType.Type2)
 	require.NotEmpty(t, all.SelectorMix)
 	require.Equal(t, int64(1), all.BlockDensity.MaxPerBlock, "verified only: one known payment in block 400")
 	require.GreaterOrEqual(t, all.Cost.BreakevenTxnCount, int64(0)) // cost block populated from gas cube
@@ -155,7 +155,7 @@ func TestEmit_WritesMechanics(t *testing.T) {
 	require.NoError(t, metrics.Rebuild(ctx, pool, testPrices(t)))
 
 	dir := t.TempDir()
-	require.NoError(t, metrics.Emit(ctx, pool, dir, nil))
+	require.NoError(t, metrics.Emit(ctx, pool, dir, nil, nil))
 
 	b, err := os.ReadFile(filepath.Join(dir, "mechanics.json"))
 	require.NoError(t, err)

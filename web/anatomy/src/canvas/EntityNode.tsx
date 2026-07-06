@@ -8,8 +8,7 @@ type Props = NodeProps<Node<EntityNodeData>> & { data: EntityNodeData }
 export function EntityNode({ data, selected }: Props) {
   const title = data.label || short(data.address)
   const cls = ['node-card', data.roleClass, selected ? 'selected' : ''].join(' ').trim()
-  const onExpand = data.onExpand as ((addr: string) => void) | undefined
-  const onFocus = data.onFocus as ((addr: string) => void) | undefined
+  const { onExpand, onFocus } = data
   return (
     <div className={cls} style={{ width: 300 }}>
       <Handle id="l" type="target" position={Position.Left} style={{ opacity: 0 }} />
