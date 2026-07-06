@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type Lens } from '../lib/api'
-import { usd, groupDigits, pct } from '../lib/format'
+import { usdc, groupDigits, pct } from '../lib/format'
 
 export function FingerprintTab({ chain, address, lens }: { chain: string; address: string; lens: Lens }) {
   const q = useQuery({
@@ -28,7 +28,7 @@ export function FingerprintTab({ chain, address, lens }: { chain: string; addres
             <div className="tile">
               <h4>Price points</h4>
               {fp.pricePoints.slice(0, 5).map((p) => (
-                <div className="sub" key={p.amountUsdc}><b>{usd(p.amountUsdc)}</b> × {groupDigits(p.txnCount)}</div>
+                <div className="sub" key={p.amountUsdc}><b>{usdc(p.amountUsdc)}</b> × {groupDigits(p.txnCount)}</div>
               ))}
               <div className="sub">
                 {fp.totalDistinctAmounts != null

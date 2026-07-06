@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { weiToEth, gwei, groupDigits, relativeAge, short, usd, pct, dayLabel } from './format'
+import { weiToEth, gwei, groupDigits, relativeAge, short, usdc, pct, dayLabel } from './format'
 
 describe('format (ported)', () => {
   it('weiToEth', () => {
@@ -26,17 +26,17 @@ describe('format (ported)', () => {
 })
 
 describe('format (new)', () => {
-  it('usd formats dollars with grouping at 2dp', () => {
-    expect(usd('12345.678')).toBe('$12,345.68')
-    expect(usd('38.36')).toBe('$38.36')
-    expect(usd('0')).toBe('$0.00')
+  it('usdc formats amounts with grouping at 2dp', () => {
+    expect(usdc('12345.678')).toBe('12,345.68 USDC')
+    expect(usdc('38.36')).toBe('38.36 USDC')
+    expect(usdc('0')).toBe('0.00 USDC')
   })
-  it('usd keeps sub-cent precision', () => {
-    expect(usd('0.001881')).toBe('$0.001881')
+  it('usdc keeps sub-cent precision', () => {
+    expect(usdc('0.001881')).toBe('0.001881 USDC')
   })
-  it('usd tolerates empty', () => {
-    expect(usd('')).toBe('—')
-    expect(usd(null)).toBe('—')
+  it('usdc tolerates empty', () => {
+    expect(usdc('')).toBe('—')
+    expect(usdc(null)).toBe('—')
   })
   it('pct', () => {
     expect(pct('0.415000')).toBe('41.5%')

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, type Lens } from '../lib/api'
-import { usd, groupDigits, pct, short, dayLabel } from '../lib/format'
+import { usdc, groupDigits, pct, short, dayLabel } from '../lib/format'
 import { Identicon } from '../lib/Identicon'
 
 const PAGE = 50
@@ -56,7 +56,7 @@ export function CounterpartiesTab({ chain, address, lens, onNavigate, defaultRol
                   {r.label ?? short(r.address)}
                 </button>
               </td>
-              <td>{usd(r.volumeUsdc)}</td>
+              <td>{usdc(r.volumeUsdc)}</td>
               <td>{groupDigits(r.txnCount)}</td>
               <td>{dayLabel(r.lastSeen)}</td>
               <td><span className="share-bar"><i style={{ width: pct(r.share) }} /></span></td>
