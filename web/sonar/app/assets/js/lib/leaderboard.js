@@ -1,6 +1,6 @@
 // Sortable entity leaderboard. Re-renders its own <table> on header click;
 // innerHTML replacement means click listeners die with their nodes (no leak).
-import { num, fmtMoney, fmtInt, fmtCount, escHtml } from "../format.js";
+import { num, fmtUSDC, fmtInt, fmtCount, escHtml } from "../format.js";
 import { classify, CLASSES } from "./fingerprint.js";
 
 export const shortAddr = a => a.slice(0, 6) + "…" + a.slice(-4);
@@ -32,7 +32,7 @@ export function renderLeaderboard(tableEl, rows, opts) {
     const arrow = id => st.sort === id ? (st.dir < 0 ? " ▾" : " ▴") : "";
     const head = `<thead><tr>
       <th>#</th>
-      <th data-sort="volume" style="cursor:pointer">$ volume${arrow("volume")}</th>
+      <th data-sort="volume" style="cursor:pointer">USDC volume${arrow("volume")}</th>
       <th data-sort="txns" style="cursor:pointer">txns${arrow("txns")}</th>
       <th data-sort="cparties" style="cursor:pointer">${cpartyLabel}${arrow("cparties")}</th>
       <th data-sort="amounts" style="cursor:pointer">amounts${arrow("amounts")}</th>
@@ -43,7 +43,7 @@ export function renderLeaderboard(tableEl, rows, opts) {
       const meta = CLASSES[cls];
       return `<tr>
         <td style="color:var(--faint)">${i + 1}</td>
-        <td style="font-weight:700">${fmtMoney(r.volume_usdc)}</td>
+        <td style="font-weight:700">${fmtUSDC(r.volume_usdc)}</td>
         <td>${fmtInt(r.txn_count)}</td>
         <td>${fmtInt(r.distinct_counterparties)}</td>
         <td>${fmtInt(r.distinct_amounts)}</td>

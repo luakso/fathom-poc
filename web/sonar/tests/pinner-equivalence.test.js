@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { state, setData, setWinLabel, setFacData } from "../app/assets/js/state.js";
 import { PINNERS, _clearPins } from "../app/assets/js/tray.js";
 import { rOverview, rShape, rGas, rClaims } from "../app/assets/js/panels.js";
-import { fmtAmt, fmtMoney, fmtInt, fmtCount, claimVerdict } from "../app/assets/js/format.js";
+import { fmtUSDCAmt, fmtUSDC, fmtInt, fmtCount, claimVerdict } from "../app/assets/js/format.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixture: conservation passes so no banner.
@@ -133,10 +133,10 @@ describe("8.3 — overview pinner ↔ panel equivalence", () => {
     setup("all");
   });
 
-  it("pin.value is fmtMoney(volume_usdc) and that exact string appears in panel", () => {
+  it("pin.value is fmtUSDC(volume_usdc) and that exact string appears in panel", () => {
     rOverview();
     const pin = PINNERS.overview();
-    const expectedVolume = fmtMoney(FIX.windows.all.volume_usdc);
+    const expectedVolume = fmtUSDC(FIX.windows.all.volume_usdc);
     expect(pin.value).toBe(expectedVolume);
     expect(document.getElementById("ov-stats").innerHTML).toContain(expectedVolume);
   });
@@ -144,7 +144,7 @@ describe("8.3 — overview pinner ↔ panel equivalence", () => {
   it("pin.context mentions txn_count and median: both appear in panel", () => {
     rOverview();
     const pin = PINNERS.overview();
-    const expectedMedian = fmtAmt(FIX.typical.all.median_usdc);
+    const expectedMedian = fmtUSDCAmt(FIX.typical.all.median_usdc);
     const expectedCount  = fmtCount(FIX.windows.all.txn_count);
     expect(pin.context).toContain(expectedMedian);
     expect(pin.context).toContain(expectedCount);
@@ -158,7 +158,7 @@ describe("8.3 — overview pinner ↔ panel equivalence", () => {
     setup("all");
     const pinAll = PINNERS.overview();
     expect(pin7d.value).not.toBe(pinAll.value);
-    expect(pin7d.value).toContain(fmtMoney(FIX.windows["7d"].volume_usdc));
+    expect(pin7d.value).toContain(fmtUSDC(FIX.windows["7d"].volume_usdc));
   });
 });
 
@@ -175,25 +175,25 @@ describe("8.3 — shape pinner ↔ panel equivalence", () => {
 
   beforeEach(() => { shapeDom(); setup("all"); });
 
-  it("pin.value starts with fmtAmt(median) which also appears in panel #shp-big", () => {
+  it("pin.value starts with fmtUSDCAmt(median) which also appears in panel #shp-big", () => {
     rShape();
     const pin = PINNERS.shape();
-    const expectedMedian = fmtAmt(FIX.typical.all.median_usdc);
+    const expectedMedian = fmtUSDCAmt(FIX.typical.all.median_usdc);
     expect(pin.value).toContain(expectedMedian);
     expect(document.getElementById("shp-big").innerHTML).toContain(expectedMedian);
   });
 
-  it("fmtAmt(avg) appears identically in both pin.context and panel #shp-big", () => {
+  it("fmtUSDCAmt(avg) appears identically in both pin.context and panel #shp-big", () => {
     rShape();
     const pin = PINNERS.shape();
-    const expectedAvg = fmtAmt(FIX.typical.all.avg_usdc);
+    const expectedAvg = fmtUSDCAmt(FIX.typical.all.avg_usdc);
     expect(pin.context).toContain(expectedAvg);
     expect(document.getElementById("shp-big").innerHTML).toContain(expectedAvg);
   });
 
-  it("pin.value is exactly fmtAmt(median)+' median'", () => {
+  it("pin.value is exactly fmtUSDCAmt(median)+' median'", () => {
     const pin = PINNERS.shape();
-    expect(pin.value).toBe(fmtAmt(FIX.typical.all.median_usdc) + " median");
+    expect(pin.value).toBe(fmtUSDCAmt(FIX.typical.all.median_usdc) + " median");
   });
 
   it("percentile values appear identically in pin.context and panel when p10/p90/p99 present", () => {
@@ -209,9 +209,9 @@ describe("8.3 — shape pinner ↔ panel equivalence", () => {
     shapeDom();
     rShape();
     const pin = PINNERS.shape();
-    const p10 = fmtAmt("0.0001");
-    const p90 = fmtAmt("0.50");
-    const p99 = fmtAmt("1.00");
+    const p10 = fmtUSDCAmt("0.0001");
+    const p90 = fmtUSDCAmt("0.50");
+    const p99 = fmtUSDCAmt("1.00");
     // All three formatted values appear in pin.context
     expect(pin.context).toContain(p10);
     expect(pin.context).toContain(p90);
@@ -311,12 +311,12 @@ describe("8.3 — price pinner ↔ panel share equivalence", () => {
     expect(document.getElementById("pptable").innerHTML).toContain(expectedShare);
   });
 
-  it("pin.value contains fmtAmt(amount_usdc) that also appears in panel table", async () => {
+  it("pin.value contains fmtUSDCAmt(amount_usdc) that also appears in panel table", async () => {
     const { rPrice } = await import("../app/assets/js/panels.js");
     rPrice();
     const pin = PINNERS.price();
     const p = FIX.price_points.all[0];
-    const expectedAmt = fmtAmt(p.amount_usdc);
+    const expectedAmt = fmtUSDCAmt(p.amount_usdc);
     expect(pin.value).toContain(expectedAmt);
     expect(document.getElementById("pptable").innerHTML).toContain(expectedAmt);
   });
@@ -409,7 +409,7 @@ describe("8.3 — daily pinner peak follows active metric", () => {
   it("USD mode: pin.value is money-formatted and pin.context shows usd-peak day", () => {
     state.dMetric = "usd";
     const pin = PINNERS.daily();
-    expect(pin.value).toContain("$");              // money format
+    expect(pin.value).toContain("USDC");            // money format
     expect(pin.value).not.toContain("tx/day");     // not the tx label
     expect(pin.context).toContain("2026-06-14");   // usd peak day
   });
@@ -498,7 +498,7 @@ describe("8.3 — facilitators pinner", () => {
     });
     const pin = PINNERS.facilitators();
     expect(pin).not.toBeNull();
-    expect(pin.value).toContain(fmtMoney("500.00"));
+    expect(pin.value).toContain(fmtUSDC("500.00"));
   });
 });
 
@@ -511,7 +511,7 @@ describe("8.3 — monthly pinner ↔ data", () => {
   it("pin returns non-null and value describes MoM change", () => {
     const pin = PINNERS.monthly();
     expect(pin).not.toBeNull();
-    expect(pin.value).toMatch(/[A-Z][a-z]{2} \$: [+-]\d+% MoM/);
+    expect(pin.value).toMatch(/[A-Z][a-z]{2} USDC: [+-]\d+% MoM/);
   });
 
   it("pin returns 'insufficient complete months' value when < 2 complete months", () => {

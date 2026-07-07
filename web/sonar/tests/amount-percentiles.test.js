@@ -79,9 +79,9 @@ describe("item 6.3 - rShape percentile strip", () => {
     expect(html).toContain("p90");
     expect(html).toContain("p99");
     // Values should appear formatted (fmtAmt strips trailing zeros).
-    expect(html).toContain("$0.01");
-    expect(html).toContain("$0.9");
-    expect(html).toContain("$2.5");
+    expect(html).toContain("0.01 USDC");
+    expect(html).toContain("0.9 USDC");
+    expect(html).toContain("2.50 USDC");
   });
 
   it("does NOT render percentile strip when p10_usdc is absent (old-artifact tolerance)", () => {
@@ -105,7 +105,7 @@ describe("item 6.3 - rShape percentile strip", () => {
     const html = document.getElementById("shp-big").innerHTML;
     // median_usdc = "0.10" → fmtAmt = "$0.1"
     expect(html).toContain("median");
-    expect(html).toContain("$0.1");
+    expect(html).toContain("0.1 USDC");
   });
 });
 
@@ -136,6 +136,6 @@ describe("item 6.3 - PINNERS.shape with percentiles", () => {
     const pin = PINNERS.shape();
     expect(pin.value).toContain("median");
     // median_usdc = "0.10" → fmtAmt → "$0.1"
-    expect(pin.value).toContain("$0.1");
+    expect(pin.value).toContain("0.1 USDC");
   });
 });

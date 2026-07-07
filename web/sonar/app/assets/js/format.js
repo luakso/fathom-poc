@@ -30,7 +30,30 @@ export const fmtAmt = s => { let t = String(s);
   return "$" + t; };
 export const pct = (a,b,dp=1) => num(b) ? (100*num(a)/num(b)).toFixed(dp) + "%" : "—";
 
-export const BANDDEF = [["dust","<$0.01"],["micro","<$1"],["small","<$100"],["mid","<$1k"],["whale","≥$1k"]];
+// USDC-denominated formatters. Payment amounts are USDC quantities, not USD —
+// Fathom denominates them honestly in USDC (no 1:1 USD conflation). Gas /
+// settlement cost is genuine USD (ETH valued at the ETH/USD reference) and
+// keeps the fmtMoney/fmtMoneyFull/$ formatters above.
+export const fmtUSDC = n => { n = num(n);
+  if (n >= 1e9) return (n/1e9).toFixed(2) + "B USDC";
+  if (n >= 1e6) return (n/1e6).toFixed(2) + "M USDC";
+  if (n >= 1e3) return (n/1e3).toFixed(1) + "k USDC";
+  return n.toFixed(2) + " USDC"; };
+export const fmtUSDCFull = n => num(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) + " USDC";
+export const fmtUSDCAmt = s => { let t = String(s);
+  if (t.includes(".")) t = t.replace(/0+$/,"").replace(/\.$/,"");
+  const f = parseFloat(t);
+  if (f >= 0.01) return f.toFixed(f >= 1 ? 2 : Math.min(4, (t.split(".")[1]||"").length || 2)) + " USDC";
+  return t + " USDC"; };
+// fmtCompact: bare compact number (no unit) for chart AXIS TICKS, where a
+// repeated "USDC" suffix would clutter — the axis/metric-toggle conveys the unit.
+export const fmtCompact = n => { n = num(n);
+  if (n >= 1e9) return (n/1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n/1e3).toFixed(1) + "k";
+  return n.toFixed(2); };
+
+export const BANDDEF = [["dust","<0.01"],["micro","<1"],["small","<100"],["mid","<1k"],["whale","≥1k"]];
 
 // Shared verdict vocabulary — panel tags and pin/X-card text must agree, so
 // the thresholds live here, in one place, not in each renderer.

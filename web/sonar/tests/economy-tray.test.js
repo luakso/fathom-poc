@@ -162,7 +162,7 @@ describe("item 1.2 — daily pinner peak follows active metric", () => {
     state.dMetric = "usd";
     const pin = PINNERS.daily();
     // usd-peak is day 9 ("2026-06-02", usd=200)
-    expect(pin.value).toContain("$");          // money format
+    expect(pin.value).toContain("USDC");       // money format
     expect(pin.value).not.toContain("tx/day"); // not the tx label
     expect(pin.context).toContain("2026-06-02");
   });

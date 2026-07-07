@@ -22,7 +22,7 @@ describe("renderLeaderboard", () => {
   it("sorts by volume descending by default (largest first)", () => {
     renderLeaderboard(document.getElementById("t"), rows, { cpartyLabel: "payers" });
     const first = document.querySelector("#t tbody tr td:nth-child(2)").textContent;
-    expect(first).toContain("$10.00M"); // the otc row, $10,000,000
+    expect(first).toContain("10.00M USDC"); // the otc row, $10,000,000
   });
   it("re-sorts ascending when a header is clicked twice", () => {
     renderLeaderboard(document.getElementById("t"), rows, { cpartyLabel: "payers" });

@@ -1,7 +1,7 @@
 // Activity buckets: payers (or payees) grouped by lifetime txn count. Bars in
 // canonical order so the shape reads left-to-right regardless of artifact key
 // ordering. Reuses the .mrow/.meter/.bar idiom.
-import { num, fmtCount, fmtMoney, fmtInt } from "../format.js";
+import { num, fmtCount, fmtUSDC, fmtInt } from "../format.js";
 
 export const BUCKET_ORDER = ["1", "2-10", "11-100", "101-1k", "1k-100k", "100k+"];
 
@@ -14,8 +14,8 @@ export function renderBuckets(host, buckets, opts) {
   host.innerHTML = BUCKET_ORDER.map(k => {
     const b = byKey[k] || ZERO;
     const v = get(b), wp = Math.max(1, 66 * v / max);
-    const main = metric === "usd" ? fmtMoney(v) : metric === "txns" ? fmtCount(v) + " tx" : fmtInt(v) + " wallets";
-    const sub = `${fmtInt(b.entity_count)} wallets · ${fmtCount(b.txn_sum)} tx · ${fmtMoney(b.volume_sum)}`;
+    const main = metric === "usd" ? fmtUSDC(v) : metric === "txns" ? fmtCount(v) + " tx" : fmtInt(v) + " wallets";
+    const sub = `${fmtInt(b.entity_count)} wallets · ${fmtCount(b.txn_sum)} tx · ${fmtUSDC(b.volume_sum)}`;
     return `<div class="mrow">
       <span class="lab">${k}<small>txns</small></span>
       <span class="meter"><span class="bar ${k === "1" || k === "2-10" ? "dim" : ""}" style="width:${wp}%"></span>

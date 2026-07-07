@@ -2,7 +2,7 @@
 // Hand-rolled SVG; innerHTML replacement on each render means hover listeners
 // die with their nodes (no leak).
 import { $ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount } from "./format.js";
+import { num, fmtInt, fmtUSDC, fmtUSDCFull, fmtCompact, fmtCount } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { state, data } from "./state.js";
 
@@ -75,7 +75,7 @@ export function rDaily(){
     gv = [1,2,3].map(k => vmax*k/4);
   }
   gv.forEach(v => { grid += `<line class="gl" x1="${padL}" y1="${y(v)}" x2="${W-10}" y2="${y(v)}"/>
-    <text x="${padL-7}" y="${y(v)+3}" text-anchor="end">${state.dMetric==="tx"?fmtCount(v):fmtMoney(v)}</text>`; });
+    <text x="${padL-7}" y="${y(v)+3}" text-anchor="end">${state.dMetric==="tx"?fmtCount(v):fmtCompact(v)}</text>`; });
   // x-axis ticks adapt to the selected slice: month markers for long spans,
   // evenly spaced dated markers for short windows (where no "-01" may fall).
   let ticks = "";
@@ -120,7 +120,7 @@ export function rDaily(){
     const d = days[i];
     $("#dcross").setAttribute("x1", x(i)); $("#dcross").setAttribute("x2", x(i)); $("#dcross").setAttribute("opacity",".7");
     $("#ddot").setAttribute("cx", x(i)); $("#ddot").setAttribute("cy", y(vals[i])); $("#ddot").setAttribute("opacity","1");
-    $("#d-readout").innerHTML = `<span class="d">${d[0]}</span> ▸ ${fmtInt(d[1])} tx ▸ ${fmtMoneyFull(d[2])}${state.dMa==="ma7" ? ` ▸ ma7 ${state.dMetric==="tx"?fmtCount(vals[i]):fmtMoney(vals[i])}`:""}`;
+    $("#d-readout").innerHTML = `<span class="d">${d[0]}</span> ▸ ${fmtInt(d[1])} tx ▸ ${fmtUSDCFull(d[2])}${state.dMa==="ma7" ? ` ▸ ma7 ${state.dMetric==="tx"?fmtCount(vals[i]):fmtUSDC(vals[i])}`:""}`;
   });
   $("#dhover").addEventListener("mouseleave", () => {
     $("#dcross").setAttribute("opacity","0"); $("#ddot").setAttribute("opacity","0");
@@ -142,11 +142,11 @@ export function rMonthly(){
       mom = `<span class="mom ${d<0?"dn":"up"}">${d>0?"+":""}${d.toFixed(0)}%</span>`;
     }
     if (!m.complete) mom = `<span class="mom na">◌ partial</span>`;
-    const other = usd ? fmtCount(m.txn_count)+" tx" : fmtMoney(m.volume_usdc);
+    const other = usd ? fmtCount(m.txn_count)+" tx" : fmtUSDC(m.volume_usdc);
     return `<div class="mrow">
       <span class="lab">${m.month}</span>
       <span class="meter"><span class="bar ${m.complete?"":"partial"}" style="width:${wpct}%"></span>
-        <span class="val">${usd?fmtMoney(v):fmtCount(v)+" tx"}</span>${mom}<span class="sub">${other}</span></span>
+        <span class="val">${usd?fmtUSDC(v):fmtCount(v)+" tx"}</span>${mom}<span class="sub">${other}</span></span>
     </div>`;
   }).join("");
 }
@@ -268,11 +268,11 @@ export function rGasCostDaily(){
     const i = Math.max(0, Math.min(days.length-1, Math.round((sx-padL)/((W-padL-8)/(days.length-1 || 1)))));
     const d = days[i];
     const readout = document.getElementById("gascost-readout");
-    if (readout) readout.innerHTML = `<span class="d">${d[0]}</span> ▸ ${(+d[1]).toFixed(2)}¢ per $1${d[2]===false ? " · partial day" : ""}`;
+    if (readout) readout.innerHTML = `<span class="d">${d[0]}</span> ▸ ${(+d[1]).toFixed(2)}¢ per 1 USDC${d[2]===false ? " · partial day" : ""}`;
   });
   hoverRect.addEventListener("mouseleave", () => {
     const readout = document.getElementById("gascost-readout");
-    if (readout) readout.textContent = "hover ▸ cents per $1 moved";
+    if (readout) readout.textContent = "hover ▸ cents per 1 USDC moved";
   });
 }
 
