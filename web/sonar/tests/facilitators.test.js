@@ -122,16 +122,16 @@ describe("6.6 rFacilitators — renders correctly", () => {
     setFacData(mockFacData);
     rFacilitators();
     const html = document.getElementById("fac-body").innerHTML;
-    // $5000 → fmtMoney = "$5.0k"
-    expect(html).toContain("$5.0k");
+    // $5000 → fmtMoney = "5.0k USDC"
+    expect(html).toContain("5.0k USDC");
   });
 
   it("shows 7d volume column in the table", () => {
     setFacData(mockFacData);
     rFacilitators();
     const html = document.getElementById("fac-body").innerHTML;
-    // $1000 7d volume → "$1.0k"
-    expect(html).toContain("$1.0k");
+    // $1000 7d volume → "1.0k USDC"
+    expect(html).toContain("1.0k USDC");
   });
 
   it("shows momentum column (7d share of 30d)", () => {
@@ -253,8 +253,8 @@ describe("6.6 PINNERS.facilitators — pin structure", () => {
   it("value contains the all-time volume", () => {
     setFacData(mockFacData);
     const pin = PINNERS.facilitators();
-    // $5000 → "$5.0k all-time"
-    expect(pin.value).toContain("$5.0k");
+    // $5000 → "5.0k USDC all-time"
+    expect(pin.value).toContain("5.0k USDC");
     expect(pin.value).toContain("all-time");
   });
 

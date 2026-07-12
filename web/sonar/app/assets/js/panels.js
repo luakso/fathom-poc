@@ -1,6 +1,6 @@
 // Non-chart panel renderers, moved verbatim from the mockup.
 import { $ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtMoneyFull, fmtCount, fmtAmt, pct, BANDDEF, priceRead, claimVerdict, escHtml } from "./format.js";
+import { num, fmtInt, fmtMoneyFull, fmtUSDC, fmtUSDCFull, fmtUSDCAmt, fmtCount, pct, BANDDEF, priceRead, claimVerdict, escHtml } from "./format.js";
 import { USD_TOLERANCE } from "./adapter.js";
 import { state, data, winLabel, issues, facData } from "./state.js";
 
@@ -10,7 +10,7 @@ function fmtExcluded(ex) {
   const n = ex.txn_count;
   const nStr = n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
   const v = num(ex.volume_usdc);
-  const vStr = v >= 1e9 ? "$"+(v/1e9).toFixed(1)+"B" : v >= 1e6 ? "$"+(v/1e6).toFixed(0)+"M" : "$"+(v/1e3).toFixed(0)+"k";
+  const vStr = v >= 1e9 ? (v/1e9).toFixed(1)+"B USDC" : v >= 1e6 ? (v/1e6).toFixed(0)+"M USDC" : (v/1e3).toFixed(0)+"k USDC";
   return `Transfers we can't tie to a known facilitator (${nStr} transfers, ${vStr}, in the same period) are excluded from every number here.`;
 }
 
@@ -20,13 +20,13 @@ export function rOverview(){
   const payees = (((data.concentration.windows[state.win] || {}).payee) || {}).total_entities || 0;
   // 6.2: largest payment — omit when absent (old-artifact tolerance).
   const largestStat = t.largest_payment_usdc != null
-    ? `<div class="bignum">${fmtMoney(t.largest_payment_usdc)}<small>LARGEST PAYMENT</small></div>`
+    ? `<div class="bignum">${fmtUSDC(t.largest_payment_usdc)}<small>LARGEST PAYMENT</small></div>`
     : "";
   $("#ov-win").textContent = "· " + winLabel[state.win];
   $("#ov-stats").innerHTML = `
     <div class="bignum c-ag glow">${fmtCount(w.txn_count)}<small>VERIFIED PAYMENTS</small></div>
-    <div class="bignum c-ag">${fmtMoney(w.volume_usdc)}<small>VOLUME</small></div>
-    <div class="bignum">${fmtAmt(t.median_usdc)}<small>TYPICAL PAYMENT (median)</small><small style="display:block;font-size:.65em;opacity:.65;margin-top:2px">${fmtAmt(t.avg_usdc)} average — pulled up by large payments</small></div>
+    <div class="bignum c-ag">${fmtUSDC(w.volume_usdc)}<small>VOLUME</small></div>
+    <div class="bignum">${fmtUSDCAmt(t.median_usdc)}<small>TYPICAL PAYMENT (median)</small><small style="display:block;font-size:.65em;opacity:.65;margin-top:2px">${fmtUSDCAmt(t.avg_usdc)} average — pulled up by large payments</small></div>
     ${largestStat}
     <div class="bignum">${fmtInt(payees)}<small>ACTIVE PAYEES</small></div>`;
   // amount-band distribution bar (share of verified volume by band)
@@ -50,11 +50,11 @@ export function rShape(){
   // 6.3 percentile strip: shown only when the artifact carries p10/p90/p99.
   // Old-artifact tolerance: missing or null fields → strip omitted, not a crash.
   const pctStrip = t.p10_usdc != null && t.p90_usdc != null && t.p99_usdc != null
-    ? `<div class="pct-strip" style="margin-top:6px;font-size:.8em;color:var(--dim)">p10 ${fmtAmt(t.p10_usdc)} · median ${fmtAmt(t.median_usdc)} · p90 ${fmtAmt(t.p90_usdc)} · p99 ${fmtAmt(t.p99_usdc)}</div>`
+    ? `<div class="pct-strip" style="margin-top:6px;font-size:.8em;color:var(--dim)">p10 ${fmtUSDCAmt(t.p10_usdc)} · median ${fmtUSDCAmt(t.median_usdc)} · p90 ${fmtUSDCAmt(t.p90_usdc)} · p99 ${fmtUSDCAmt(t.p99_usdc)}</div>`
     : "";
   $("#shp-big").innerHTML = `
-    <div class="bignum c-ag glow">${fmtAmt(t.median_usdc)}<small>MEDIAN PAYMENT</small></div>
-    <div class="bignum">${fmtAmt(t.avg_usdc)}<small>MEAN — ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× THE MEDIAN</small></div>
+    <div class="bignum c-ag glow">${fmtUSDCAmt(t.median_usdc)}<small>MEDIAN PAYMENT</small></div>
+    <div class="bignum">${fmtUSDCAmt(t.avg_usdc)}<small>MEAN — ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× THE MEDIAN</small></div>
     ${pctStrip}`;
   const b = data.windows[state.win].by_band;
   const tx = state.bMetric === "tx";
@@ -74,7 +74,7 @@ export function rShape(){
       return `<div class="mrow">
         <span class="lab">${k}<small>${def}</small></span>
         <span class="meter"><span class="bar ${k==="whale"||k==="mid"?"dim":""}" style="width:${wp}%"></span>
-        <span class="val">${tx?fmtCount(v)+" tx":fmtMoney(v)}</span><span class="sub">${tx?fmtMoney(r.volume_usdc):fmtCount(r.txn_count)+" tx"}</span></span></div>`;
+        <span class="val">${tx?fmtCount(v)+" tx":fmtUSDC(v)}</span><span class="sub">${tx?fmtUSDC(r.volume_usdc):fmtCount(r.txn_count)+" tx"}</span></span></div>`;
     }).join("");
 }
 
@@ -120,7 +120,7 @@ export function rPrice(){
         const bs = breadth.find(b => b.amount_usdc === p.amount_usdc);
         sparkCell = `<td>${sparklineSVG(bs ? bs.series : null)}</td>`;
       }
-      return `<tr><td style="font-weight:700">${fmtAmt(p.amount_usdc)}</td>
+      return `<tr><td style="font-weight:700">${fmtUSDCAmt(p.amount_usdc)}</td>
         <td style="text-align:left;min-width:140px"><span style="display:inline-block;vertical-align:middle;height:9px;width:${w}px;max-width:60%;background:var(--agentic)"></span> <span style="color:var(--dim)">${s.toFixed(1)}%</span></td>
         <td>${fmtInt(p.txn_count)}</td>
         <td${p.payee_count<10?' style="color:var(--contam);font-weight:700"':""}>${fmtInt(p.payee_count)}</td>
@@ -140,11 +140,11 @@ export function rGas(){
   $("#gas-kv").innerHTML = `
     <div class="kv"><span class="k">cost L1+L2</span><span class="v">${num(kn.gas_eth).toFixed(3)} ETH <small>≈ ${fmtMoneyFull(kn.gas_usd)}</small></span></div>
     <div class="kv"><span class="k">L1 / L2 (ETH)</span><span class="v">${num(kn.gas_eth_l1).toFixed(3)} / ${num(kn.gas_eth_l2).toFixed(3)}</span></div>
-    <div class="kv"><span class="k">value moved</span><span class="v">${fmtMoneyFull(vol)}</span></div>
-    <div class="kv"><span class="k">cost per $1 settled</span><span class="v">${kn.gas_cents_per_dollar === null ? "—" : num(kn.gas_cents_per_dollar).toFixed(2)+"¢"}</span></div>
+    <div class="kv"><span class="k">value moved</span><span class="v">${fmtUSDCFull(vol)}</span></div>
+    <div class="kv"><span class="k">cost per 1 USDC settled</span><span class="v">${kn.gas_cents_per_dollar === null ? "—" : num(kn.gas_cents_per_dollar).toFixed(2)+"¢"}</span></div>
     <div class="kv"><span class="k">breakeven payments</span><span class="v c-cm">${fmtInt(kn.breakeven_txn_count)} <small>of ${fmtInt(kn.txn_count)}</small></span></div>`;
   $("#gasbands").innerHTML = `
-    <thead><tr><th>band</th><th>cost¢/$1</th><th>breakeven</th></tr></thead>
+    <thead><tr><th>band</th><th>cost¢/USDC</th><th>breakeven</th></tr></thead>
     <tbody>${BANDDEF.map(([k,def]) => {
       const r = g.by_band[k]; if (!r) return "";
       const c = r.gas_cents_per_dollar === null ? "—" : num(r.gas_cents_per_dollar).toFixed(2)+"¢";
@@ -168,7 +168,7 @@ export function rClaims(){
     const tagClass = ratio === null ? "na" : ratio >= 1.5 ? "over" : ratio < 0.9 ? "low" : "ok";
     const tag = `<span class="tag ${tagClass}">claim ${verdict}</span>`;
     const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
-    const fmt = isUsd ? fmtMoney : fmtInt;
+    const fmt = isUsd ? fmtUSDC : fmtInt;
     return `<div class="claimrow">
       <div class="q">"${escHtml(c.claim_text)}"</div>
       <div class="src">${/^https?:\/\//i.test(c.source_url) ? `<a href="${escHtml(c.source_url)}" target="_blank" rel="noopener" style="color:inherit">${escHtml(c.source)}</a>` : escHtml(c.source)} · ${escHtml(c.claim_date)} · measured as ${escHtml(c.measured_metric)}</div>
@@ -236,8 +236,8 @@ export function rFacilitators(){
     <tbody>${show.map(r => `<tr>
       <td style="font-family:monospace;font-size:.85em">${escHtml(shortAddr(r.facilitator))}</td>
       <td>${fmtCount(r.txn_count)}</td>
-      <td>${fmtMoney(r.volume_usdc)}</td>
-      <td>${fmtMoney(r.windows["7d"].volume_usdc)}</td>
+      <td>${fmtUSDC(r.volume_usdc)}</td>
+      <td>${fmtUSDC(r.windows["7d"].volume_usdc)}</td>
       <td style="color:var(--dim)">${momentum(r)}</td>
     </tr>`).join("")}
     ${more > 0 ? `<tr><td colspan="5" style="color:var(--faint);padding-top:4px">…${fmtInt(more)} more facilitators</td></tr>` : ""}
@@ -258,5 +258,5 @@ export function rShell(){
     <div><span class="ps">$</span> <span class="cmd">jq '.scope, .methodology_version, .data_through_day' dist/economy.json</span></div>
     <div class="out">${data.meta.scope || "verified-x402"} · v${data.meta.methodology_version} · ${data.meta.data_through_day}</div>
     ${lines}
-    <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtMoney(w.volume_usdc)} ${glyph}<span class="cursor" style="margin-left:6px"></span></div>`;
+    <div class="out">${fmtInt(w.txn_count)} verified payments · ${fmtUSDC(w.volume_usdc)} ${glyph}<span class="cursor" style="margin-left:6px"></span></div>`;
 }

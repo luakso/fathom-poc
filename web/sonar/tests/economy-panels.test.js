@@ -104,7 +104,7 @@ describe("item 3.1 — rOverview shows median as TYPICAL PAYMENT", () => {
     rOverview();
     const html = document.getElementById("ov-stats").innerHTML;
     // median_usdc = "0.001" → fmtAmt("0.001") = "$0.001"
-    expect(html).toContain("$0.001");
+    expect(html).toContain("0.001 USDC");
     expect(html).toContain("TYPICAL PAYMENT (median)");
   });
 
@@ -126,7 +126,7 @@ describe("item 3.1 — rOverview shows median as TYPICAL PAYMENT", () => {
     rOverview();
     const html = document.getElementById("ov-stats").innerHTML;
     // typical["7d"].median_usdc = "0.10" → fmtAmt("0.10") strips trailing zero → "$0.1"
-    expect(html).toContain("$0.1");
+    expect(html).toContain("0.1 USDC");
     expect(html).toContain("TYPICAL PAYMENT (median)");
   });
 
@@ -135,7 +135,7 @@ describe("item 3.1 — rOverview shows median as TYPICAL PAYMENT", () => {
     const pin = PINNERS.overview();
     expect(pin.context).toContain("median");
     // $0.001 formatted
-    expect(pin.context).toContain("$0.001");
+    expect(pin.context).toContain("0.001 USDC");
   });
 });
 

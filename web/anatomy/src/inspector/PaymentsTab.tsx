@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, type Lens } from '../lib/api'
-import { usd, short } from '../lib/format'
+import { usdc, short } from '../lib/format'
 import type { PaymentRow } from '../lib/schemas'
 
 type Props = { chain: string; address: string; lens: Lens; onNavigate: (to: string) => void; defaultRole: string }
@@ -42,7 +42,7 @@ export function PaymentsTab({ chain, address, lens, onNavigate, defaultRole }: P
       {rows.map((r) => (
         <div className="pay-row" key={`${r.txHash}:${r.logIndex}`} onClick={() => onNavigate(`/base/tx/${r.txHash}${lensSuffix}`)}>
           <span className="tx">{short(r.txHash)}</span>
-          <span className="amt">{usd(r.amountUsdc)}</span>
+          <span className="amt">{usdc(r.amountUsdc)}</span>
           <span className="time">{timeLabel(r.blockTimestamp)}</span>
         </div>
       ))}

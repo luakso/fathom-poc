@@ -42,9 +42,11 @@ export function short(s: string | null | undefined): string {
   return s.length > 12 ? `${s.slice(0, 7)}…${s.slice(-4)}` : s
 }
 
-// usd renders an API decimal string as dollars: 2dp with digit grouping for
-// >= $0.01, full precision below (micro-payment price points must stay exact).
-export function usd(amount: string | null | undefined): string {
+// usdc renders an API decimal string as a USDC amount: 2dp with digit grouping
+// for >= 0.01, full precision below (micro-payment price points must stay
+// exact). Amounts are USDC quantities, not USD — the ' USDC' suffix keeps the
+// denomination honest (Fathom does not assume 1 USDC = 1 USD).
+export function usdc(amount: string | null | undefined): string {
   if (amount == null || amount === '') return '—'
   const neg = amount.startsWith('-')
   const abs = neg ? amount.slice(1) : amount
@@ -52,7 +54,7 @@ export function usd(amount: string | null | undefined): string {
   const int = intRaw.replace(/^0+(?=\d)/, '') || '0'
   const isSubCent = int === '0' && !/^[1-9]/.test(fracRaw.slice(0, 2))
   if (isSubCent && fracRaw.replace(/0+$/, '') !== '') {
-    return `${neg ? '-' : ''}$0.${fracRaw.replace(/0+$/, '')}`
+    return `${neg ? '-' : ''}0.${fracRaw.replace(/0+$/, '')} USDC`
   }
   // round to 2dp using string math on the third fraction digit
   let cents = (fracRaw + '00').slice(0, 2)
@@ -62,7 +64,7 @@ export function usd(amount: string | null | undefined): string {
     intOut = bumped.slice(0, -2)
     cents = bumped.slice(-2)
   }
-  return `${neg ? '-' : ''}$${groupDigits(intOut)}.${cents}`
+  return `${neg ? '-' : ''}${groupDigits(intOut)}.${cents} USDC`
 }
 
 // pct renders a share fraction string ("0.415000") as a percentage.

@@ -1,6 +1,6 @@
 import type { Entity } from '../lib/schemas'
 import type { Lens } from '../lib/api'
-import { usd, groupDigits } from '../lib/format'
+import { usdc, groupDigits } from '../lib/format'
 
 export function OverviewTab({ entity }: { entity: Entity; lens: Lens }) {
   return (
@@ -26,7 +26,7 @@ export function OverviewTab({ entity }: { entity: Entity; lens: Lens }) {
                 <tr key={l}>
                   <td>{l === 'known' ? 'verified x402' : 'all EIP-3009'}</td>
                   <td>{groupDigits(byLens[l].txnCount)}</td>
-                  <td>{usd(byLens[l].volumeUsdc)}</td>
+                  <td>{usdc(byLens[l].volumeUsdc)}</td>
                   <td>{groupDigits(byLens[l].distinctCounterparties)}</td>
                   <td>{byLens[l].activeDays}</td>
                 </tr>

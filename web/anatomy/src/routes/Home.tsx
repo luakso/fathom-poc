@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, type Lens } from '../lib/api'
-import { usd, groupDigits, short, dayLabel } from '../lib/format'
+import { usdc, groupDigits, short, dayLabel } from '../lib/format'
 import { Identicon } from '../lib/Identicon'
 
 const WINDOWS = ['7d', '30d', 'all'] as const
@@ -67,7 +67,7 @@ export function Home() {
                         {r.label ?? short(r.address)}
                       </span>
                     </td>
-                    <td>{usd(r.volumeUsdc)}</td>
+                    <td>{usdc(r.volumeUsdc)}</td>
                     <td>{groupDigits(r.txnCount)}</td>
                     <td>{groupDigits(r.distinctCounterparties)}</td>
                     <td>{dayLabel(r.firstSeen)}</td>

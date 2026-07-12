@@ -1,6 +1,6 @@
 // Report tray: pin findings -> compose thread -> 1200x675 X card.
 import { $, $$ } from "./dom.js";
-import { num, fmtInt, fmtMoney, fmtCount, fmtAmt, pct, priceRead, claimVerdict, escHtml, BANDDEF } from "./format.js";
+import { num, fmtInt, fmtUSDC, fmtCount, fmtUSDCAmt, pct, priceRead, claimVerdict, escHtml, BANDDEF } from "./format.js";
 import { medianOf, peakIndex } from "./stats.js";
 import { tapeSlice } from "./charts.js";
 import { state, data, winLabel, facData } from "./state.js";
@@ -40,7 +40,7 @@ function overviewPinDenom() {
   const n = ex.txn_count;
   const nStr = n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
   const v = num(ex.volume_usdc);
-  const vStr = v >= 1e9 ? "$"+(v/1e9).toFixed(1)+"B" : v >= 1e6 ? "$"+(v/1e6).toFixed(0)+"M" : "$"+(v/1e3).toFixed(0)+"k";
+  const vStr = v >= 1e9 ? (v/1e9).toFixed(1)+"B USDC" : v >= 1e6 ? (v/1e6).toFixed(0)+"M USDC" : (v/1e3).toFixed(0)+"k USDC";
   return `${defn} ${nStr} non-verified transfers (${vStr}) excluded.`;
 }
 export const PINNERS = {
@@ -48,10 +48,10 @@ export const PINNERS = {
     const t = data.typical[state.win];
     // 6.2: append largest payment to context when the artifact carries the field.
     const largestCtx = t.largest_payment_usdc != null
-      ? ` · largest ${fmtMoney(t.largest_payment_usdc)}`
+      ? ` · largest ${fmtUSDC(t.largest_payment_usdc)}`
       : "";
-    return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtMoney(w.volume_usdc),
-      context:`median ${fmtAmt(t.median_usdc)} typical · avg ${fmtAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments${largestCtx}`,
+    return { title:"OVERVIEW · "+state.win.toUpperCase(), value:fmtUSDC(w.volume_usdc),
+      context:`median ${fmtUSDCAmt(t.median_usdc)} typical · avg ${fmtUSDCAmt(t.avg_usdc)} pulled up by large payments · ${fmtCount(w.txn_count)} verified payments${largestCtx}`,
       denom:overviewPinDenom()+" · "+winLabel[state.win],
       series:tapeSlice(data.daily, state.win).map(d=>d[2]) }; },
   daily(){ const slice = tapeSlice(data.daily, state.dWin);
@@ -61,7 +61,7 @@ export const PINNERS = {
     const complete = slice.filter(d => d[3] !== false);
     const peakPool = complete.length ? complete : slice; // fall back if all incomplete
     const peak = usd ? peakPool.reduce((a,b)=> b[2]>a[2]?b:a) : peakPool.reduce((a,b)=> b[1]>a[1]?b:a);
-    const val  = usd ? fmtMoney(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
+    const val  = usd ? fmtUSDC(peak[2])+" vol/day peak" : fmtInt(peak[1])+" tx/day peak";
     const hasPartial = slice.some(d => d[3] === false);
     const partialNote = hasPartial ? " · last day partial, excluded from peak" : "";
     return { title:"DAILY TAPE · "+state.dWin.toUpperCase(), value:val,
@@ -80,8 +80,8 @@ export const PINNERS = {
     const dTx  = 100*(t(last)-t(prev))/t(prev);
     const name = new Date(last.month + "-01T00:00:00Z").toLocaleString("en-US",{month:"short", timeZone:"UTC"});
     return { title:"MONTHLY",
-      value:`${name} $: ${dUsd>0?"+":""}${dUsd.toFixed(0)}% MoM`,
-      context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while $ ${dUsd<0?"fell":"rose"} ${fmtMoney(v(prev))}→${fmtMoney(v(last))}`,
+      value:`${name} USDC: ${dUsd>0?"+":""}${dUsd.toFixed(0)}% MoM`,
+      context:`tx ${dTx>0?"+":""}${dTx.toFixed(0)}% while USDC volume ${dUsd<0?"fell":"rose"} ${fmtUSDC(v(prev))}→${fmtUSDC(v(last))}`,
       denom:"verified payments · complete months",
       series: data.monthly.map(m => num(m.volume_usdc)) };
   },
@@ -95,10 +95,10 @@ export const PINNERS = {
     const xMed = num(t.avg_usdc)/num(t.median_usdc);
     // 6.3 percentile context: appended when artifact carries p10/p90/p99.
     const pctCtx = t.p10_usdc != null && t.p90_usdc != null && t.p99_usdc != null
-      ? ` · p10 ${fmtAmt(t.p10_usdc)} → p90 ${fmtAmt(t.p90_usdc)} → p99 ${fmtAmt(t.p99_usdc)}`
+      ? ` · p10 ${fmtUSDCAmt(t.p10_usdc)} → p90 ${fmtUSDCAmt(t.p90_usdc)} → p99 ${fmtUSDCAmt(t.p99_usdc)}`
       : "";
-    return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtAmt(t.median_usdc)+" median",
-      context:`mean ${fmtAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars${pctCtx}`,
+    return { title:"PAYMENT SHAPE · "+state.win.toUpperCase(), value:fmtUSDCAmt(t.median_usdc)+" median",
+      context:`mean ${fmtUSDCAmt(t.avg_usdc)} = ${isFinite(xMed) ? Math.round(xMed).toLocaleString() : "—"}× median · dust: ${dustTxPct}% of payments, ${dustUsdPct}% of dollars${pctCtx}`,
       denom:"verified payments · "+winLabel[state.win] }; },
   price(){ const p = data.price_points[state.win][0];
     if (!p) return null;
@@ -120,14 +120,14 @@ export const PINNERS = {
         }
       }
     }
-    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtAmt(p.amount_usdc)+" × "+fmtInt(p.txn_count),
+    return { title:"PRICE POINTS · "+state.win.toUpperCase(), value:fmtUSDCAmt(p.amount_usdc)+" × "+fmtInt(p.txn_count),
       context:`top amount = ${num(p.txn_share_pct).toFixed(1)}% of verified tx across ${fmtInt(p.payee_count)} payees — ${READ[priceRead(p)]}${trendCtx}`,
       denom:"verified payments · "+winLabel[state.win] }; },
   gas(){ const g = data.gas.windows[state.win];
     if (!g.txn_count) return null;
     const p = 100*g.breakeven_txn_count/g.txn_count;
     return { title:"GAS / BREAKEVEN · "+state.win.toUpperCase(), value:p.toFixed(1)+"% cost>value",
-      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments cost more than value · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per $1`,
+      context:`${fmtInt(g.breakeven_txn_count)} of ${fmtInt(g.txn_count)} verified payments cost more than value · ${g.gas_cents_per_dollar === null ? "—" : num(g.gas_cents_per_dollar).toFixed(2)+"¢"} true cost (L1+L2) per 1 USDC`,
       denom:"tx-deduped L1+L2 cost, equal apportioning · weekly ETH/USD ref · "+winLabel[state.win] }; },
   velocity(){ const vw = data.velocity.windows.all;
     const days = data.velocity.verified_daily;
@@ -143,7 +143,7 @@ export const PINNERS = {
     const measured = num(c.measured_value);
     const ratio = measured !== 0 ? num(c.claimed_value) / measured : null;
     const isUsd = (c.measured_unit || "").toUpperCase() === "USDC";
-    const fmt = isUsd ? fmtMoney : fmtInt;
+    const fmt = isUsd ? fmtUSDC : fmtInt;
     return { title:"CLAIM LEDGER", value:"claim "+claimVerdict(ratio),
       context:`"${escHtml(c.claim_text)}" → measured ${fmt(c.measured_value)}`,
       denom:"claim vs Fathom measured count" }; },
@@ -156,9 +156,9 @@ export const PINNERS = {
     const v7  = num(r.windows["7d"].volume_usdc);
     const v30 = num(r.windows["30d"].volume_usdc);
     const momentum = v30 > 0 ? (100 * v7 / v30).toFixed(0) + "%" : "—";
-    const topN = facData.rows.slice(0, 3).map(x => `${escHtml(shortAddr(x.facilitator))} ${fmtMoney(x.volume_usdc)}`).join(" · ");
+    const topN = facData.rows.slice(0, 3).map(x => `${escHtml(shortAddr(x.facilitator))} ${fmtUSDC(x.volume_usdc)}`).join(" · ");
     return { title:"FACILITATORS",
-      value:`${escHtml(shortAddr(r.facilitator))} · ${fmtMoney(r.volume_usdc)} all-time`,
+      value:`${escHtml(shortAddr(r.facilitator))} · ${fmtUSDC(r.volume_usdc)} all-time`,
       context:`top facilitators: ${topN} · 7d momentum ${momentum} of 30d`,
       denom:"who settled the payments · verified payments only · momentum = last 7 days' share of the last 30" }; },
   active_wallets(){ const ae = data.active_entities;

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type Lens } from '../lib/api'
-import { usd, groupDigits } from '../lib/format'
+import { usdc, groupDigits } from '../lib/format'
 import { primaryRole } from '../lib/roles'
 import { buildEntityGraph, expandNode, ghostRows, type FlowState } from '../canvas/graph'
 import { Canvas } from '../canvas/Canvas'
@@ -40,7 +40,7 @@ export function Entity() {
     const sum = e.summaries[role]?.[lens]
     const kpis = {
       payments: groupDigits(sum?.txnCount ?? 0),
-      volume: usd(sum?.volumeUsdc ?? '0'),
+      volume: usdc(sum?.volumeUsdc ?? '0'),
       counterparties: groupDigits(sum?.distinctCounterparties ?? 0),
     }
     const ghosts = lens === 'known'

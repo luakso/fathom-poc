@@ -6,7 +6,7 @@ import {
   NODE_W, NODE_H, GHOST_W, GHOST_H, COL_GAP,
   placeColumn, columnX, type Rect, type Dir,
 } from './layout'
-import { usd, groupDigits, pct } from '../lib/format'
+import { usdc, groupDigits, pct } from '../lib/format'
 import type { Neighbors, NeighborRow } from '../lib/schemas'
 import type { RoleClass } from '../lib/roles'
 
@@ -61,7 +61,7 @@ function nodeRect(n: FlowNode): Rect {
 }
 
 function flowLabel(r: NeighborRow): string {
-  return `${usd(r.volumeUsdc)} · ${groupDigits(r.txnCount)} txns · ${pct(r.share)}`
+  return `${usdc(r.volumeUsdc)} · ${groupDigits(r.txnCount)} txns · ${pct(r.share)}`
 }
 
 function makeNode(

@@ -13,7 +13,7 @@ function row(address: string, share = '0.500000', volumeUsdc = '10', txnCount = 
   return { address, txnCount, volumeUsdc, share, firstSeen: '2026-04-08', lastSeen: '2026-06-06' }
 }
 const subject = { address: A, roles: ['payer'] }
-const kpis = { payments: '20,389', volume: '$38.36', counterparties: '1' }
+const kpis = { payments: '20,389', volume: '38.36 USDC', counterparties: '1' }
 
 function neighbors(partial: Partial<Neighbors>): Neighbors {
   return { address: A, lens: 'known', ...partial }
@@ -46,7 +46,7 @@ describe('buildEntityGraph', () => {
     expect(primaries[0]!.id).toBe(`${A}->${B}`)
   })
   it('edge label composes usd · txns · share', () => {
-    expect(state.edges.find((e) => e.id === `${A}->${B}`)?.data?.label).toBe('$90.00 · 100 txns · 90%')
+    expect(state.edges.find((e) => e.id === `${A}->${B}`)?.data?.label).toBe('90.00 USDC · 100 txns · 90%')
   })
   it('no two node boxes overlap', () => {
     const rects = state.nodes.map((n) => ({

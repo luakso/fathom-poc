@@ -2,7 +2,7 @@
 // (y, log), bubble area ∝ volume, color by fingerprint class. Native SVG
 // <title> tooltips, so there are no listeners to leak. Role-agnostic: the
 // caller supplies xLabel (payers for a payee page, payees for a payer page).
-import { num, fmtMoney, fmtCount } from "../format.js";
+import { num, fmtUSDC, fmtCount } from "../format.js";
 import { classify, CLASSES } from "./fingerprint.js";
 import { shortAddr } from "./leaderboard.js";
 
@@ -47,7 +47,7 @@ export function renderScatter(host, rows, opts) {
 
   const circles = pts.map(p => {
     const m = CLASSES[p.cls];
-    const tip = `${shortAddr(p.r.address)} · ${m.label}\n${fmtCount(p.r.txn_count)} tx · ${fmtMoney(p.r.volume_usdc)}\n${p.r.distinct_counterparties} ${xLabel} · ${p.r.distinct_amounts} amounts`;
+    const tip = `${shortAddr(p.r.address)} · ${m.label}\n${fmtCount(p.r.txn_count)} tx · ${fmtUSDC(p.r.volume_usdc)}\n${p.r.distinct_counterparties} ${xLabel} · ${p.r.distinct_amounts} amounts`;
     return `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="${rad(p.v).toFixed(1)}" fill="${m.color}" fill-opacity="0.45" stroke="${m.color}" stroke-width="0.7"><title>${tip}</title></circle>`;
   }).join("");
 

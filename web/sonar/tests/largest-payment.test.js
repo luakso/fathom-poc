@@ -98,7 +98,7 @@ describe("item 6.2 - rOverview largest payment stat", () => {
     // The label "LARGEST PAYMENT" must appear.
     expect(html.toUpperCase()).toContain("LARGEST PAYMENT");
     // fmtMoney("99.000000") → "$99.00"
-    expect(html).toContain("$99.00");
+    expect(html).toContain("99.00 USDC");
   });
 
   it("omits largest stat when largest_payment_usdc is absent (old-artifact tolerance)", () => {
@@ -140,6 +140,6 @@ describe("item 6.2 - PINNERS.overview largest in context", () => {
     const pin = PINNERS.overview();
     // fmtMoney(4957.8) → "$5.0k"; NOT the raw string "4957.800000"
     expect(pin.context).not.toContain("4957.800000");
-    expect(pin.context).toContain("$");
+    expect(pin.context).toContain("USDC");
   });
 });

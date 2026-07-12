@@ -18,7 +18,7 @@ function maybeGate() {
   $("#gate-nums").innerHTML = `
     <div>${fmtCount(a.settlement_count)}<small>SETTLEMENTS</small></div>
     <div>${pctOf(a.cost.breakeven_txn_count, a.settlement_count)}<small>COST &gt; VALUE</small></div>
-    <div>${a.cost.gas_cents_per_dollar == null ? "—" : a.cost.gas_cents_per_dollar}<small>¢ / $</small></div>`;
+    <div>${a.cost.gas_cents_per_dollar == null ? "—" : a.cost.gas_cents_per_dollar}<small>¢ / USDC</small></div>`;
   $("#gate").classList.add("open");
   $("#gate-continue").addEventListener("click", () => { localStorage.setItem(GATE_KEY, "1"); $("#gate").classList.remove("open"); });
 }
@@ -39,7 +39,7 @@ function rEconomics() {
   $("#ue-win").textContent = "· " + WIN_LABEL[state.win];
   $("#ue-stats").innerHTML = `
     <div class="bignum c-cm glow">${pctOf(c.breakeven_txn_count, a.settlement_count)}<small>COST &gt; VALUE MOVED</small></div>
-    <div class="bignum">${c.gas_cents_per_dollar == null ? "—" : c.gas_cents_per_dollar}<small>¢ COST PER $ SETTLED</small></div>
+    <div class="bignum">${c.gas_cents_per_dollar == null ? "—" : c.gas_cents_per_dollar}<small>¢ COST PER USDC SETTLED</small></div>
     <div class="bignum">${num(c.gas_eth).toFixed(2)}<small>ETH BURNED</small></div>
     <div class="bignum">${fmtCount(c.breakeven_txn_count)}<small>UNDERWATER PAYMENTS</small></div>`;
   $("#ue-denom").textContent = `true cost = L2 exec ${num(c.gas_eth_l2).toFixed(2)} + L1 data ${num(c.gas_eth_l1).toFixed(2)} ETH · $${c.gas_usd} · ${WIN_LABEL[state.win]}`;
@@ -122,7 +122,7 @@ function rShell() {
 }
 
 const PIN = {
-  economics() { const a = win(), c = a.cost; return { title: "UNIT ECONOMICS · " + state.win.toUpperCase(), value: pctOf(c.breakeven_txn_count, a.settlement_count) + " cost > value", context: `${fmtCount(c.breakeven_txn_count)} of ${fmtCount(a.settlement_count)} payments cost more gas than they moved · ${c.gas_cents_per_dollar} ¢/$ · ${num(c.gas_eth).toFixed(2)} ETH burned`, denom: "true cost = L2+L1 gas · " + WIN_LABEL[state.win] }; },
+  economics() { const a = win(), c = a.cost; return { title: "UNIT ECONOMICS · " + state.win.toUpperCase(), value: pctOf(c.breakeven_txn_count, a.settlement_count) + " cost > value", context: `${fmtCount(c.breakeven_txn_count)} of ${fmtCount(a.settlement_count)} payments cost more gas than they moved · ${c.gas_cents_per_dollar} ¢/USDC · ${num(c.gas_eth).toFixed(2)} ETH burned`, denom: "true cost = L2+L1 gas · " + WIN_LABEL[state.win] }; },
   fee() { const a = win(), t = a.fee.tx_type, n = a.settlement_count; return { title: "FEE INTENT · " + state.win.toUpperCase(), value: pctOf(t["2"] || 0, n) + " EIP-1559", context: `tx_type-2 ${pctOf(t["2"] || 0, n)}, legacy ${pctOf(t["0"] || 0, n)}, other ${fmtInt(txTypeOther(a))} · max_fee p50 ${gwei(a.fee.max_fee.p50)}`, denom: "tx_type mix · " + WIN_LABEL[state.win] }; },
   batch() { const b = win().batch; return { title: "BATCH MECHANICS · " + state.win.toUpperCase(), value: batchPct(b.pct_batched) + " batched", context: `${batchPct(b.pct_batched)} of payments share a tx (Multicall3 etc.); largest batch ${fmtInt(b.max_batch_size)}`, denom: "payments per tx · " + WIN_LABEL[state.win] }; },
   wrapper() { const r = (win().selector_mix || [])[0]; if (!r) return null; const lbl = selectorLabel(r.selector_hex) || ("0x" + r.selector_hex); return { title: "TOP WRAPPER · " + lbl, value: fmtCount(r.txn_count) + " settlements", context: `${lbl} (0x${r.selector_hex}, ${r.settlement_kind}) is the most-used settlement path`, denom: "top selector · " + WIN_LABEL[state.win] }; },
