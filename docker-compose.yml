@@ -1,4 +1,4 @@
-name: fathom
+name: fathom-poc
 
 services:
   postgres:
